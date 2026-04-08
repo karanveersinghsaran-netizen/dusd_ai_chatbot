@@ -1,20 +1,28 @@
-# WMS AI Chatbot
+# Wells Middle School AI Chatbot
 
-An AI-powered chatbot for Warehouse Management System (WMS) operations. This assistant helps warehouse staff query inventory, track shipments, manage orders, and get instant answers about warehouse operations.
+A WhatsApp chatbot for Wells Middle School (Dublin Unified School District) powered by Claude AI. It answers questions about the school by scraping the school website in real time.
 
 ## Features
 
-- Natural language queries for inventory and order data
-- Integration with WMS database
-- Conversational AI powered by Claude API
-- REST API backend
+- WhatsApp integration via Twilio
+- AI-powered responses using Claude (Anthropic)
+- Live school website scraping for up-to-date information
+- Per-user conversation history
+
+## Tech Stack
+
+- **FastAPI** — REST API and webhook handler
+- **Twilio** — WhatsApp messaging
+- **Anthropic Claude** — AI agent
+- **BeautifulSoup** — Website scraping
 
 ## Getting Started
 
 ### Prerequisites
 
 - Python 3.10+
-- pip
+- Twilio account with WhatsApp sandbox
+- Anthropic API key
 
 ### Installation
 
@@ -28,10 +36,9 @@ pip install -r requirements.txt
 
 ### Configuration
 
-Copy `.env.example` to `.env` and fill in your credentials:
-
 ```bash
 cp .env.example .env
+# Edit .env and fill in your API keys
 ```
 
 ### Running
@@ -40,14 +47,27 @@ cp .env.example .env
 python main.py
 ```
 
+Expose to the internet with ngrok:
+
+```bash
+ngrok http 8000
+```
+
+Then set your Twilio WhatsApp sandbox webhook to:
+```
+https://<your-ngrok-url>/webhook/whatsapp
+```
+
 ## Project Structure
 
 ```
 wms_ai_chatbot/
-├── main.py           # Application entry point
-├── requirements.txt  # Python dependencies
-├── .env.example      # Environment variable template
-└── README.md
+├── main.py              # FastAPI app and Twilio webhook
+├── agent.py             # Claude AI agent with tools
+├── website_scraper.py   # School website scraper
+├── config.py            # Configuration and env vars
+├── requirements.txt
+└── .env.example
 ```
 
 ## License
