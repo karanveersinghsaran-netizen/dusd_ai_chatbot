@@ -2,8 +2,8 @@ from fastapi import FastAPI, Form
 from fastapi.responses import PlainTextResponse
 from twilio.twiml.messaging_response import MessagingResponse
 import uvicorn
-import config
-from agent import agent
+from app import config
+from app.agent import agent
 
 app = FastAPI(title="Wells Middle School WhatsApp Bot")
 
@@ -22,12 +22,9 @@ async def whatsapp_webhook(
 ):
     """Webhook endpoint for Twilio WhatsApp messages."""
     print(f"Received message from {From}: {Body}")
-
     response_text = agent.chat(Body, user_id=From)
-
     twiml_response = MessagingResponse()
     twiml_response.message(response_text)
-
     return PlainTextResponse(content=str(twiml_response), media_type="application/xml")
 
 

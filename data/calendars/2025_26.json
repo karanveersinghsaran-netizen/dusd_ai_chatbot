@@ -1,0 +1,52 @@
+{
+  "school_year": "2025-26",
+  "first_day": "2025-08-12",
+  "last_day": "2026-06-03",
+  "no_school_days": {
+    "2025-09-01":  "Labor Day Holiday",
+    "2025-10-16":  "No School",
+    "2025-10-17":  "No School",
+    "2025-11-10":  "No School",
+    "2025-11-11":  "Veterans Day Holiday",
+    "2025-11-26":  "Thanksgiving Break",
+    "2025-11-27":  "Thanksgiving Holiday",
+    "2025-11-28":  "Thanksgiving Break",
+    "2025-12-25":  "Christmas Day Holiday",
+    "2026-01-01":  "New Year's Day Holiday",
+    "2026-01-19":  "Martin Luther King Jr. Holiday",
+    "2026-02-13":  "No School",
+    "2026-02-16":  "President's Day Holiday",
+    "2026-03-12":  "Staff Development Day / No School",
+    "2026-03-13":  "No School",
+    "2026-05-25":  "Memorial Day Holiday",
+    "2026-06-04":  "TK-12 Teacher Work Day / No School"
+  },
+  "breaks": [
+    {"name": "Thanksgiving Break", "start": "2025-11-24", "end": "2025-11-30"},
+    {"name": "Winter Break",       "start": "2025-12-22", "end": "2026-01-05"},
+    {"name": "Spring Break",       "start": "2026-04-06", "end": "2026-04-12"}
+  ],
+  "minimum_days": {
+    "2025-08-12":  "1st-5th Early Release",
+    "2025-09-15":  "TK-8 Minimum Day / Parent Conference",
+    "2025-10-13":  "1st-5th Early Release",
+    "2025-10-14":  "1st-5th Early Release",
+    "2025-10-27":  "TK-8 Minimum Day / Parent Conference",
+    "2025-10-28":  "TK-8 Minimum Day / Parent Conference",
+    "2025-10-29":  "TK-8 Minimum Day / Parent Conference",
+    "2025-10-30":  "TK-8 Minimum Day / Parent Conference",
+    "2025-10-31":  "TK-8 Minimum Day",
+    "2025-12-19":  "TK-8 Minimum Day",
+    "2026-02-17":  "1st-5th Early Release",
+    "2026-03-09":  "1st-5th Early Release",
+    "2026-03-10":  "1st-5th Early Release",
+    "2026-06-03":  "TK-8 Minimum Day / Last Day of School"
+  },
+  "academic_dates": {
+    "2025-08-12":  "First Day of School",
+    "2025-10-10":  "TK-12 1st Quarter End",
+    "2025-12-19":  "TK-12 1st Semester End",
+    "2026-03-11":  "TK-12 3rd Quarter End",
+    "2026-06-03":  "Last Day of School / TK-12 2nd Semester End"
+  }
+}

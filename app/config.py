@@ -16,6 +16,6 @@ PORT = int(os.getenv("PORT", 8000))
 # School Website
 SCHOOL_WEBSITE = "https://wms.dublinusd.org/"
 
-# School Contact Information
+# School Info
 SCHOOL_NAME = "Wells Middle School"
 SCHOOL_DISTRICT = "Dublin Unified School District"
