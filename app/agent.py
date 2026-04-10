@@ -26,7 +26,11 @@ class WellsMiddleSchoolAgent:
                 "description": (
                     "Get information about Wells Middle School from the school website. "
                     "Use this to answer questions about the school such as: staff, programs, "
-                    "academics, clubs, sports, contact info, and announcements."
+                    "academics, clubs, sports, contact info, and announcements. "
+                    "Use the 'page_group' parameter to target specific sections: "
+                    "'principal' for principal/assistant principal/admin info, "
+                    "'staff' for the full staff directory (teachers, counselors, support staff), "
+                    "'home' for general school info (default)."
                 ),
                 "input_schema": {
                     "type": "object",
@@ -35,12 +39,14 @@ class WellsMiddleSchoolAgent:
                             "type": "string",
                             "description": "The user's question about the school"
                         },
-                        "pages": {
-                            "type": "array",
-                            "items": {"type": "string"},
+                        "page_group": {
+                            "type": "string",
+                            "enum": ["home", "principal", "staff"],
                             "description": (
-                                "Optional list of specific page paths to scrape "
-                                "(e.g., ['/about', '/staff']). Leave empty to use defaults."
+                                "Which page group to scrape. "
+                                "'principal' for questions about the principal or assistant principals. "
+                                "'staff' for questions about teachers, counselors, or any staff member by name/department. "
+                                "Defaults to 'home'."
                             )
                         }
                     },
@@ -72,18 +78,34 @@ Today's date is {today}.
 You help students, parents, and staff with questions about the school — including academics, staff, events, clubs, sports, schedules, and general information.
 
 SCHOOL INFORMATION:
+Name: Wells Middle School
+Address: 6800 Penn Drive, Dublin, CA 94568
+Phone: (925) 828-6227
+Fax: (925) 829-8851
+Office Hours: Monday–Friday, 8:00 AM – 4:00 PM
 Website: https://wms.dublinusd.org/
 District: Dublin Unified School District
 
 CRITICAL RULES:
 - NEVER guess, assume, or fabricate school information
-- Always use the available tools to look up answers
-- If you cannot find an answer, say so clearly and suggest contacting the school directly
+- ALWAYS call a tool before answering any factual question about the school — including follow-up questions. Do not rely on prior tool results already in the conversation; call the tool again.
+- If you cannot find an answer from the tools, say so clearly and suggest contacting the school directly
 - Be friendly, concise, and helpful"""
 
     # Page URL registry — add new URLs here as they become available
     PAGES = {
-        "home": ["/"],
+        "home": [
+            "/",
+            "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=449301&type=d&termREC_ID=&pREC_ID=921000",
+            "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=449301&type=d&termREC_ID=&pREC_ID=1132073",
+        ],
+        "principal": [
+            "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=449301&type=d&termREC_ID=&pREC_ID=921000",
+            "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=449301&type=d&termREC_ID=&pREC_ID=1132073",
+        ],
+        "staff": [
+            "https://wms.dublinusd.org/apps/staff/",
+        ],
     }
 
     @property
@@ -98,8 +120,12 @@ CRITICAL RULES:
 
     def process_tool_call(self, tool_name: str, tool_input: Dict[str, Any]) -> str:
         if tool_name == "get_school_information":
-            pages = tool_input.get("pages") or self.PAGES["home"]
-            return scraper.get_school_info(pages)
+            page_group = tool_input.get("page_group", "home")
+            pages = self.PAGES.get(page_group, self.PAGES["home"])
+            result = scraper.get_school_info(pages)
+            if page_group == "staff":
+                result += "\n\n[NOTE: Please include a brief disclaimer in your response that the staff directory may not always be up to date, and users should contact the school directly at (925) 828-6227 to confirm current staff assignments.]"
+            return result
         if tool_name == "get_calendar_events":
             return get_upcoming_events()
         if tool_name == "get_no_school_days":
