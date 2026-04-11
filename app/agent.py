@@ -26,10 +26,14 @@ class WellsMiddleSchoolAgent:
                 "description": (
                     "Get information about Wells Middle School from the school website. "
                     "Use this to answer questions about the school such as: staff, programs, "
-                    "academics, clubs, sports, contact info, and announcements. "
+                    "academics, clubs, contact info, and announcements. "
                     "Use the 'page_group' parameter to target specific sections: "
                     "'principal' for principal/assistant principal/admin info, "
                     "'staff' for the full staff directory (teachers, counselors, support staff), "
+                    "'academics' for dress code, academic programs, homework policy, after-school hours, "
+                    "'counseling' for counselor names, emails, and office locations, "
+                    "'attendance' for attendance policies and absence reporting, "
+                    "'clubs' for student clubs and organizations, "
                     "'home' for general school info (default)."
                 ),
                 "input_schema": {
@@ -41,11 +45,15 @@ class WellsMiddleSchoolAgent:
                         },
                         "page_group": {
                             "type": "string",
-                            "enum": ["home", "principal", "staff"],
+                            "enum": ["home", "principal", "staff", "academics", "counseling", "attendance", "clubs"],
                             "description": (
                                 "Which page group to scrape. "
                                 "'principal' for questions about the principal or assistant principals. "
-                                "'staff' for questions about teachers, counselors, or any staff member by name/department. "
+                                "'staff' for questions about teachers or any staff member by name/department. "
+                                "'academics' for dress code, academic programs, homework policy, after-school programs. "
+                                "'counseling' for counselor names, emails, office locations, or counseling services. "
+                                "'attendance' for attendance policies and how to report absences. "
+                                "'clubs' for student clubs, organizations, and activities. "
                                 "Defaults to 'home'."
                             )
                         }
@@ -86,9 +94,58 @@ Office Hours: Monday–Friday, 8:00 AM – 4:00 PM
 Website: https://wms.dublinusd.org/
 District: Dublin Unified School District
 
+BELL SCHEDULE (2025-26):
+Monday / Tuesday / Thursday / Friday:
+  Period 0:  7:40 AM – 8:30 AM
+  Period 1:  8:35 AM – 9:25 AM
+  Period 2:  9:29 AM – 10:19 AM
+  Break:     10:19 AM – 10:26 AM
+  AVID/Advisory: 10:30 AM – 10:55 AM
+  Period 3:  10:59 AM – 11:49 AM
+  Lunch A:   11:49 AM – 12:23 PM
+  Period 4 (Lunch A): 12:27 PM – 1:17 PM
+  Period 4 (Lunch B): 11:53 AM – 12:43 PM
+  Lunch B:   12:43 PM – 1:17 PM
+  Period 5:  1:21 PM – 2:11 PM
+  Period 6:  2:15 PM – 3:05 PM
+
+Wednesday:
+  Period 0:  7:45 AM – 8:30 AM
+  Period 1:  8:35 AM – 9:23 AM
+  Period 2:  9:27 AM – 10:10 AM
+  Break:     10:10 AM – 10:17 AM
+  Period 3:  10:21 AM – 11:04 AM
+  Lunch A:   11:04 AM – 11:39 AM
+  Period 4 (Lunch A): 11:43 AM – 12:26 PM
+  Period 4 (Lunch B): 11:08 AM – 11:51 AM
+  Lunch B:   11:51 AM – 12:26 PM
+  Period 5:  12:30 PM – 1:13 PM
+  Period 6:  1:17 PM – 2:00 PM
+
+Minimum Days:
+  Period 0:  8:05 AM – 8:30 AM
+  Period 1:  8:35 AM – 9:07 AM
+  Period 2:  9:11 AM – 9:41 AM
+  Period 3:  9:45 AM – 10:15 AM
+  Period 4:  10:22 AM – 10:52 AM
+  Period 5:  10:56 AM – 11:26 AM
+  Period 6:  11:30 AM – 12:00 PM (Lunch Grab & Go)
+
+USEFUL LINKS (share these when relevant):
+- Bell Schedule PDF: https://drive.google.com/file/d/107PmZjvXZacDQgX_O6mpDd-09qWPgiIi/view
+- Athletics: https://sites.google.com/dublinusd.org/wmsathletics/home
+- AVID Program: https://sites.google.com/dublinusd.org/wells-middle-school-avid
+- Parent Portal (grades/attendance): https://icampus.dublinusd.org/campus/portal/dublin.jsp
+- Counseling Appointment Request: https://forms.gle/dXkFqP5bRxUGtFvi9
+- FlexiSched (counseling schedule): https://wells.flexisched.net/
+- Wells Webstore: https://wellswebstore.myschoolcentral.com
+- Elective Handbook: https://drive.google.com/file/d/1uVqHtEqBH17XAKrkz9lu3OStBcIMVQ9G/view
+- Bullying Report Form: https://forms.gle/7xYV7TgBdpbYA8z87
+
 CRITICAL RULES:
 - NEVER guess, assume, or fabricate school information
 - ALWAYS call a tool before answering any factual question about the school — including follow-up questions. Do not rely on prior tool results already in the conversation; call the tool again.
+- Bell schedule and useful links above are hardcoded facts — you may answer those directly without calling a tool.
 - If you cannot find an answer from the tools, say so clearly and suggest contacting the school directly
 - Be friendly, concise, and helpful"""
 
@@ -105,6 +162,21 @@ CRITICAL RULES:
         ],
         "staff": [
             "https://wms.dublinusd.org/apps/staff/",
+        ],
+        "academics": [
+            "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=449299&type=d",   # About our School
+            "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=449323&type=d",   # Academic Opportunities
+            "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=449318&type=d",   # Homework Policy
+        ],
+        "counseling": [
+            "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=449306&type=d",   # Counseling Staff
+        ],
+        "attendance": [
+            "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=449304&type=d",   # Attendance
+        ],
+        "clubs": [
+            "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=449324&type=d",   # Student Clubs & Organizations
+            "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=449323&type=d",   # Academic Opportunities (lists programs)
         ],
     }
 
