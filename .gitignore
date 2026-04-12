@@ -35,6 +35,9 @@ logs/
 # User data — never commit
 data/feedback.jsonl
 
+# Local Claude Code instructions — never commit
+CLAUDE.md
+
 # Database
 *.db
 *.sqlite3
