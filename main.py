@@ -24,7 +24,9 @@ async def whatsapp_webhook(
     print(f"Received message from {From}: {Body}")
     response_text = agent.chat(Body, user_id=From)
     twiml_response = MessagingResponse()
-    twiml_response.message(response_text)
+    msg = twiml_response.message(response_text)
+    if agent.attach_map:
+        msg.media(config.CAMPUS_MAP_URL)
     return PlainTextResponse(content=str(twiml_response), media_type="application/xml")
 
 

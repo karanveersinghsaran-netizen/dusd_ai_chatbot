@@ -1,0 +1,123 @@
+{
+  "map_url": "https://raw.githubusercontent.com/karanveersinghsaran-netizen/wms_ai_chatbot/master/data/campus_map.png",
+  "pdf_url": "https://wms.dublinusd.org/pdf/Wells%20Map-Final%20_1_.pdf",
+
+  "buildings": {
+    "B": {
+      "name": "B Building",
+      "position": "west side of campus",
+      "floors": {
+        "1": {
+          "rooms": ["B101", "B102", "B103", "B104", "B105", "B106"],
+          "key_areas": ["Library", "Foyer", "Copy Room", "Staff Room"]
+        },
+        "2": {
+          "rooms": ["B201", "B202", "B203", "B204", "B205", "B206", "B207", "B208", "B209"],
+          "key_areas": ["Counseling", "Conference Room"]
+        }
+      },
+      "notes": "Main academic building. Enter through the Foyer on the 1st floor. Elevator available near Foyer."
+    },
+    "H": {
+      "name": "H Building",
+      "position": "northwest side of campus, curved building",
+      "floors": {
+        "1": {
+          "rooms": ["H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10", "H11", "H12"],
+          "key_areas": ["Copy Room"]
+        },
+        "2": {
+          "rooms": ["H21", "H22", "H23", "H24", "H25", "H26", "H27", "H28", "H29"],
+          "key_areas": ["Boiler Room"]
+        }
+      },
+      "notes": "Curved building on the northwest side. Elevator available. H1-H12 on 1st floor, H21-H29 on 2nd floor."
+    },
+    "E": {
+      "name": "E Building",
+      "position": "east-center side of campus, standalone portable classrooms",
+      "floors": {
+        "1": {
+          "rooms": ["E1", "E2", "E3", "E4", "E5", "E6"],
+          "key_areas": ["Student Activities"]
+        }
+      },
+      "notes": "Standalone portable classrooms near the Admin Office and Band room."
+    }
+  },
+
+  "key_locations": {
+    "Library": {
+      "building": "B Building",
+      "floor": "1st floor",
+      "description": "Inside B Building, 1st floor — enter through the Foyer"
+    },
+    "Counseling": {
+      "building": "B Building",
+      "floor": "2nd floor",
+      "description": "B Building, 2nd floor — take stairs or elevator near the Foyer"
+    },
+    "Gym": {
+      "building": "Standalone",
+      "floor": "Ground level",
+      "position": "north side of campus",
+      "description": "Large standalone building on the north side, next to the Lunch Pavilion. Boys and Girls Locker Rooms are attached."
+    },
+    "MPR": {
+      "building": "Standalone",
+      "floor": "Ground level",
+      "position": "center of campus",
+      "description": "Multi-Purpose Room in the center of campus. Includes the Stage, Weight Room, and D1."
+    },
+    "Lunch Pavilion": {
+      "building": "Standalone",
+      "floor": "Ground level",
+      "position": "north side of campus, next to Gym",
+      "description": "Standalone building on the north side next to the Gym. Includes Kitchen and Restrooms."
+    },
+    "Band": {
+      "building": "Standalone",
+      "floor": "Ground level",
+      "position": "east side of campus",
+      "description": "Standalone Band room on the east side of campus, near E Building."
+    },
+    "Office": {
+      "building": "Standalone",
+      "floor": "Ground level",
+      "position": "southeast side of campus",
+      "description": "Main Admin area on the southeast side. Includes Principal, Asst. Principal, Health room, and Student Activities."
+    },
+    "Boys Locker Room": {
+      "building": "Gym",
+      "description": "Attached to the Gym on the north side of campus"
+    },
+    "Girls Locker Room": {
+      "building": "Gym",
+      "description": "Attached to the Gym on the north side of campus"
+    },
+    "Weight Room": {
+      "building": "MPR",
+      "description": "Inside the MPR building, center of campus"
+    },
+    "Stage": {
+      "building": "MPR",
+      "description": "Inside the MPR building, center of campus"
+    },
+    "Foyer": {
+      "building": "B Building",
+      "floor": "1st floor",
+      "description": "Main entrance area of B Building, 1st floor"
+    }
+  },
+
+  "navigation_notes": [
+    "H Building is the large curved building on the northwest side.",
+    "B Building is on the west side and contains the Library (1F) and Counseling (2F).",
+    "The Gym and Lunch Pavilion are side by side on the north side.",
+    "The MPR (Multi-Purpose Room) is in the center of campus.",
+    "E Building portable classrooms are near the Admin Office on the east-center side.",
+    "The Band room is on the far east side of campus.",
+    "The Admin Office (Principal, Asst. Principal, Health) is on the southeast side.",
+    "Most buildings have restrooms (RR) marked on the map."
+  ]
+}

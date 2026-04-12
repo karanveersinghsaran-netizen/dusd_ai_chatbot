@@ -19,6 +19,7 @@ from app.services.calendar import (
 
 class WellsMiddleSchoolAgent:
     FEEDBACK_FILE = Path(__file__).resolve().parents[1] / "data" / "feedback.jsonl"
+    CAMPUS_MAP_FILE = Path(__file__).resolve().parents[1] / "data" / "campus_map.json"
 
     def __init__(self):
         self.client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
@@ -28,6 +29,7 @@ class WellsMiddleSchoolAgent:
         self.feedback_pending: set = set()  # sessions whose next reply should be treated as passive feedback
         self.report_pending: set = set()    # sessions whose next reply is a report comment
         self.last_responses: dict = {}      # last bot response per user, for attaching to reports
+        self.attach_map: bool = False       # set to True when last response should include campus map
 
         self.tools = [
             {
@@ -85,6 +87,29 @@ class WellsMiddleSchoolAgent:
                     "instructional calendar. Use this for questions about days off, holidays, or breaks."
                 ),
                 "input_schema": {"type": "object", "properties": {}}
+            },
+            {
+                "name": "get_campus_directions",
+                "description": (
+                    "Get directions and location info for rooms, buildings, or areas on the Wells Middle School campus. "
+                    "Use this for any question about where something is on campus, how to get somewhere, "
+                    "or what building a room number belongs to. "
+                    "Examples: 'where is the library', 'how do I get from B101 to the gym', 'where is room H5'."
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "origin": {
+                            "type": "string",
+                            "description": "Where the student is starting from (room, building, or area). Leave empty if not specified."
+                        },
+                        "destination": {
+                            "type": "string",
+                            "description": "Where the student wants to go (room, building, or area)."
+                        }
+                    },
+                    "required": ["destination"]
+                }
             }
         ]
 
@@ -219,6 +244,16 @@ CRITICAL RULES:
             return "SOURCE: https://wms.dublinusd.org/apps/events/\n\n" + get_upcoming_events()
         if tool_name == "get_no_school_days":
             return "SOURCE: https://wms.dublinusd.org/apps/events/\n\n" + get_upcoming_no_school_days()
+        if tool_name == "get_campus_directions":
+            try:
+                campus = json.loads(self.CAMPUS_MAP_FILE.read_text(encoding="utf-8"))
+                return (
+                    f"[ATTACH_MAP]\n\n"
+                    f"Campus map image: {campus['map_url']}\n\n"
+                    f"{json.dumps(campus, indent=2)}"
+                )
+            except Exception as e:
+                return f"Campus map data unavailable: {e}"
         return "Tool not found"
 
     def _is_feedback(self, message: str) -> str | None:
@@ -371,6 +406,10 @@ CRITICAL RULES:
             final_response = "".join(
                 block.text for block in response.content if hasattr(block, "text")
             ) or "I'm not sure how to help with that. Please contact Wells Middle School directly."
+
+            # Extract map attachment marker if present
+            self.attach_map = "[ATTACH_MAP]" in final_response
+            final_response = final_response.replace("[ATTACH_MAP]", "").strip()
 
             self.conversations[user_id].append({"role": "assistant", "content": final_response})
             self.last_responses[user_id] = final_response  # store for potential report
