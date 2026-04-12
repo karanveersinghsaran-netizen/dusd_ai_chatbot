@@ -1,7 +1,10 @@
 import anthropic
+import hashlib
+import json
 import re
 import time
-from datetime import date
+from datetime import date, datetime
+from pathlib import Path
 from typing import Dict, Any
 
 from app import config
@@ -15,10 +18,14 @@ from app.services.calendar import (
 
 
 class WellsMiddleSchoolAgent:
+    FEEDBACK_FILE = Path(__file__).resolve().parents[1] / "data" / "feedback.jsonl"
+
     def __init__(self):
         self.client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
         self.model = "claude-haiku-4-5-20251001"
         self.conversations = {}
+        self.feedback_asked: set = set()    # sessions that have been asked for feedback
+        self.feedback_pending: set = set()  # sessions whose next reply should be treated as feedback
 
         self.tools = [
             {
@@ -142,6 +149,14 @@ USEFUL LINKS (share these when relevant):
 - Elective Handbook: https://drive.google.com/file/d/1uVqHtEqBH17XAKrkz9lu3OStBcIMVQ9G/view
 - Bullying Report Form: https://forms.gle/7xYV7TgBdpbYA8z87
 
+SOURCE CITATION:
+- At the end of every substantive response, add a compact source line on its own line.
+- Format: "📍 Source: <URL>" — use the URL from the "=== URL ===" header or "SOURCE:" marker in the tool result.
+- For calendar events: 📍 Source: https://wms.dublinusd.org/apps/events/
+- For bell schedule or hardcoded school info: 📍 Source: https://wms.dublinusd.org/
+- One source line only — pick the most relevant URL if multiple pages were scraped.
+- Skip the source line for conversational replies, error messages, and feedback acknowledgments.
+
 CRITICAL RULES:
 - NEVER guess, assume, or fabricate school information
 - ALWAYS call a tool before answering any factual question about the school — including follow-up questions. Do not rely on prior tool results already in the conversation; call the tool again.
@@ -199,13 +214,41 @@ CRITICAL RULES:
                 result += "\n\n[NOTE: Please include a brief disclaimer in your response that the staff directory may not always be up to date, and users should contact the school directly at (925) 828-6227 to confirm current staff assignments.]"
             return result
         if tool_name == "get_calendar_events":
-            return get_upcoming_events()
+            return "SOURCE: https://wms.dublinusd.org/apps/events/\n\n" + get_upcoming_events()
         if tool_name == "get_no_school_days":
-            return get_upcoming_no_school_days()
+            return "SOURCE: https://wms.dublinusd.org/apps/events/\n\n" + get_upcoming_no_school_days()
         return "Tool not found"
+
+    def _is_feedback(self, message: str) -> str | None:
+        """Return 'positive', 'negative', or None if the message is not a feedback reply."""
+        msg = message.strip().lower()
+        positive = {"1", "👍", "good", "great", "yes", "helpful", "perfect", "nice", "awesome", "thanks", "✅", "😊"}
+        negative = {"2", "👎", "bad", "no", "poor", "not helpful", "wrong", "incorrect", "❌", "😞"}
+        if msg in positive:
+            return "positive"
+        if msg in negative:
+            return "negative"
+        return None
+
+    def _record_feedback(self, user_id: str, sentiment: str, raw: str) -> None:
+        """Append a feedback entry to the JSONL file."""
+        try:
+            self.FEEDBACK_FILE.parent.mkdir(parents=True, exist_ok=True)
+            record = {
+                "timestamp": datetime.utcnow().isoformat(),
+                "user_hash": hashlib.sha256(user_id.encode()).hexdigest()[:12],
+                "sentiment": sentiment,
+                "raw": raw.strip(),
+            }
+            with open(self.FEEDBACK_FILE, "a", encoding="utf-8") as f:
+                f.write(json.dumps(record) + "\n")
+        except Exception:
+            pass  # Never let feedback recording break the chat flow
 
     def clear_conversation(self, user_id: str = "default"):
         self.conversations.pop(user_id, None)
+        self.feedback_asked.discard(user_id)
+        self.feedback_pending.discard(user_id)
 
     def _call_api(self, messages: list, retries: int = 3) -> Any:
         """Call Claude API with exponential backoff for transient errors."""
@@ -226,6 +269,17 @@ CRITICAL RULES:
 
     def chat(self, user_message: str, user_id: str = "default") -> str:
         try:
+            # Intercept pending feedback reply before anything else
+            if user_id in self.feedback_pending:
+                self.feedback_pending.discard(user_id)
+                sentiment = self._is_feedback(user_message)
+                if sentiment:
+                    self._record_feedback(user_id, sentiment, user_message)
+                    ack = "Thanks for the feedback! 🙏" if sentiment == "positive" \
+                        else "Sorry to hear that! 🙏 Feel free to rephrase your question or contact the school at (925) 828-6227."
+                    return ack + " How else can I help you?"
+                # Not feedback — fall through and treat as a new question
+
             # Basic content filter
             for word in ['fuck', 'shit', 'bitch', 'bastard']:
                 if re.search(r'\b' + re.escape(word) + r'\b', user_message.lower()):
@@ -270,6 +324,12 @@ CRITICAL RULES:
             # Keep last 20 messages
             if len(self.conversations[user_id]) > 20:
                 self.conversations[user_id] = self.conversations[user_id][-20:]
+
+            # Ask for feedback once per session (after the first real response)
+            if user_id not in self.feedback_asked:
+                self.feedback_asked.add(user_id)
+                self.feedback_pending.add(user_id)
+                final_response += "\n\n---\n💬 *Was this helpful?* Reply *1* 👍 or *2* 👎"
 
             return final_response
 

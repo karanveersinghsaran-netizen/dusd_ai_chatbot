@@ -32,6 +32,9 @@ Thumbs.db
 *.log
 logs/
 
+# User data — never commit
+data/feedback.jsonl
+
 # Database
 *.db
 *.sqlite3
