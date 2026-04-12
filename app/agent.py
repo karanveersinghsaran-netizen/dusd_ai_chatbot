@@ -25,7 +25,9 @@ class WellsMiddleSchoolAgent:
         self.model = "claude-haiku-4-5-20251001"
         self.conversations = {}
         self.feedback_asked: set = set()    # sessions that have been asked for feedback
-        self.feedback_pending: set = set()  # sessions whose next reply should be treated as feedback
+        self.feedback_pending: set = set()  # sessions whose next reply should be treated as passive feedback
+        self.report_pending: set = set()    # sessions whose next reply is a report comment
+        self.last_responses: dict = {}      # last bot response per user, for attaching to reports
 
         self.tools = [
             {
@@ -220,7 +222,7 @@ CRITICAL RULES:
         return "Tool not found"
 
     def _is_feedback(self, message: str) -> str | None:
-        """Return 'positive', 'negative', or None if the message is not a feedback reply."""
+        """Return 'positive', 'negative', or None if the message is not a passive feedback reply."""
         msg = message.strip().lower()
         positive = {"1", "👍", "good", "great", "yes", "helpful", "perfect", "nice", "awesome", "thanks", "✅", "😊"}
         negative = {"2", "👎", "bad", "no", "poor", "not helpful", "wrong", "incorrect", "❌", "😞"}
@@ -230,16 +232,26 @@ CRITICAL RULES:
             return "negative"
         return None
 
-    def _record_feedback(self, user_id: str, sentiment: str, raw: str) -> None:
+    def _is_report_trigger(self, message: str) -> bool:
+        """Return True if the message is a user-initiated report/feedback command."""
+        return message.strip().lower() in {"report", "/report", "feedback", "/feedback"}
+
+    def _record_feedback(self, user_id: str, feedback_type: str, sentiment: str,
+                         raw: str, comment: str = "", last_response: str = "") -> None:
         """Append a feedback entry to the JSONL file."""
         try:
             self.FEEDBACK_FILE.parent.mkdir(parents=True, exist_ok=True)
             record = {
                 "timestamp": datetime.utcnow().isoformat(),
                 "user_hash": hashlib.sha256(user_id.encode()).hexdigest()[:12],
+                "type": feedback_type,   # "passive" | "report"
                 "sentiment": sentiment,
                 "raw": raw.strip(),
             }
+            if comment:
+                record["comment"] = comment.strip()
+            if last_response:
+                record["last_response"] = last_response.strip()
             with open(self.FEEDBACK_FILE, "a", encoding="utf-8") as f:
                 f.write(json.dumps(record) + "\n")
         except Exception:
@@ -247,8 +259,10 @@ CRITICAL RULES:
 
     def clear_conversation(self, user_id: str = "default"):
         self.conversations.pop(user_id, None)
+        self.last_responses.pop(user_id, None)
         self.feedback_asked.discard(user_id)
         self.feedback_pending.discard(user_id)
+        self.report_pending.discard(user_id)
 
     def _call_api(self, messages: list, retries: int = 3) -> Any:
         """Call Claude API with exponential backoff for transient errors."""
@@ -269,23 +283,62 @@ CRITICAL RULES:
 
     def chat(self, user_message: str, user_id: str = "default") -> str:
         try:
-            # Intercept pending feedback reply before anything else
+            # ── Priority 1: collect active report comment ──────────────────────
+            if user_id in self.report_pending:
+                self.report_pending.discard(user_id)
+                comment = "" if user_message.strip().lower() == "skip" else user_message
+                self._record_feedback(
+                    user_id, feedback_type="report", sentiment="negative",
+                    raw=user_message, comment=comment,
+                    last_response=self.last_responses.get(user_id, ""),
+                )
+                return "Thanks for the report! 🙏 We'll use it to improve. How else can I help?"
+
+            # ── Priority 2: help command ───────────────────────────────────────
+            if user_message.strip().lower() in {"help", "/help"}:
+                return (
+                    "Here's what I can help with:\n\n"
+                    "Ask me anything about *Wells Middle School* — staff, events, schedules, clubs, attendance, and more.\n\n"
+                    "*Commands:*\n"
+                    "• *report* — flag my last response if something seems wrong\n"
+                    "• *clear* — start a fresh conversation\n"
+                    "• *help* — show this message\n\n"
+                    "You can also reach the school directly:\n"
+                    "📞 (925) 828-6227 | 🌐 wms.dublinusd.org"
+                )
+
+            # ── Priority 4: user-initiated report trigger ──────────────────────
+            if self._is_report_trigger(user_message):
+                if user_id not in self.last_responses:
+                    return "There's no recent response to report. Ask me a question first!"
+                self.report_pending.add(user_id)
+                self.feedback_pending.discard(user_id)  # cancel any pending passive ask
+                return (
+                    "Thanks for flagging that! What was the issue with my last response?\n"
+                    "(Reply with a comment, or *skip* to just flag it)"
+                )
+
+            # ── Priority 5: collect passive feedback ───────────────────────────
             if user_id in self.feedback_pending:
                 self.feedback_pending.discard(user_id)
                 sentiment = self._is_feedback(user_message)
                 if sentiment:
-                    self._record_feedback(user_id, sentiment, user_message)
+                    self._record_feedback(
+                        user_id, feedback_type="passive", sentiment=sentiment,
+                        raw=user_message,
+                    )
                     ack = "Thanks for the feedback! 🙏" if sentiment == "positive" \
-                        else "Sorry to hear that! 🙏 Feel free to rephrase your question or contact the school at (925) 828-6227."
+                        else "Sorry to hear that! 🙏 You can also type *report* anytime to flag a specific response."
                     return ack + " How else can I help you?"
-                # Not feedback — fall through and treat as a new question
+                # Not a feedback reply — fall through and treat as a new question
 
-            # Basic content filter
+            # ── Priority 6: content filter ─────────────────────────────────────
             for word in ['fuck', 'shit', 'bitch', 'bastard']:
                 if re.search(r'\b' + re.escape(word) + r'\b', user_message.lower()):
                     return ("I'm sorry, but I can only respond to respectful inquiries. "
                             "Please keep communication kind and respectful.")
 
+            # ── Normal chat flow ───────────────────────────────────────────────
             if user_id not in self.conversations:
                 self.conversations[user_id] = []
 
@@ -320,16 +373,21 @@ CRITICAL RULES:
             ) or "I'm not sure how to help with that. Please contact Wells Middle School directly."
 
             self.conversations[user_id].append({"role": "assistant", "content": final_response})
+            self.last_responses[user_id] = final_response  # store for potential report
 
             # Keep last 20 messages
             if len(self.conversations[user_id]) > 20:
                 self.conversations[user_id] = self.conversations[user_id][-20:]
 
-            # Ask for feedback once per session (after the first real response)
+            # Ask for passive feedback once per session
             if user_id not in self.feedback_asked:
                 self.feedback_asked.add(user_id)
                 self.feedback_pending.add(user_id)
-                final_response += "\n\n---\n💬 *Was this helpful?* Reply *1* 👍 or *2* 👎"
+                final_response += (
+                    "\n\n---\n"
+                    "💬 *Was this helpful?* Reply *1* 👍 or *2* 👎\n"
+                    "💡 Tip: Type *report* anytime to flag a response that seems wrong"
+                )
 
             return final_response
 
