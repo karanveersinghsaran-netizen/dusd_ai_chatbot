@@ -110,6 +110,15 @@
     }
   },
 
+  "subject_locations": {
+    "Math": "H Building or E Building",
+    "Science": "H Building",
+    "English": "B Building",
+    "History": "B Building",
+    "Drama": "MPR",
+    "Electives": "Any building — elective classes can be located throughout campus"
+  },
+
   "navigation_notes": [
     "H Building is the large curved building on the northwest side.",
     "B Building is on the west side and contains the Library (1F) and Counseling (2F).",
@@ -118,6 +127,7 @@
     "E Building portable classrooms are near the Admin Office on the east-center side.",
     "The Band room is on the far east side of campus.",
     "The Admin Office (Principal, Asst. Principal, Health) is on the southeast side.",
-    "Most buildings have restrooms (RR) marked on the map."
+    "Most buildings have restrooms (RR) marked on the map.",
+    "You cannot cut through between B Building and the Office/E Building — to travel between them, you must go around the MPR and through the main quad."
   ]
 }
