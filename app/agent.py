@@ -91,10 +91,11 @@ class WellsMiddleSchoolAgent:
             {
                 "name": "get_campus_directions",
                 "description": (
-                    "Get directions and location info for rooms, buildings, or areas on the Wells Middle School campus. "
+                    "Get directions and location info for rooms, buildings, areas, or classes on the Wells Middle School campus. "
                     "Use this for any question about where something is on campus, how to get somewhere, "
-                    "or what building a room number belongs to. "
-                    "Examples: 'where is the library', 'how do I get from B101 to the gym', 'where is room H5'."
+                    "what building a room number belongs to, or which building a subject/class is held in. "
+                    "Examples: 'where is the library', 'how do I get from B101 to the gym', 'where is room H5', "
+                    "'where is my science class', 'what building is math in', 'where is drama'."
                 ),
                 "input_schema": {
                     "type": "object",
@@ -188,6 +189,7 @@ CRITICAL RULES:
 - NEVER guess, assume, or fabricate school information
 - ALWAYS call a tool before answering any factual question about the school — including follow-up questions. Do not rely on prior tool results already in the conversation; call the tool again.
 - Bell schedule and useful links above are hardcoded facts — you may answer those directly without calling a tool.
+- For ANY question about where a class, subject, or room is on campus, ALWAYS call get_campus_directions — never guess building names.
 - If you cannot find an answer from the tools, say so clearly and suggest contacting the school directly
 - Be friendly, concise, and helpful"""
 
