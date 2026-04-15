@@ -169,6 +169,7 @@ Minimum Days:
   Period 6:  11:30 AM – 12:00 PM (Lunch Grab & Go)
 
 USEFUL LINKS (share these when relevant):
+- Donate to Wells Middle School: https://www.paypal.com/donate/?hosted_button_id=A7XCLC68BRATW
 - Bell Schedule PDF: https://drive.google.com/file/d/107PmZjvXZacDQgX_O6mpDd-09qWPgiIi/view
 - Athletics: https://sites.google.com/dublinusd.org/wmsathletics/home
 - AVID Program: https://sites.google.com/dublinusd.org/wells-middle-school-avid
@@ -338,13 +339,23 @@ CRITICAL RULES:
             if user_message.strip().lower() in {"help", "/help"}:
                 return (
                     "Here's what I can help with:\n\n"
-                    "Ask me anything about *Wells Middle School* — staff, events, schedules, clubs, attendance, and more.\n\n"
-                    "*Commands:*\n"
-                    "• *report* — flag my last response if something seems wrong\n"
-                    "• *clear* — start a fresh conversation\n"
-                    "• *help* — show this message\n\n"
+                    "Ask me anything about Wells Middle School — staff, events, schedules, clubs, attendance, and more.\n\n"
+                    "Commands:\n"
+                    "- report — flag my last response if something seems wrong\n"
+                    "- clear — start a fresh conversation\n"
+                    "- donate — support Wells Middle School\n"
+                    "- help — show this message\n\n"
                     "You can also reach the school directly:\n"
-                    "📞 (925) 828-6227 | 🌐 wms.dublinusd.org"
+                    "(925) 828-6227 | wms.dublinusd.org"
+                )
+
+            # ── Priority 3: donate command ─────────────────────────────────────
+            if re.search(r'\b(donate|donation|donations|support the school)\b', user_message.strip().lower()):
+                return (
+                    "Thank you for supporting Wells Middle School!\n\n"
+                    "You can make a donation here:\n"
+                    "https://www.paypal.com/donate/?hosted_button_id=A7XCLC68BRATW\n\n"
+                    "Every contribution helps our students and programs. Thank you!"
                 )
 
             # ── Priority 4: user-initiated report trigger ──────────────────────
