@@ -1,0 +1,39 @@
+{
+  "school_year": "2026-27",
+  "first_day": "2026-08-11",
+  "last_day": "2027-05-26",
+  "no_school_days": {
+    "2026-09-07":  "Labor Day Holiday",
+    "2026-10-15":  "No School",
+    "2026-10-16":  "No School",
+    "2026-11-11":  "Veterans Day Holiday",
+    "2026-11-26":  "Thanksgiving Holiday",
+    "2026-12-25":  "Christmas Day Holiday",
+    "2027-01-01":  "New Year's Day Holiday",
+    "2027-01-18":  "Martin Luther King Jr. Holiday",
+    "2027-02-15":  "President's Day Holiday",
+    "2027-03-12":  "Staff Development Day / No School",
+    "2027-05-31":  "Memorial Day Holiday"
+  },
+  "breaks": [
+    {"name": "Thanksgiving Break", "start": "2026-11-23", "end": "2026-11-29"},
+    {"name": "Winter Break",       "start": "2026-12-21", "end": "2027-01-03"},
+    {"name": "Spring Break",       "start": "2027-03-15", "end": "2027-03-21"}
+  ],
+  "minimum_days": {
+    "2026-10-26":  "TK-8 Minimum Day / Parent Conference",
+    "2026-10-27":  "TK-8 Minimum Day / Parent Conference",
+    "2026-10-28":  "TK-8 Minimum Day / Parent Conference",
+    "2026-10-29":  "TK-8 Minimum Day / Parent Conference",
+    "2026-10-30":  "TK-8 Minimum Day",
+    "2026-12-18":  "TK-8 Minimum Day",
+    "2027-05-26":  "TK-8 Minimum Day / Last Day of School"
+  },
+  "academic_dates": {
+    "2026-08-11":  "First Day of School",
+    "2026-10-09":  "TK-12 1st Quarter End",
+    "2026-12-18":  "TK-12 1st Semester End",
+    "2027-03-12":  "TK-12 3rd Quarter End",
+    "2027-05-26":  "Last Day of School / TK-12 2nd Semester End"
+  }
+}

@@ -42,9 +42,9 @@ def _current_school_year_key() -> str:
     return f"{start_year}_{str(start_year + 1)[2:]}"
 
 
-def _load_district_calendar() -> dict:
-    """Load the JSON calendar for the current school year."""
-    key = _current_school_year_key()
+def _load_district_calendar(year_key: str = None) -> dict:
+    """Load the JSON calendar for the given school year key (e.g. '2025_26'), or current year if omitted."""
+    key = year_key or _current_school_year_key()
     path = DATA_DIR / f"{key}.json"
     if not path.exists():
         return {}
@@ -112,28 +112,43 @@ def get_school_day_status(today: date = None) -> str:
         return f"School has not started yet. First day is {cal['first_day'].strftime('%B %d, %Y')}."
 
     if today > cal.get("last_day", today):
+        next_cal = _load_district_calendar(_next_year_key(_current_school_year_key()))
+        if next_cal and next_cal.get("first_day"):
+            return (f"The school year has ended (last day was {cal['last_day'].strftime('%B %d, %Y')}). "
+                    f"Next school year starts on {next_cal['first_day'].strftime('%B %d, %Y')}.")
         return f"The school year has ended (last day was {cal['last_day'].strftime('%B %d, %Y')})."
 
     return f"{date_str} is a regular school day."
 
 
-def get_upcoming_no_school_days(today: date = None, limit: int = 5) -> str:
-    """Return the next few no-school days and breaks."""
+def _next_year_key(key: str) -> str:
+    """Return the key for the following school year (e.g. '2025_26' -> '2026_27')."""
+    start_year = int(key.split("_")[0]) + 1
+    return f"{start_year}_{str(start_year + 1)[2:]}"
+
+
+def get_upcoming_no_school_days(today: date = None, limit: int = 20) -> str:
+    """Return the next few no-school days and breaks, spanning into next year if needed."""
     if today is None:
         today = date.today()
 
-    cal = _load_district_calendar()
-    if not cal:
-        return "District calendar data not available."
+    current_key = _current_school_year_key()
+    next_key = _next_year_key(current_key)
+    calendars = [_load_district_calendar(current_key), _load_district_calendar(next_key)]
 
     upcoming = []
-    for brk in cal.get("breaks", []):
-        if brk["end"] >= today:
-            upcoming.append((brk["start"], f"{brk['name']} ({brk['start'].strftime('%B %d')} – {brk['end'].strftime('%B %d, %Y')})"))
-
-    for d, reason in cal.get("no_school_days", {}).items():
-        if d >= today:
-            upcoming.append((d, f"{d.strftime('%B %d, %Y')}: {reason}"))
+    for cal in calendars:
+        if not cal:
+            continue
+        for brk in cal.get("breaks", []):
+            if brk["end"] >= today:
+                upcoming.append((brk["start"], f"{brk['name']} ({brk['start'].strftime('%B %d')} – {brk['end'].strftime('%B %d, %Y')})"))
+        for d, reason in cal.get("no_school_days", {}).items():
+            if d >= today:
+                upcoming.append((d, f"{d.strftime('%B %d, %Y')}: {reason}"))
+        for d, reason in cal.get("academic_dates", {}).items():
+            if d >= today:
+                upcoming.append((d, f"{d.strftime('%B %d, %Y')}: {reason}"))
 
     upcoming.sort(key=lambda x: x[0])
     seen, result = set(), []
