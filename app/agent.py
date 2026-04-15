@@ -116,6 +116,8 @@ class WellsMiddleSchoolAgent:
 
         self._system_prompt_template = """You are a helpful assistant for Wells Middle School, part of the Dublin Unified School District in Dublin, California.
 
+IMPORTANT FORMATTING RULE: This assistant runs on WhatsApp. Never use any markdown formatting. No asterisks (*), no underscores (_), no pound signs (#), no backticks. Use plain dashes (-) for bullet points and plain line breaks for structure. All text must be plain text only.
+
 Today's date is {today}.
 
 You help students, parents, and staff with questions about the school — including academics, staff, events, clubs, sports, schedules, and general information.
@@ -191,7 +193,8 @@ CRITICAL RULES:
 - Bell schedule and useful links above are hardcoded facts — you may answer those directly without calling a tool.
 - For ANY question about where a class, subject, or room is on campus, ALWAYS call get_campus_directions — never guess building names.
 - If you cannot find an answer from the tools, say so clearly and suggest contacting the school directly
-- Be friendly, concise, and helpful"""
+- Be friendly, concise, and helpful
+- FORMAT FOR WHATSAPP: Use plain text only. No markdown — no asterisks (*), underscores (_), pound signs (#), or backticks. Use plain dashes (-) for bullet points and plain line breaks for spacing."""
 
     # Page URL registry — add new URLs here as they become available
     PAGES = {
@@ -249,8 +252,8 @@ CRITICAL RULES:
         if tool_name == "get_campus_directions":
             try:
                 campus = json.loads(self.CAMPUS_MAP_FILE.read_text(encoding="utf-8"))
+                self.attach_map = True
                 return (
-                    f"[ATTACH_MAP]\n\n"
                     f"Campus map image: {campus['map_url']}\n\n"
                     f"{json.dumps(campus, indent=2)}"
                 )
@@ -369,6 +372,9 @@ CRITICAL RULES:
                     return ack + " How else can I help you?"
                 # Not a feedback reply — fall through and treat as a new question
 
+            # Reset map attachment flag for this request
+            self.attach_map = False
+
             # ── Priority 6: content filter ─────────────────────────────────────
             for word in ['fuck', 'shit', 'bitch', 'bastard']:
                 if re.search(r'\b' + re.escape(word) + r'\b', user_message.lower()):
@@ -409,9 +415,7 @@ CRITICAL RULES:
                 block.text for block in response.content if hasattr(block, "text")
             ) or "I'm not sure how to help with that. Please contact Wells Middle School directly."
 
-            # Extract map attachment marker if present
-            self.attach_map = "[ATTACH_MAP]" in final_response
-            final_response = final_response.replace("[ATTACH_MAP]", "").strip()
+            final_response = final_response.strip()
 
             self.conversations[user_id].append({"role": "assistant", "content": final_response})
             self.last_responses[user_id] = final_response  # store for potential report
