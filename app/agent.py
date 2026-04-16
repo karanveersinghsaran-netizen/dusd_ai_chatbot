@@ -83,8 +83,10 @@ class WellsMiddleSchoolAgent:
             {
                 "name": "get_no_school_days",
                 "description": (
-                    "Get upcoming no-school days, holidays, and breaks from the DUSD "
-                    "instructional calendar. Use this for questions about days off, holidays, or breaks."
+                    "Get upcoming no-school days, holidays, breaks, and key academic dates from the DUSD "
+                    "instructional calendar. Use this for questions about days off, holidays, breaks, "
+                    "first day of school, last day of school, quarter/semester end dates, or the school calendar "
+                    "for both the current and next school year."
                 ),
                 "input_schema": {"type": "object", "properties": {}}
             },
