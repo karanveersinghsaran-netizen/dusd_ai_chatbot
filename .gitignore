@@ -35,8 +35,12 @@ logs/
 # User data — never commit
 data/feedback.jsonl
 
-# Local Claude Code instructions — never commit
+# Local Claude Code instructions and settings — never commit
 CLAUDE.md
+.claude/
+
+# Local design docs — never commit
+docs/production_plan.md
 
 # Database
 *.db
