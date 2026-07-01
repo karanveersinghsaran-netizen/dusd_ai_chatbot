@@ -1,5 +1,7 @@
 # Wells Middle School AI Chatbot
 
+[![tests](https://github.com/karanveersinghsaran-netizen/wms_ai_chatbot/actions/workflows/tests.yml/badge.svg)](https://github.com/karanveersinghsaran-netizen/wms_ai_chatbot/actions/workflows/tests.yml)
+
 A WhatsApp chatbot for Wells Middle School (Dublin Unified School District) powered by Claude AI. It answers questions about the school by scraping the school website in real time.
 
 ## Features
