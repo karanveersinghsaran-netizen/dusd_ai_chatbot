@@ -112,15 +112,14 @@ class WellsMiddleSchoolAgent:
                         }
                     },
                     "required": ["destination"]
-                }
+                },
+                "cache_control": {"type": "ephemeral"},
             }
         ]
 
         self._system_prompt_template = """You are a helpful assistant for Wells Middle School, part of the Dublin Unified School District in Dublin, California.
 
 IMPORTANT FORMATTING RULE: This assistant runs on WhatsApp. Never use any markdown formatting. No asterisks (*), no underscores (_), no pound signs (#), no backticks. Use plain dashes (-) for bullet points and plain line breaks for structure. All text must be plain text only.
-
-Today's date is {today}.
 
 You help students, parents, and staff with questions about the school — including academics, staff, events, clubs, sports, schedules, and general information.
 
@@ -230,15 +229,17 @@ CRITICAL RULES:
         ],
     }
 
-    @property
-    def system_prompt(self) -> str:
+    def _dynamic_context(self) -> str:
+        """Build the per-request context line injected into the first user message."""
         today = date.today()
+        parts = [f"Today is {today.strftime('%A, %B %d, %Y')}."]
         school_status = get_school_day_status(today)
+        if school_status:
+            parts.append(f"School status: {school_status}")
         event_status = get_today_status()
-        extra = f"\nSCHOOL STATUS: {school_status}" if school_status else ""
         if event_status:
-            extra += f"\n{event_status}"
-        return self._system_prompt_template.format(today=today.strftime("%A, %B %d, %Y")) + extra
+            parts.append(event_status)
+        return "[Context: " + " ".join(parts) + "]"
 
     def process_tool_call(self, tool_name: str, tool_input: Dict[str, Any]) -> str:
         if tool_name == "get_school_information":
@@ -309,14 +310,16 @@ CRITICAL RULES:
 
     def _call_api(self, messages: list, retries: int = 3) -> Any:
         """Call Claude API with exponential backoff for transient errors."""
+        system = [{"type": "text", "text": self._system_prompt_template, "cache_control": {"type": "ephemeral"}}]
         for attempt in range(retries):
             try:
                 return self.client.messages.create(
                     model=self.model,
                     max_tokens=4096,
-                    system=self.system_prompt,
+                    system=system,
                     tools=self.tools,
-                    messages=messages
+                    messages=messages,
+                    betas=["prompt-caching-2024-07-31"],
                 )
             except (anthropic.RateLimitError, anthropic.InternalServerError):
                 if attempt < retries - 1:
@@ -400,6 +403,12 @@ CRITICAL RULES:
 
             self.conversations[user_id].append({"role": "user", "content": user_message})
             messages = self.conversations[user_id].copy()
+
+            # Prepend dynamic context (date, school status) to the first user message so
+            # the system prompt stays byte-stable and prompt caching hits on every turn.
+            if len(messages) == 1:
+                messages[0] = {"role": "user", "content": f"{self._dynamic_context()}\n\n{messages[0]['content']}"}
+
             response = self._call_api(messages)
 
             # Agentic loop — process ALL tool_use blocks before next API call
