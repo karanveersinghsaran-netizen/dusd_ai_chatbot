@@ -1,0 +1,31 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: wms
+      POSTGRES_PASSWORD: wms
+      POSTGRES_DB: wms
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  app:
+    build: .
+    env_file: .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://wms:wms@postgres:5432/wms
+    depends_on:
+      - redis
+      - postgres
+    ports:
+      - "8000-8002:8000"
+
+volumes:
+  pgdata:
