@@ -4,8 +4,14 @@ from twilio.twiml.messaging_response import MessagingResponse
 import uvicorn
 from app import config
 from app.agent import agent
+from app.store.postgres_store import store as postgres_store
 
 app = FastAPI(title="Wells Middle School WhatsApp Bot")
+
+
+@app.on_event("startup")
+async def on_startup():
+    postgres_store.init_schema()
 
 
 @app.get("/")
@@ -22,10 +28,10 @@ async def whatsapp_webhook(
 ):
     """Webhook endpoint for Twilio WhatsApp messages."""
     print(f"Received message from {From}: {Body}")
-    response_text = agent.chat(Body, user_id=From)
+    reply = agent.chat(Body, user_id=From)
     twiml_response = MessagingResponse()
-    msg = twiml_response.message(response_text)
-    if agent.attach_map:
+    msg = twiml_response.message(reply.text)
+    if reply.attach_map:
         msg.media(config.CAMPUS_MAP_URL)
     return PlainTextResponse(content=str(twiml_response), media_type="application/xml")
 

@@ -17,12 +17,15 @@ A WhatsApp chatbot for Wells Middle School (Dublin Unified School District) powe
 - **Twilio** — WhatsApp messaging
 - **Anthropic Claude** — AI agent
 - **BeautifulSoup** — Website scraping
+- **Redis** — per-session conversation history and feedback-flow state
+- **Postgres** — feedback storage
 
 ## Getting Started
 
 ### Prerequisites
 
 - Python 3.10+
+- Redis and Postgres (or Docker, to run them via `docker compose`)
 - Twilio account with WhatsApp sandbox
 - Anthropic API key
 
@@ -40,13 +43,27 @@ pip install -r requirements.txt
 
 ```bash
 cp .env.example .env
-# Edit .env and fill in your API keys
+# Edit .env and fill in your API keys, plus REDIS_URL / DATABASE_URL if not using the defaults
 ```
 
 ### Running
 
+Start Redis and Postgres with Docker Compose, or point `REDIS_URL`/`DATABASE_URL` at existing instances:
+
+```bash
+docker compose up redis postgres
+```
+
+Then run the app:
+
 ```bash
 python main.py
+```
+
+Or run the whole stack (app + Redis + Postgres) together, optionally with multiple app replicas:
+
+```bash
+docker compose up --build --scale app=3
 ```
 
 Expose to the internet with ngrok:
