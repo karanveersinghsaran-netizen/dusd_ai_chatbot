@@ -40,11 +40,11 @@ def test_system_prompt_template_is_stable_across_calls(agent):
 def test_call_api_system_is_list_with_cache_control(agent):
     mock_response = MagicMock()
     mock_response.stop_reason = "end_turn"
-    agent.client.messages.create.return_value = mock_response
+    agent.client.beta.messages.create.return_value = mock_response
 
     agent._call_api([{"role": "user", "content": "hi"}])
 
-    _, kwargs = agent.client.messages.create.call_args
+    _, kwargs = agent.client.beta.messages.create.call_args
     system = kwargs["system"]
     assert isinstance(system, list)
     assert len(system) == 1
@@ -56,11 +56,16 @@ def test_call_api_system_is_list_with_cache_control(agent):
 def test_call_api_includes_prompt_caching_beta(agent):
     mock_response = MagicMock()
     mock_response.stop_reason = "end_turn"
-    agent.client.messages.create.return_value = mock_response
+    agent.client.beta.messages.create.return_value = mock_response
 
     agent._call_api([{"role": "user", "content": "hi"}])
 
-    _, kwargs = agent.client.messages.create.call_args
+    # Regression guard: the betas= kwarg only exists on client.beta.messages.create
+    # in anthropic==0.39.0; sending it to client.messages.create raises TypeError.
+    agent.client.beta.messages.create.assert_called_once()
+    agent.client.messages.create.assert_not_called()
+
+    _, kwargs = agent.client.beta.messages.create.call_args
     assert "prompt-caching-2024-07-31" in kwargs.get("betas", [])
 
 
@@ -79,7 +84,7 @@ def test_non_last_tools_have_no_cache_control(agent):
 # ── Dynamic context injected into first user message only ─────────────────────
 
 def test_dynamic_context_prepended_to_first_message(agent):
-    agent.client.messages.create.return_value = _text_response("Test response")
+    agent.client.beta.messages.create.return_value = _text_response("Test response")
 
     with patch("app.agent.get_school_day_status", return_value="Regular school day"), \
          patch("app.agent.get_today_status", return_value=""), \
@@ -87,7 +92,7 @@ def test_dynamic_context_prepended_to_first_message(agent):
          patch("app.agent.get_upcoming_no_school_days", return_value=""):
         agent.chat("What time does school start?", user_id="test_user")
 
-    _, kwargs = agent.client.messages.create.call_args
+    _, kwargs = agent.client.beta.messages.create.call_args
     first_message = kwargs["messages"][0]
     assert first_message["role"] == "user"
     assert first_message["content"].startswith("[Context:")
@@ -95,7 +100,7 @@ def test_dynamic_context_prepended_to_first_message(agent):
 
 
 def test_dynamic_context_not_stored_in_history(agent):
-    agent.client.messages.create.return_value = _text_response("Test response")
+    agent.client.beta.messages.create.return_value = _text_response("Test response")
 
     with patch("app.agent.get_school_day_status", return_value=""), \
          patch("app.agent.get_today_status", return_value=""), \
@@ -108,7 +113,7 @@ def test_dynamic_context_not_stored_in_history(agent):
 
 
 def test_dynamic_context_not_prepended_on_subsequent_turns(agent):
-    agent.client.messages.create.return_value = _text_response("Answer")
+    agent.client.beta.messages.create.return_value = _text_response("Answer")
 
     with patch("app.agent.get_school_day_status", return_value=""), \
          patch("app.agent.get_today_status", return_value=""), \
@@ -117,7 +122,7 @@ def test_dynamic_context_not_prepended_on_subsequent_turns(agent):
         agent.chat("First question", user_id="u3")
         agent.chat("Second question", user_id="u3")
 
-    last_call_messages = agent.client.messages.create.call_args_list[-1][1]["messages"]
+    last_call_messages = agent.client.beta.messages.create.call_args_list[-1][1]["messages"]
     second_user_message = [m for m in last_call_messages if m["role"] == "user"][1]
     assert not second_user_message["content"].startswith("[Context:")
 
@@ -131,7 +136,7 @@ def test_agent_has_no_instance_state_dicts(agent):
 
 
 def test_chat_returns_chat_reply(agent):
-    agent.client.messages.create.return_value = _text_response("Answer")
+    agent.client.beta.messages.create.return_value = _text_response("Answer")
 
     with patch("app.agent.get_school_day_status", return_value=""), \
          patch("app.agent.get_today_status", return_value=""), \
@@ -152,7 +157,7 @@ def test_attach_map_true_when_campus_directions_tool_used(agent):
     tool_response.stop_reason = "tool_use"
     tool_response.content = [tool_use_block]
 
-    agent.client.messages.create.side_effect = [tool_response, _text_response("Here's the map")]
+    agent.client.beta.messages.create.side_effect = [tool_response, _text_response("Here's the map")]
 
     with patch.object(agent, "process_tool_call", return_value=("map info", True)), \
          patch("app.agent.get_school_day_status", return_value=""), \
@@ -167,7 +172,7 @@ def test_attach_map_true_when_campus_directions_tool_used(agent):
 # ── No dangling history entry when the API call fails ──────────────────────────
 
 def test_no_dangling_history_entry_on_api_exception(agent):
-    agent.client.messages.create.side_effect = Exception("boom")
+    agent.client.beta.messages.create.side_effect = Exception("boom")
 
     with patch("app.agent.get_school_day_status", return_value=""), \
          patch("app.agent.get_today_status", return_value=""), \
@@ -182,7 +187,7 @@ def test_no_dangling_history_entry_on_api_exception(agent):
 # ── Feedback flow routes through the injected RedisStore ───────────────────────
 
 def test_feedback_ask_suffix_added_once_per_session(agent):
-    agent.client.messages.create.return_value = _text_response("Answer")
+    agent.client.beta.messages.create.return_value = _text_response("Answer")
 
     with patch("app.agent.get_school_day_status", return_value=""), \
          patch("app.agent.get_today_status", return_value=""), \
