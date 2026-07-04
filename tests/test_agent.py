@@ -29,11 +29,11 @@ def test_system_prompt_template_is_stable_across_calls(agent):
 def test_call_api_system_is_list_with_cache_control(agent):
     mock_response = MagicMock()
     mock_response.stop_reason = "end_turn"
-    agent.client.messages.create.return_value = mock_response
+    agent.client.beta.messages.create.return_value = mock_response
 
     agent._call_api([{"role": "user", "content": "hi"}])
 
-    _, kwargs = agent.client.messages.create.call_args
+    _, kwargs = agent.client.beta.messages.create.call_args
     system = kwargs["system"]
     assert isinstance(system, list)
     assert len(system) == 1
@@ -45,11 +45,16 @@ def test_call_api_system_is_list_with_cache_control(agent):
 def test_call_api_includes_prompt_caching_beta(agent):
     mock_response = MagicMock()
     mock_response.stop_reason = "end_turn"
-    agent.client.messages.create.return_value = mock_response
+    agent.client.beta.messages.create.return_value = mock_response
 
     agent._call_api([{"role": "user", "content": "hi"}])
 
-    _, kwargs = agent.client.messages.create.call_args
+    # Regression guard: the betas= kwarg only exists on client.beta.messages.create
+    # in anthropic==0.39.0; sending it to client.messages.create raises TypeError.
+    agent.client.beta.messages.create.assert_called_once()
+    agent.client.messages.create.assert_not_called()
+
+    _, kwargs = agent.client.beta.messages.create.call_args
     assert "prompt-caching-2024-07-31" in kwargs.get("betas", [])
 
 
@@ -71,7 +76,7 @@ def test_dynamic_context_prepended_to_first_message(agent):
     mock_response = MagicMock()
     mock_response.stop_reason = "end_turn"
     mock_response.content = [MagicMock(text="Test response", type="text")]
-    agent.client.messages.create.return_value = mock_response
+    agent.client.beta.messages.create.return_value = mock_response
 
     with patch("app.agent.get_school_day_status", return_value="Regular school day"), \
          patch("app.agent.get_today_status", return_value=""), \
@@ -79,7 +84,7 @@ def test_dynamic_context_prepended_to_first_message(agent):
          patch("app.agent.get_upcoming_no_school_days", return_value=""):
         agent.chat("What time does school start?", user_id="test_user")
 
-    _, kwargs = agent.client.messages.create.call_args
+    _, kwargs = agent.client.beta.messages.create.call_args
     first_message = kwargs["messages"][0]
     assert first_message["role"] == "user"
     assert first_message["content"].startswith("[Context:")
@@ -90,7 +95,7 @@ def test_dynamic_context_not_stored_in_history(agent):
     mock_response = MagicMock()
     mock_response.stop_reason = "end_turn"
     mock_response.content = [MagicMock(text="Test response", type="text")]
-    agent.client.messages.create.return_value = mock_response
+    agent.client.beta.messages.create.return_value = mock_response
 
     with patch("app.agent.get_school_day_status", return_value=""), \
          patch("app.agent.get_today_status", return_value=""), \
@@ -106,7 +111,7 @@ def test_dynamic_context_not_prepended_on_subsequent_turns(agent):
     mock_response = MagicMock()
     mock_response.stop_reason = "end_turn"
     mock_response.content = [MagicMock(text="Answer", type="text")]
-    agent.client.messages.create.return_value = mock_response
+    agent.client.beta.messages.create.return_value = mock_response
 
     with patch("app.agent.get_school_day_status", return_value=""), \
          patch("app.agent.get_today_status", return_value=""), \
@@ -115,6 +120,6 @@ def test_dynamic_context_not_prepended_on_subsequent_turns(agent):
         agent.chat("First question", user_id="u3")
         agent.chat("Second question", user_id="u3")
 
-    last_call_messages = agent.client.messages.create.call_args_list[-1][1]["messages"]
+    last_call_messages = agent.client.beta.messages.create.call_args_list[-1][1]["messages"]
     second_user_message = [m for m in last_call_messages if m["role"] == "user"][1]
     assert not second_user_message["content"].startswith("[Context:")
