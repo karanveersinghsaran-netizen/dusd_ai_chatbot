@@ -313,7 +313,7 @@ CRITICAL RULES:
         system = [{"type": "text", "text": self._system_prompt_template, "cache_control": {"type": "ephemeral"}}]
         for attempt in range(retries):
             try:
-                return self.client.messages.create(
+                return self.client.beta.messages.create(
                     model=self.model,
                     max_tokens=4096,
                     system=system,
