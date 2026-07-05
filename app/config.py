@@ -19,6 +19,9 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 # Postgres Configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://wms:wms@localhost:5432/wms")
 
+# Session Cookie Signing (web chat widget)
+SESSION_SIGNING_KEY = os.getenv("SESSION_SIGNING_KEY")
+
 # School Website
 SCHOOL_WEBSITE = "https://wms.dublinusd.org/"
 
