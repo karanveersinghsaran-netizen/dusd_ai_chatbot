@@ -44,6 +44,7 @@ pip install -r requirements.txt
 ```bash
 cp .env.example .env
 # Edit .env and fill in your API keys, plus REDIS_URL / DATABASE_URL if not using the defaults
+# SESSION_SIGNING_KEY is required for the web /chat endpoint (not needed for WhatsApp only)
 ```
 
 ### Running
