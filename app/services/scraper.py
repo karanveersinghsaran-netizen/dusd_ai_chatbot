@@ -45,7 +45,7 @@ class WebsiteScraper:
         for page in pages:
             url = page if page.startswith("http") else self.base_url.rstrip("/") + "/" + page.lstrip("/")
             content = self.scrape_page(url)
-            all_content.append(f"=== {url} ===\n{content}\n")
+            all_content.append(f'<scraped_page url="{url}">\n{content}\n</scraped_page>')
         return "\n\n".join(all_content)
 
 
