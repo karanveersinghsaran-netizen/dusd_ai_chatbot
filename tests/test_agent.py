@@ -233,6 +233,12 @@ def test_report_flow_records_feedback(agent):
     assert kwargs["last_response"] == "previous answer"
 
 
+def test_system_prompt_instructs_scraped_content_is_untrusted(agent):
+    prompt = agent._system_prompt_template
+    assert "<scraped_page>" in prompt
+    assert "untrusted" in prompt.lower()
+
+
 def test_clear_conversation_clears_redis_session(agent):
     agent.redis_store.append_message("u11", {"role": "user", "content": "hi"})
     agent.redis_store.mark_feedback_asked("u11")
