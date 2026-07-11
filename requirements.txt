@@ -15,3 +15,4 @@ pymupdf==1.27.2.2
 redis==5.0.8
 psycopg[binary]==3.2.3
 testcontainers[postgres,redis]==4.9.0
+slowapi==0.1.9
