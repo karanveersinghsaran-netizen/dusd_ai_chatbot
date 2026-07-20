@@ -22,6 +22,14 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://wms:wms@localhost:5432/wm
 # Session Cookie Signing (web chat widget)
 SESSION_SIGNING_KEY = os.getenv("SESSION_SIGNING_KEY")
 
+# CORS: origins allowed to call the web /chat endpoint from browser JS.
+# Comma-separated env override lets a staging origin be added without a code change.
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("ALLOWED_ORIGINS", "https://wms.dublinusd.org").split(",")
+    if origin.strip()
+]
+
 # School Website
 SCHOOL_WEBSITE = "https://wms.dublinusd.org/"
 
