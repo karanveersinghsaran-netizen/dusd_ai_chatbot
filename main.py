@@ -1,14 +1,31 @@
-from fastapi import Cookie, FastAPI, Form, HTTPException, Response
+from fastapi import Cookie, Depends, FastAPI, Form, HTTPException, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from twilio.twiml.messaging_response import MessagingResponse
 import uvicorn
 from app import config
 from app.agent import agent
+from app.security.middleware import enforce_max_body_size, limiter, session_or_ip_key
 from app.security.sessions import issue_session_id, verify_session_id
 from app.store.postgres_store import store as postgres_store
 
 app = FastAPI(title="Wells Middle School WhatsApp Bot")
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=config.ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["POST"],
+    allow_headers=["Content-Type"],
+)
 
 SESSION_COOKIE_NAME = "wms_session"
 SESSION_COOKIE_MAX_AGE = 24 * 60 * 60  # matches RedisStore's conversation TTL
@@ -55,8 +72,11 @@ async def whatsapp_webhook_get():
     return {"message": "WhatsApp webhook is active. Send POST requests here."}
 
 
-@app.post("/chat", response_model=ChatResponse)
+@app.post("/chat", response_model=ChatResponse, dependencies=[Depends(enforce_max_body_size)])
+@limiter.limit("10/minute")
+@limiter.limit("30/minute", key_func=session_or_ip_key)
 async def chat(
+    request: Request,
     chat_request: ChatRequest,
     response: Response,
     wms_session: str | None = Cookie(default=None),
