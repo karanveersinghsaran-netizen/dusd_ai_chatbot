@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Wells Middle School Chat</title>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<style>
+  body { font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+  #messages { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; height: 60vh; overflow-y: auto; margin-bottom: 1rem; }
+  .msg { margin-bottom: 1rem; line-height: 1.4; }
+  .msg .role { font-weight: 600; display: block; margin-bottom: 0.25rem; }
+  .msg.user .role { color: #1a73e8; }
+  .msg.bot .role { color: #188038; }
+  .msg .body p:first-child { margin-top: 0; }
+  .msg .body p:last-child { margin-bottom: 0; }
+  #input-row { display: flex; gap: 0.5rem; }
+  #input-row input { flex: 1; padding: 0.5rem; font-size: 1rem; }
+  #input-row button { padding: 0.5rem 1rem; font-size: 1rem; }
+</style>
+</head>
+<body>
+  <h1>Wells Middle School Chat</h1>
+
+  <!--
+    Standalone dev/test page for the web channel added in Sprint 1.5.
+    Not yet served by the app — open directly or via a static file server,
+    and point API_BASE at a backend that has this origin in ALLOWED_ORIGINS.
+    Production embedding (iframe snippet) is Sprint 1.6.
+  -->
+  <script>
+    const API_BASE = window.location.origin.startsWith("file:") ? "http://localhost:8000" : "";
+  </script>
+
+  <div id="messages"></div>
+  <div id="input-row">
+    <input id="input" type="text" placeholder="Ask about Wells Middle School..." autocomplete="off">
+    <button id="send">Send</button>
+  </div>
+
+  <script>
+    const messagesEl = document.getElementById("messages");
+    const inputEl = document.getElementById("input");
+    const sendEl = document.getElementById("send");
+
+    function addMessage(role, text) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "msg " + role;
+
+      const roleEl = document.createElement("span");
+      roleEl.className = "role";
+      roleEl.textContent = role === "user" ? "You" : "Wells Bot";
+      wrapper.appendChild(roleEl);
+
+      const bodyEl = document.createElement("div");
+      bodyEl.className = "body";
+      if (role === "bot") {
+        // Bot replies render as Markdown; sanitize before injecting since the
+        // reply may echo untrusted content the agent scraped from the web.
+        bodyEl.innerHTML = DOMPurify.sanitize(marked.parse(text));
+      } else {
+        // User input is never rendered as Markdown/HTML.
+        bodyEl.textContent = text;
+      }
+      wrapper.appendChild(bodyEl);
+
+      messagesEl.appendChild(wrapper);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const text = inputEl.value.trim();
+      if (!text) return;
+      inputEl.value = "";
+      sendEl.disabled = true;
+      addMessage("user", text);
+
+      try {
+        const resp = await fetch(API_BASE + "/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ message: text }),
+        });
+        if (!resp.ok) {
+          addMessage("bot", "Sorry, something went wrong (HTTP " + resp.status + ").");
+          return;
+        }
+        const data = await resp.json();
+        addMessage("bot", data.reply);
+      } catch (err) {
+        addMessage("bot", "Sorry, I couldn't reach the server.");
+      } finally {
+        sendEl.disabled = false;
+        inputEl.focus();
+      }
+    }
+
+    sendEl.addEventListener("click", sendMessage);
+    inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") sendMessage();
+    });
+  </script>
+</body>
+</html>
