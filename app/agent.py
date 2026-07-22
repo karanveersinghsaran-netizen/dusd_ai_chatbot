@@ -5,7 +5,7 @@ import re
 import time
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, NamedTuple, Optional
+from typing import Any, Dict, Literal, NamedTuple, Optional
 
 from app import config
 from app.services.scraper import scraper
@@ -123,9 +123,50 @@ class WellsMiddleSchoolAgent:
             }
         ]
 
-        self._system_prompt_template = """You are a helpful assistant for Wells Middle School, part of the Dublin Unified School District in Dublin, California.
+    # ── Channel-specific formatting rules ──────────────────────────────────────
+    # Each channel's assembled system prompt is a distinct, byte-stable string,
+    # so Anthropic prompt caching keys them independently (see #7).
+    _CHANNEL_FORMATTING: Dict[str, Dict[str, str]] = {
+        "whatsapp": {
+            "intro": (
+                "IMPORTANT FORMATTING RULE: This assistant runs on WhatsApp. Never use any "
+                "markdown formatting. No asterisks (*), no underscores (_), no pound signs (#), "
+                "no backticks. Use plain dashes (-) for bullet points and plain line breaks for "
+                "structure. All text must be plain text only."
+            ),
+            "rule": (
+                "- FORMAT FOR WHATSAPP: Use plain text only. No markdown — no asterisks (*), "
+                "underscores (_), pound signs (#), or backticks. Use plain dashes (-) for bullet "
+                "points and plain line breaks for spacing."
+            ),
+        },
+        "web": {
+            "intro": (
+                "IMPORTANT FORMATTING RULE: This assistant runs in a web chat widget that renders "
+                "Markdown. Use Markdown to make responses easy to scan: **bold** for emphasis, "
+                "headers (##) for sections when helpful, and bullet lists with * or - for lists."
+            ),
+            "rule": (
+                "- FORMAT FOR WEB: Use Markdown formatting — **bold** for emphasis, bullet lists "
+                "with *, and headers where they aid readability. Keep formatting light and clean."
+            ),
+        },
+    }
 
-IMPORTANT FORMATTING RULE: This assistant runs on WhatsApp. Never use any markdown formatting. No asterisks (*), no underscores (_), no pound signs (#), no backticks. Use plain dashes (-) for bullet points and plain line breaks for structure. All text must be plain text only.
+    def _system_prompt_for(self, channel: str) -> str:
+        """Assemble the system prompt for a channel. Pure string substitution — the
+        result is deterministic and byte-stable across calls, which is required for
+        prompt caching to hit."""
+        formatting = self._CHANNEL_FORMATTING.get(channel, self._CHANNEL_FORMATTING["whatsapp"])
+        return self._SYSTEM_PROMPT_BASE.replace(
+            "__FORMATTING_INTRO__", formatting["intro"]
+        ).replace(
+            "__FORMATTING_RULE__", formatting["rule"]
+        )
+
+    _SYSTEM_PROMPT_BASE = """You are a helpful assistant for Wells Middle School, part of the Dublin Unified School District in Dublin, California.
+
+__FORMATTING_INTRO__
 
 You help students, parents, and staff with questions about the school — including academics, staff, events, clubs, sports, schedules, and general information.
 
@@ -203,7 +244,7 @@ CRITICAL RULES:
 - If you cannot find an answer from the tools, say so clearly and suggest contacting the school directly
 - Be friendly, concise, and helpful
 - Always be respectful, kind, and supportive — many users are middle school students. Never use sarcasm, dismissive language, or anything that could feel discouraging or embarrassing to a young student
-- FORMAT FOR WHATSAPP: Use plain text only. No markdown — no asterisks (*), underscores (_), pound signs (#), or backticks. Use plain dashes (-) for bullet points and plain line breaks for spacing."""
+__FORMATTING_RULE__"""
 
     # Page URL registry — add new URLs here as they become available
     PAGES = {
@@ -307,9 +348,9 @@ CRITICAL RULES:
     def clear_conversation(self, user_id: str = "default"):
         self.redis_store.clear_session(user_id)
 
-    def _call_api(self, messages: list, retries: int = 3) -> Any:
+    def _call_api(self, messages: list, channel: str = "whatsapp", retries: int = 3) -> Any:
         """Call Claude API with exponential backoff for transient errors."""
-        system = [{"type": "text", "text": self._system_prompt_template, "cache_control": {"type": "ephemeral"}}]
+        system = [{"type": "text", "text": self._system_prompt_for(channel), "cache_control": {"type": "ephemeral"}}]
         for attempt in range(retries):
             try:
                 return self.client.beta.messages.create(
@@ -326,7 +367,12 @@ CRITICAL RULES:
                 else:
                     raise
 
-    def chat(self, user_message: str, user_id: str = "default") -> ChatReply:
+    def chat(
+        self,
+        user_message: str,
+        user_id: str = "default",
+        channel: Literal["whatsapp", "web"] = "whatsapp",
+    ) -> ChatReply:
         try:
             # ── Priority 1: collect active report comment ──────────────────────
             if self.redis_store.is_report_pending(user_id):
@@ -408,7 +454,7 @@ CRITICAL RULES:
             if len(messages) == 1:
                 messages[0] = {"role": "user", "content": f"{self._dynamic_context()}\n\n{messages[0]['content']}"}
 
-            response = self._call_api(messages)
+            response = self._call_api(messages, channel=channel)
 
             attach_map = False
 
@@ -434,7 +480,7 @@ CRITICAL RULES:
 
                 messages.append({"role": "assistant", "content": response.content})
                 messages.append({"role": "user", "content": tool_results})
-                response = self._call_api(messages)
+                response = self._call_api(messages, channel=channel)
 
             final_response = "".join(
                 block.text for block in response.content if hasattr(block, "text")
