@@ -26,13 +26,59 @@ def _text_response(text: str):
 # ── Prompt caching: system prompt is static ───────────────────────────────────
 
 def test_system_prompt_template_has_no_today_placeholder(agent):
-    assert "{today}" not in agent._system_prompt_template
+    assert "{today}" not in agent._system_prompt_for("whatsapp")
+    assert "{today}" not in agent._system_prompt_for("web")
 
 
 def test_system_prompt_template_is_stable_across_calls(agent):
-    first = agent._system_prompt_template
-    second = agent._system_prompt_template
+    first = agent._system_prompt_for("whatsapp")
+    second = agent._system_prompt_for("whatsapp")
     assert first == second
+
+
+# ── Channel-aware system prompts (Sprint 1.5) ──────────────────────────────────
+
+def test_whatsapp_and_web_system_prompts_differ(agent):
+    assert agent._system_prompt_for("whatsapp") != agent._system_prompt_for("web")
+
+
+def test_whatsapp_system_prompt_forbids_markdown(agent):
+    prompt = agent._system_prompt_for("whatsapp")
+    assert "No markdown" in prompt or "no markdown" in prompt.lower()
+
+
+def test_web_system_prompt_allows_markdown(agent):
+    prompt = agent._system_prompt_for("web")
+    assert "Markdown" in prompt
+    assert "**bold**" in prompt
+
+
+def test_unknown_channel_falls_back_to_whatsapp_prompt(agent):
+    assert agent._system_prompt_for("carrier-pigeon") == agent._system_prompt_for("whatsapp")
+
+
+def test_call_api_uses_web_system_prompt_when_channel_is_web(agent):
+    mock_response = MagicMock()
+    mock_response.stop_reason = "end_turn"
+    agent.client.beta.messages.create.return_value = mock_response
+
+    agent._call_api([{"role": "user", "content": "hi"}], channel="web")
+
+    _, kwargs = agent.client.beta.messages.create.call_args
+    assert kwargs["system"][0]["text"] == agent._system_prompt_for("web")
+
+
+def test_chat_passes_channel_through_to_system_prompt(agent):
+    agent.client.beta.messages.create.return_value = _text_response("Answer")
+
+    with patch("app.agent.get_school_day_status", return_value=""), \
+         patch("app.agent.get_today_status", return_value=""), \
+         patch("app.agent.get_upcoming_events", return_value=""), \
+         patch("app.agent.get_upcoming_no_school_days", return_value=""):
+        agent.chat("Hello", user_id="u_web", channel="web")
+
+    _, kwargs = agent.client.beta.messages.create.call_args
+    assert kwargs["system"][0]["text"] == agent._system_prompt_for("web")
 
 
 # ── _call_api passes system as list with cache_control ────────────────────────
@@ -50,7 +96,7 @@ def test_call_api_system_is_list_with_cache_control(agent):
     assert len(system) == 1
     assert system[0]["type"] == "text"
     assert system[0]["cache_control"] == {"type": "ephemeral"}
-    assert system[0]["text"] == agent._system_prompt_template
+    assert system[0]["text"] == agent._system_prompt_for("whatsapp")
 
 
 def test_call_api_includes_prompt_caching_beta(agent):
@@ -234,9 +280,10 @@ def test_report_flow_records_feedback(agent):
 
 
 def test_system_prompt_instructs_scraped_content_is_untrusted(agent):
-    prompt = agent._system_prompt_template
-    assert "<scraped_page>" in prompt
-    assert "untrusted" in prompt.lower()
+    for channel in ("whatsapp", "web"):
+        prompt = agent._system_prompt_for(channel)
+        assert "<scraped_page>" in prompt
+        assert "untrusted" in prompt.lower()
 
 
 def test_clear_conversation_clears_redis_session(agent):

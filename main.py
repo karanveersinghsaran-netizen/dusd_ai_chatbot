@@ -59,7 +59,7 @@ async def whatsapp_webhook(
 ):
     """Webhook endpoint for Twilio WhatsApp messages."""
     print(f"Received message from {From}: {Body}")
-    reply = agent.chat(Body, user_id=From)
+    reply = agent.chat(Body, user_id=From, channel="whatsapp")
     twiml_response = MessagingResponse()
     msg = twiml_response.message(reply.text)
     if reply.attach_map:
@@ -98,7 +98,7 @@ async def chat(
         if session_id is None:
             raise HTTPException(status_code=401, detail="Invalid session cookie")
 
-    reply = agent.chat(chat_request.message, user_id=session_id)
+    reply = agent.chat(chat_request.message, user_id=session_id, channel="web")
     return ChatResponse(reply=reply.text, attach_map=reply.attach_map)
 
 
