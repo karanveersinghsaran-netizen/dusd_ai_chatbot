@@ -33,6 +33,13 @@ def test_chat_without_cookie_sets_cookie(client):
     assert "samesite=lax" in set_cookie.lower()
 
 
+def test_chat_passes_web_channel_to_agent(client):
+    with patch.object(main.agent, "chat", return_value=ChatReply("Hello!", False)) as mock_chat:
+        client.post("/chat", json={"message": "hi"})
+
+    assert mock_chat.call_args.kwargs["channel"] == "web"
+
+
 def test_chat_with_valid_cookie_reuses_session_id(client):
     with patch.object(main.agent, "chat", return_value=ChatReply("Hello!", False)) as mock_chat:
         client.post("/chat", json={"message": "first"})
@@ -68,6 +75,7 @@ def test_whatsapp_webhook_still_works(client):
     assert resp.status_code == 200
     assert "Hello!" in resp.text
     assert mock_chat.call_args.kwargs["user_id"] == "whatsapp:+15551234567"
+    assert mock_chat.call_args.kwargs["channel"] == "whatsapp"
 
 
 # ── CORS ────────────────────────────────────────────────────────────────────
