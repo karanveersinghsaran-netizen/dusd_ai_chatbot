@@ -1,6 +1,8 @@
+from pathlib import Path
+
 from fastapi import Cookie, Depends, FastAPI, Form, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -30,6 +32,8 @@ app.add_middleware(
 SESSION_COOKIE_NAME = "wms_session"
 SESSION_COOKIE_MAX_AGE = 24 * 60 * 60  # matches RedisStore's conversation TTL
 
+CHATBOX_HTML = Path(__file__).parent / "chatbox.html"
+
 
 class ChatRequest(BaseModel):
     message: str
@@ -48,6 +52,14 @@ async def on_startup():
 @app.get("/")
 async def root():
     return {"status": "ok", "message": "Wells Middle School WhatsApp Bot is running"}
+
+
+@app.get("/chatbox")
+async def chatbox():
+    """Serves the standalone web chat widget from the same origin as /chat, so
+    the session cookie is first-party. Opening chatbox.html via file:// breaks
+    cookie storage under browsers' cross-origin Secure-cookie rules."""
+    return FileResponse(CHATBOX_HTML, media_type="text/html")
 
 
 @app.post("/webhook/whatsapp")

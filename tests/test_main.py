@@ -145,3 +145,15 @@ def test_request_body_within_cap_is_accepted(client):
         resp = client.post("/chat", json={"message": "a" * 100})
 
     assert resp.status_code == 200
+
+
+# ── /chatbox route (same-origin dev widget) ─────────────────────────────────
+
+def test_chatbox_route_serves_html(client):
+    resp = client.get("/chatbox")
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/html")
+    # Marker from chatbox.html's <title>; guards against the route silently
+    # serving the wrong file.
+    assert "Wells Middle School Chat" in resp.text
