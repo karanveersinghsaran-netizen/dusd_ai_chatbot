@@ -33,6 +33,7 @@ SESSION_COOKIE_NAME = "wms_session"
 SESSION_COOKIE_MAX_AGE = 24 * 60 * 60  # matches RedisStore's conversation TTL
 
 CHATBOX_HTML = Path(__file__).parent / "chatbox.html"
+EMBED_JS = Path(__file__).parent / "embed" / "wms-chatbot.js"
 
 
 class ChatRequest(BaseModel):
@@ -60,6 +61,13 @@ async def chatbox():
     the session cookie is first-party. Opening chatbox.html via file:// breaks
     cookie storage under browsers' cross-origin Secure-cookie rules."""
     return FileResponse(CHATBOX_HTML, media_type="text/html")
+
+
+@app.get("/embed/wms-chatbot.js")
+async def embed_script():
+    """Serves the iframe-embed snippet. Interim hosting until Sprint 1.7 (#10)
+    provisions Cloud Storage + Cloud CDN for static assets."""
+    return FileResponse(EMBED_JS, media_type="application/javascript")
 
 
 @app.post("/webhook/whatsapp")
