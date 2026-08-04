@@ -157,3 +157,15 @@ def test_chatbox_route_serves_html(client):
     # Marker from chatbox.html's <title>; guards against the route silently
     # serving the wrong file.
     assert "Wells Middle School Chat" in resp.text
+
+
+# ── /embed/wms-chatbot.js route (interim static hosting, pending #10) ──────────
+
+def test_embed_script_route_serves_js(client):
+    resp = client.get("/embed/wms-chatbot.js")
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("application/javascript")
+    # Marker from wms-chatbot.js; guards against the route silently serving
+    # the wrong file.
+    assert "data-api-base" in resp.text
