@@ -48,3 +48,19 @@ docs/production_plan.md
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+# tfvars can hold non-secret env config or secret overrides — the checked-in
+# .example is the source of truth; everything else stays local.
+infra/**/terraform.tfvars
+infra/**/*.auto.tfvars
+!infra/**/terraform.tfvars.example
+# Modules get their own ephemeral lock files during CI validate runs; only
+# root modules (envs/*) carry the canonical lock we all init against.
+infra/modules/**/.terraform.lock.hcl
