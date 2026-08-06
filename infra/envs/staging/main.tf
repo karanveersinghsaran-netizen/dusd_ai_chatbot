@@ -57,8 +57,6 @@ module "secrets" {
     "ANTHROPIC_API_KEY",
     "SESSION_SIGNING_KEY",
     "DB_PASSWORD",
-    "TWILIO_ACCOUNT_SID",
-    "TWILIO_AUTH_TOKEN",
   ]
 
   accessor_service_account_email = module.cloud_run.runtime_service_account_email

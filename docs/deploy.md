@@ -88,12 +88,6 @@ printf '%s' "$ANTHROPIC_API_KEY" | \
 python -c "import secrets; print(secrets.token_hex(32))" | \
   gcloud secrets versions add SESSION_SIGNING_KEY --data-file=-
 
-printf '%s' "$TWILIO_ACCOUNT_SID" | \
-  gcloud secrets versions add TWILIO_ACCOUNT_SID --data-file=-
-
-printf '%s' "$TWILIO_AUTH_TOKEN" | \
-  gcloud secrets versions add TWILIO_AUTH_TOKEN --data-file=-
-
 # DB_PASSWORD is populated as part of the Cloud SQL PR (later).
 ```
 
