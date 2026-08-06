@@ -54,12 +54,20 @@ resource "google_cloud_run_v2_service" "app" {
     }
   }
 
-  # The image tag is owned by the CI/CD deploy pipeline (later PR); Terraform
-  # only bootstraps the service with a placeholder. Without this, every
-  # `terraform apply` would try to roll back the image to var.image.
   lifecycle {
     ignore_changes = [
+      # The image tag is owned by the CI/CD deploy pipeline (later PR);
+      # Terraform only bootstraps the service with a placeholder. Without
+      # this, every `terraform apply` would revert to var.image.
       template[0].containers[0].image,
+
+      # Google provider v6 quirk: the API returns a top-level `scaling`
+      # block populated with defaults (manual_instance_count=0,
+      # min_instance_count=0), even when we only configure `template.scaling`.
+      # Without ignoring it here, every `terraform plan` shows a spurious
+      # in-place update trying to "remove" a block we never set. Real
+      # autoscaling limits still live in `template.scaling` above.
+      scaling,
     ]
   }
 }
