@@ -1,0 +1,52 @@
+# VCS
+.git
+.gitignore
+.github
+
+# Python bytecode / build
+__pycache__
+*.py[cod]
+*.egg-info
+.eggs
+dist
+build
+
+# Local venvs
+.venv
+venv
+env
+
+# Editor / IDE
+.idea
+.vscode
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets & local config — must never enter the image
+.env
+*.env
+!.env.example
+
+# Test artefacts (tests are run in CI, not shipped in the image)
+.pytest_cache
+tests
+
+# Docs and local dev files
+README.md
+CLAUDE.md
+.claude
+docs
+docker-compose.yml
+pytest.ini
+Dockerfile
+.dockerignore
+
+# Legacy per-instance data that must not be baked into the image
+data/feedback.jsonl
+
+# Logs
+*.log
+logs
