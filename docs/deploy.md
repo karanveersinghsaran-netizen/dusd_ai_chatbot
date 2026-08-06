@@ -79,7 +79,9 @@ Expected outputs: `cloud_run_url`, `cloud_run_service_name`, `cloud_run_runtime_
 
 ## 6. Populate secret values
 
-Terraform creates the Secret Manager *containers* but never the values (values must not appear in git or state). Populate each one via `gcloud`:
+To break the chicken-and-egg (Cloud Run's `version = "latest"` refs would fail on cold apply otherwise), Terraform creates each secret with a placeholder version whose payload is literally `REPLACE_ME_VIA_gcloud_secrets_versions_add`. That placeholder is what the freshly-created Cloud Run service reads today.
+
+**Replace every placeholder with a real value before pointing real traffic at the service** — otherwise the app boots with `REPLACE_ME…` as its API key. Cloud Run reads `latest` at request time, so no redeploy is needed once you add a real version.
 
 ```bash
 printf '%s' "$ANTHROPIC_API_KEY" | \
@@ -91,7 +93,7 @@ python -c "import secrets; print(secrets.token_hex(32))" | \
 # DB_PASSWORD is populated as part of the Cloud SQL PR (later).
 ```
 
-Cloud Run reads secrets at request time with `version = "latest"`, so no service redeploy is needed after `versions add`.
+Terraform's `lifecycle { ignore_changes = [secret_data] }` on the placeholder version means these real versions won't be reverted on the next `terraform apply`.
 
 ## 7. Verify
 
