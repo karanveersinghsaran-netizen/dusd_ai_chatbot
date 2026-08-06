@@ -78,6 +78,20 @@ def test_whatsapp_webhook_still_works(client):
     assert mock_chat.call_args.kwargs["channel"] == "whatsapp"
 
 
+# ── Health endpoint (Cloud Run readiness) ───────────────────────────────────
+
+def test_root_health_endpoint_returns_200_without_touching_agent(client):
+    """Cloud Run and uptime checks poll `/` — it must respond 200 without
+    invoking the LLM or the database, so a downstream outage doesn't take the
+    container out of the load-balancer pool."""
+    with patch.object(main.agent, "chat") as mock_chat:
+        resp = client.get("/")
+
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ok"
+    mock_chat.assert_not_called()
+
+
 # ── CORS ────────────────────────────────────────────────────────────────────
 
 def test_cors_preflight_allows_configured_origin(client):
