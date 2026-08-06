@@ -1,0 +1,4 @@
+project_id      = "wms-chatbot-staging"
+region          = "us-west1"
+service_name    = "wms-chatbot"
+allowed_origins = "https://wms.dublinusd.org,https://staging.wms.dublinusd.org"

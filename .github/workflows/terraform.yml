@@ -1,0 +1,37 @@
+name: terraform
+
+on:
+  pull_request:
+    paths:
+      - "infra/**"
+      - ".github/workflows/terraform.yml"
+  push:
+    branches: [master]
+    paths:
+      - "infra/**"
+      - ".github/workflows/terraform.yml"
+
+jobs:
+  fmt-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - name: terraform fmt -check
+        run: terraform fmt -check -recursive infra
+
+      # `terraform validate` needs `init` first. Skip the backend so we don't
+      # need cloud creds — provider plugins install locally either way.
+      - name: Validate every module and env
+        run: |
+          set -euo pipefail
+          while IFS= read -r dir; do
+            echo "::group::validate $dir"
+            terraform -chdir="$dir" init -backend=false -input=false -no-color
+            terraform -chdir="$dir" validate -no-color
+            echo "::endgroup::"
+          done < <(find infra -type f -name '*.tf' -exec dirname {} \; | sort -u)
