@@ -61,3 +61,6 @@ crash.*.log
 infra/**/terraform.tfvars
 infra/**/*.auto.tfvars
 !infra/**/terraform.tfvars.example
+# Modules get their own ephemeral lock files during CI validate runs; only
+# root modules (envs/*) carry the canonical lock we all init against.
+infra/modules/**/.terraform.lock.hcl
