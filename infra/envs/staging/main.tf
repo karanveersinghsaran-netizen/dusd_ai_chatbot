@@ -12,10 +12,24 @@ resource "google_project_service" "required" {
     "artifactregistry.googleapis.com",
     "secretmanager.googleapis.com",
     "iam.googleapis.com",
+    "compute.googleapis.com",
+    "servicenetworking.googleapis.com",
+    "vpcaccess.googleapis.com",
+    "sqladmin.googleapis.com",
+    "redis.googleapis.com",
   ])
   project            = var.project_id
   service            = each.value
   disable_on_destroy = false
+}
+
+module "network" {
+  source = "../../modules/network"
+
+  project_id = var.project_id
+  region     = var.region
+
+  depends_on = [google_project_service.required]
 }
 
 module "artifact_registry" {
@@ -28,6 +42,40 @@ module "artifact_registry" {
   depends_on = [google_project_service.required]
 }
 
+module "cloud_sql" {
+  source = "../../modules/cloud_sql"
+
+  project_id = var.project_id
+  region     = var.region
+  network_id = module.network.network_id
+
+  # Password gets published to the existing DB_PASSWORD secret container
+  # (created by module.secrets) as version 2, superseding the placeholder.
+  db_password_secret_id = "DB_PASSWORD"
+
+  # Cloud SQL private-IP creation requires the VPC peering to exist first.
+  depends_on = [
+    google_project_service.required,
+    module.network,
+    module.secrets,
+  ]
+}
+
+module "redis" {
+  source = "../../modules/memorystore_redis"
+
+  project_id         = var.project_id
+  region             = var.region
+  authorized_network = module.network.network_id
+
+  # MemoryStore PRIVATE_SERVICE_ACCESS reuses the same VPC peering Cloud SQL
+  # relies on — depend on module.network so the peering is up first.
+  depends_on = [
+    google_project_service.required,
+    module.network,
+  ]
+}
+
 module "cloud_run" {
   source = "../../modules/cloud_run_service"
 
@@ -35,8 +83,12 @@ module "cloud_run" {
   region       = var.region
   service_name = var.service_name
 
+  vpc_connector_id = module.network.vpc_connector_id
+
   plain_env_vars = {
     ALLOWED_ORIGINS = var.allowed_origins
+    DATABASE_URL    = module.cloud_sql.database_url
+    REDIS_URL       = module.redis.redis_url
   }
 
   secret_env_vars = {

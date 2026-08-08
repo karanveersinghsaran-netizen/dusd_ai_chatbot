@@ -19,6 +19,18 @@ resource "google_cloud_run_v2_service" "app" {
       max_instance_count = var.max_instances
     }
 
+    # Route Cloud Run egress through a Serverless VPC Access connector when
+    # one is provided — required for private-IP Cloud SQL and MemoryStore.
+    # ALL_TRAFFIC (not just private ranges) so external calls also go via
+    # the connector, letting us NAT egress through a fixed IP later if needed.
+    dynamic "vpc_access" {
+      for_each = var.vpc_connector_id == null ? [] : [1]
+      content {
+        connector = var.vpc_connector_id
+        egress    = "ALL_TRAFFIC"
+      }
+    }
+
     containers {
       image = var.image
 
