@@ -109,7 +109,19 @@ Terraform's `lifecycle { ignore_changes = [secret_data] }` on the placeholder ve
 curl -sS "$(terraform output -raw cloud_run_url)/"
 ```
 
-The placeholder `cloudrun/hello` image still responds with Google's welcome page — Cloud Run is up but not yet running our chatbot. That last mile lands with PR4 (the deploy workflow builds and pushes the real image and points Cloud Run at it).
+The placeholder `cloudrun/hello` image still responds with Google's welcome page — Cloud Run is up but not yet running our chatbot.
+
+## 8. First real image deploy (`make deploy`)
+
+Once `terraform apply` is green and the operator-managed secrets are populated, push the actual app image:
+
+```bash
+cd infra && make deploy
+```
+
+Under the hood: reads `region` / `cloud_run_service_name` / `artifact_registry_image_base` from terraform outputs, tags the image with the git short SHA (`TAG=... make deploy` to override), builds `--platform linux/amd64`, pushes to Artifact Registry, and runs `gcloud run deploy`. On success it curls `/` and prints the health response.
+
+This is the manual loop while PR4's GitHub Actions deploy workflow is being built. Once PR4 lands, every push to `master` will do the same thing automatically.
 
 ## Tear-down (stop the billing)
 

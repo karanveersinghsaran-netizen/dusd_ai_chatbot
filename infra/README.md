@@ -37,11 +37,12 @@ The Makefile is the shortest path — from `infra/`:
 make init TF_STATE_BUCKET=wms-chatbot-staging-tfstate   # one-time
 make plan
 make up                                                  # apply
+make deploy                                              # build image + push + Cloud Run deploy
 make down                                                # destroy — zero the bill
 make output
 ```
 
-`ENV` defaults to `staging` — later prod work will use `ENV=prod make up` against `envs/prod/`.
+`ENV` defaults to `staging` — later prod work will use `ENV=prod make up` against `envs/prod/`. `make deploy` uses git short SHA as the tag; override with `TAG=my-tag make deploy` for ad-hoc pushes.
 
 Raw terraform still works from `infra/envs/staging/` if you prefer:
 
@@ -54,8 +55,9 @@ terraform apply -var-file=terraform.tfvars
 ## Sprint 1.7 scope
 
 - **PR2 (merged)**: Artifact Registry, Cloud Run (placeholder image), Secret Manager containers.
-- **PR3 (this)**: VPC network + Serverless VPC Access connector, Cloud SQL Postgres (private IP), MemoryStore Redis, wiring into Cloud Run. Makefile wrapper.
-- **PR4 (next)**: GitHub Actions deploy workflow (build image → push to Artifact Registry → deploy Cloud Run revision).
+- **PR3 (merged)**: VPC network + Serverless VPC Access connector, Cloud SQL Postgres (private IP), MemoryStore Redis, wiring into Cloud Run. Makefile wrapper.
+- **PR3.5 (this)**: `make deploy` target — manual build + push + Cloud Run deploy, so end-to-end validation is repeatable while PR4's CI/CD is being built.
+- **PR4 (next)**: GitHub Actions deploy workflow (build image → push to Artifact Registry → deploy Cloud Run revision on merge to master).
 - **PR5**: Monitoring dashboard, Sentry, Cloud Storage + CDN for embed JS.
 
 ## Cost note
