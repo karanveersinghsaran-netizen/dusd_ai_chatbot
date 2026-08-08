@@ -11,6 +11,7 @@
 #   make init TF_STATE_BUCKET=wms-chatbot-staging-tfstate   # one-time
 #   make plan                                                # dry-run
 #   make up                                                  # apply
+#   make deploy                                              # build + push image, deploy Cloud Run
 #   make down                                                # destroy — zero the bill
 #   make output                                              # show URLs, SAs, image base
 
@@ -19,7 +20,15 @@ TFVARS ?= terraform.tfvars
 ENV_DIR := envs/$(ENV)
 TF_ARGS := -var-file=$(TFVARS)
 
-.PHONY: help init fmt validate plan up down output console
+# Repo root, relative to this Makefile (infra/). Used by `make deploy` as the
+# docker build context so it picks up Dockerfile + app source.
+REPO_ROOT := $(abspath ..)
+
+# Image tag for `make deploy`. Defaults to git short SHA so every deploy is
+# traceable to a commit; override with `TAG=... make deploy` for ad-hoc pushes.
+TAG ?= $(shell git -C $(REPO_ROOT) rev-parse --short HEAD 2>/dev/null)
+
+.PHONY: help init fmt validate plan up down output console deploy
 
 help:
 	@echo "Targets (ENV=$(ENV)):"
@@ -28,6 +37,7 @@ help:
 	@echo "  validate      terraform validate in $(ENV_DIR)"
 	@echo "  plan          terraform plan -var-file=$(TFVARS)"
 	@echo "  up            terraform apply -var-file=$(TFVARS)"
+	@echo "  deploy        docker build + push + gcloud run deploy (TAG=$(TAG))"
 	@echo "  down          terraform destroy -var-file=$(TFVARS) — zero the bill"
 	@echo "  output        terraform output"
 	@echo "  console       terraform console"
@@ -59,3 +69,21 @@ output:
 
 console:
 	terraform -chdir=$(ENV_DIR) console
+
+# Manual deploy loop until the GitHub Actions workflow (Sprint 1.7 PR4) lands.
+# Reads project/region/service/image-base from terraform outputs so it stays
+# in sync with what infra actually provisioned. Always builds --platform
+# linux/amd64 because Cloud Run is x86 (matters on Apple Silicon dev boxes).
+deploy:
+	@if [ -z "$(TAG)" ]; then echo "error: TAG could not be derived (not a git repo?). Set TAG=<something>."; exit 1; fi
+	@REGION=$$(terraform -chdir=$(ENV_DIR) output -raw region) && \
+	 SERVICE=$$(terraform -chdir=$(ENV_DIR) output -raw cloud_run_service_name) && \
+	 IMG_BASE=$$(terraform -chdir=$(ENV_DIR) output -raw artifact_registry_image_base) && \
+	 IMG=$${IMG_BASE}/app:$(TAG) && \
+	 echo "==> Deploying $$IMG to Cloud Run service $$SERVICE ($$REGION)" && \
+	 gcloud auth configure-docker $${REGION}-docker.pkg.dev --quiet && \
+	 docker build --platform linux/amd64 -t $$IMG $(REPO_ROOT) && \
+	 docker push $$IMG && \
+	 gcloud run deploy $$SERVICE --region=$$REGION --image=$$IMG && \
+	 echo "==> Deployed. Health check:" && \
+	 curl -sSf "$$(terraform -chdir=$(ENV_DIR) output -raw cloud_run_url)/" && echo

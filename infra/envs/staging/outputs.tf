@@ -1,3 +1,13 @@
+output "project_id" {
+  description = "GCP project ID — echoed from input so `make deploy` can read it without parsing tfvars."
+  value       = var.project_id
+}
+
+output "region" {
+  description = "GCP region — echoed from input so `make deploy` can read it without parsing tfvars."
+  value       = var.region
+}
+
 output "cloud_run_url" {
   description = "HTTPS URL of the deployed Cloud Run service."
   value       = module.cloud_run.service_url
