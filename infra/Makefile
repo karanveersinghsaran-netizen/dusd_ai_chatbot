@@ -28,7 +28,7 @@ REPO_ROOT := $(abspath ..)
 # traceable to a commit; override with `TAG=... make deploy` for ad-hoc pushes.
 TAG ?= $(shell git -C $(REPO_ROOT) rev-parse --short HEAD 2>/dev/null)
 
-.PHONY: help init fmt validate plan up down output console deploy
+.PHONY: help init fmt validate plan up down output console deploy _refresh
 
 help:
 	@echo "Targets (ENV=$(ENV)):"
@@ -70,11 +70,17 @@ output:
 console:
 	terraform -chdir=$(ENV_DIR) console
 
+# Refresh state + outputs without touching any real resources. Used as a
+# prereq for `deploy` so newly-added `output` blocks land in state without
+# a full `make up`. Skips prompts; runs in ~10-30s.
+_refresh:
+	@terraform -chdir=$(ENV_DIR) apply -refresh-only -auto-approve $(TF_ARGS) >/dev/null
+
 # Manual deploy loop until the GitHub Actions workflow (Sprint 1.7 PR4) lands.
 # Reads project/region/service/image-base from terraform outputs so it stays
 # in sync with what infra actually provisioned. Always builds --platform
 # linux/amd64 because Cloud Run is x86 (matters on Apple Silicon dev boxes).
-deploy:
+deploy: _refresh
 	@if [ -z "$(TAG)" ]; then echo "error: TAG could not be derived (not a git repo?). Set TAG=<something>."; exit 1; fi
 	@REGION=$$(terraform -chdir=$(ENV_DIR) output -raw region) && \
 	 SERVICE=$$(terraform -chdir=$(ENV_DIR) output -raw cloud_run_service_name) && \
