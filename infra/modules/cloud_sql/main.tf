@@ -13,7 +13,12 @@ resource "google_sql_database_instance" "main" {
   deletion_protection = var.deletion_protection
 
   settings {
-    tier              = var.tier
+    tier    = var.tier
+    edition = var.edition
+    # Cloud SQL now defaults new instances to ENTERPRISE_PLUS, which rejects
+    # shared-core tiers like db-f1-micro. Pin ENTERPRISE explicitly so the
+    # cheap staging tier keeps working. ENTERPRISE_PLUS is HA-oriented and
+    # ~5x the cost — not worth it for staging.
     disk_size         = var.disk_size_gb
     disk_type         = "PD_SSD"
     availability_type = "ZONAL" # single-zone; cheapest tier for staging

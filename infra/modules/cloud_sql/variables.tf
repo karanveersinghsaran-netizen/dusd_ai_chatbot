@@ -21,9 +21,20 @@ variable "database_version" {
 }
 
 variable "tier" {
-  description = "Machine tier. db-f1-micro is the cheapest option for staging."
+  description = "Machine tier. db-f1-micro is the cheapest option for staging (requires ENTERPRISE edition)."
   type        = string
   default     = "db-f1-micro"
+}
+
+variable "edition" {
+  description = "Cloud SQL edition. ENTERPRISE supports shared-core tiers (db-f1-micro); ENTERPRISE_PLUS requires db-perf-optimized-N-* and costs ~5x."
+  type        = string
+  default     = "ENTERPRISE"
+
+  validation {
+    condition     = contains(["ENTERPRISE", "ENTERPRISE_PLUS"], var.edition)
+    error_message = "edition must be ENTERPRISE or ENTERPRISE_PLUS."
+  }
 }
 
 variable "disk_size_gb" {
