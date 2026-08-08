@@ -61,6 +61,12 @@ variable "allow_unauthenticated" {
   default     = true
 }
 
+variable "vpc_connector_id" {
+  description = "Serverless VPC Access connector ID. When set, egress from Cloud Run routes through the VPC so it can reach private-IP Cloud SQL and MemoryStore. Null = no VPC egress."
+  type        = string
+  default     = null
+}
+
 variable "deletion_protection" {
   description = "Whether Terraform should refuse to delete the service."
   type        = bool

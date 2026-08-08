@@ -70,12 +70,20 @@ cd infra/envs/staging
 cp terraform.tfvars.example terraform.tfvars
 # edit terraform.tfvars — set project_id, region, allowed_origins
 
+# From infra/ using the Makefile:
+make init TF_STATE_BUCKET="${TF_STATE_BUCKET}"
+make plan
+make up
+
+# Or raw terraform from infra/envs/staging/:
 terraform init -backend-config="bucket=${TF_STATE_BUCKET}"
 terraform plan  -var-file=terraform.tfvars
 terraform apply -var-file=terraform.tfvars
 ```
 
-Expected outputs: `cloud_run_url`, `cloud_run_service_name`, `cloud_run_runtime_sa`, `artifact_registry_image_base`.
+Expected outputs after PR3: `cloud_run_url`, `cloud_run_service_name`, `cloud_run_runtime_sa`, `artifact_registry_image_base`, `cloud_sql_connection_name`, `cloud_sql_private_ip`, `redis_host`, `vpc_network_name`.
+
+First apply takes 15-20 minutes — Cloud SQL creation is the long pole (~8-10 min), then MemoryStore (~3-5 min), then Cloud Run.
 
 ## 6. Populate secret values
 
@@ -89,11 +97,11 @@ printf '%s' "$ANTHROPIC_API_KEY" | \
 
 python -c "import secrets; print(secrets.token_hex(32))" | \
   gcloud secrets versions add SESSION_SIGNING_KEY --data-file=-
-
-# DB_PASSWORD is populated as part of the Cloud SQL PR (later).
 ```
 
-Terraform's `lifecycle { ignore_changes = [secret_data] }` on the placeholder version means these real versions won't be reverted on the next `terraform apply`.
+**`DB_PASSWORD` is handled automatically by Terraform** from PR3 onwards — the `cloud_sql` module generates a random password via `random_password`, creates the Cloud SQL user with it, and writes it to a new version of the `DB_PASSWORD` secret. No manual `gcloud secrets versions add DB_PASSWORD` required. If you ever need to see the password, `terraform output -raw` on `database_url` (marked sensitive) will print it.
+
+Terraform's `lifecycle { ignore_changes = [secret_data] }` on the placeholder version means the real values you add above aren't reverted on the next `terraform apply`.
 
 ## 7. Verify
 
@@ -101,10 +109,19 @@ Terraform's `lifecycle { ignore_changes = [secret_data] }` on the placeholder ve
 curl -sS "$(terraform output -raw cloud_run_url)/"
 ```
 
-The placeholder `hello` image responds with a Cloud Run welcome page today; once the deploy pipeline lands (later PR), this becomes the WMS chatbot's `/` health response.
+The placeholder `cloudrun/hello` image still responds with Google's welcome page — Cloud Run is up but not yet running our chatbot. That last mile lands with PR4 (the deploy workflow builds and pushes the real image and points Cloud Run at it).
+
+## Tear-down (stop the billing)
+
+Cloud SQL + MemoryStore + VPC connector run ~$50/month even at zero traffic. When pausing work for more than a day:
+
+```bash
+cd infra && make down
+```
+
+Rebuild anytime with `make up` — takes ~15-20 min again because Cloud SQL is slow to provision.
 
 ## What's still missing
 
-- **Cloud SQL Postgres + MemoryStore Redis + VPC connector** — next PR. Until it lands, the real app image will fail at startup (needs a DB); the placeholder is what runs.
-- **GitHub Actions deploy workflow** — after that. Currently images are pushed manually.
+- **GitHub Actions deploy workflow** — next PR. Currently images are pushed manually.
 - **Monitoring dashboard + Sentry + CDN for embed JS** — last PR.
