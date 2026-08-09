@@ -78,6 +78,34 @@ def test_whatsapp_webhook_still_works(client):
     assert mock_chat.call_args.kwargs["channel"] == "whatsapp"
 
 
+# ── Server errors propagate as HTTP 5xx (not masked as 200) ─────────────────
+
+def test_chat_returns_500_when_agent_raises_without_leaking_exception_text():
+    """Downstream failures (Anthropic API unreachable, DB down, Redis stuck)
+    must surface as HTTP 500 so Cloud Run's error tracker + any 5xx-based
+    alerts fire. Previously the agent swallowed all exceptions and returned
+    a friendly-looking HTTP 200 with the raw exception string in the body —
+    great UX, terrible observability, and a minor info-disclosure smell.
+
+    The global exception handler in main.py returns a generic body so the
+    response body must NOT contain the raw exception message.
+
+    Uses a locally-constructed client with raise_server_exceptions=False
+    so the 500 is returned as a response instead of re-raising in-process."""
+    main.limiter.reset()
+    with patch("main.postgres_store.init_schema"), \
+         patch("app.config.SESSION_SIGNING_KEY", SIGNING_KEY):
+        with TestClient(main.app, base_url="https://testserver", raise_server_exceptions=False) as c:
+            with patch.object(main.agent, "chat", side_effect=RuntimeError("upstream boom")):
+                resp = c.post("/chat", json={"message": "hi"})
+    main.limiter.reset()
+
+    assert resp.status_code == 500
+    # Body is generic — no raw exception text leaks to the client.
+    assert "upstream boom" not in resp.text
+    assert "Internal server error" in resp.json()["detail"]
+
+
 # ── Health endpoint (Cloud Run readiness) ───────────────────────────────────
 
 def test_root_health_endpoint_returns_200_without_touching_agent(client):

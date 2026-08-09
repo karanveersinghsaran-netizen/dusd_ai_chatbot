@@ -373,141 +373,141 @@ __FORMATTING_RULE__"""
         user_id: str = "default",
         channel: Literal["whatsapp", "web"] = "whatsapp",
     ) -> ChatReply:
-        try:
-            # ── Priority 1: collect active report comment ──────────────────────
-            if self.redis_store.is_report_pending(user_id):
-                self.redis_store.clear_report_pending(user_id)
-                comment = "" if user_message.strip().lower() == "skip" else user_message
+        # Unexpected exceptions propagate to the caller. The web /chat endpoint
+        # lets them become HTTP 500 so alerts fire; the WhatsApp webhook catches
+        # them into a graceful TwiML reply so Twilio doesn't retry-storm on 5xx.
+
+        # ── Priority 1: collect active report comment ──────────────────────
+        if self.redis_store.is_report_pending(user_id):
+            self.redis_store.clear_report_pending(user_id)
+            comment = "" if user_message.strip().lower() == "skip" else user_message
+            self._record_feedback(
+                user_id, feedback_type="report", sentiment="negative",
+                raw=user_message, comment=comment,
+                last_response=self.redis_store.get_last_response(user_id) or "",
+            )
+            return ChatReply("Thanks for the report! 🙏 We'll use it to improve. How else can I help?", False)
+
+        # ── Priority 2: help command ───────────────────────────────────────
+        if user_message.strip().lower() in {"help", "/help"}:
+            return ChatReply(
+                "Here's what I can help with:\n\n"
+                "Ask me anything about Wells Middle School — staff, events, schedules, clubs, attendance, and more.\n\n"
+                "Commands:\n"
+                "- report — flag my last response if something seems wrong\n"
+                "- clear — start a fresh conversation\n"
+                "- donate — support Wells Middle School\n"
+                "- help — show this message\n\n"
+                "You can also reach the school directly:\n"
+                "(925) 828-6227 | wms.dublinusd.org",
+                False,
+            )
+
+        # ── Priority 3: donate command ─────────────────────────────────────
+        if re.search(r'\b(donate|donation|donations|support the school)\b', user_message.strip().lower()):
+            return ChatReply(
+                "Thank you for supporting Wells Middle School!\n\n"
+                "You can make a donation here:\n"
+                "https://www.paypal.com/donate/?hosted_button_id=A7XCLC68BRATW\n\n"
+                "Every contribution helps our students and programs. Thank you!",
+                False,
+            )
+
+        # ── Priority 4: user-initiated report trigger ──────────────────────
+        if self._is_report_trigger(user_message):
+            if not self.redis_store.get_last_response(user_id):
+                return ChatReply("There's no recent response to report. Ask me a question first!", False)
+            self.redis_store.mark_report_pending(user_id)
+            self.redis_store.clear_feedback_pending(user_id)  # cancel any pending passive ask
+            return ChatReply(
+                "Thanks for flagging that! What was the issue with my last response?\n"
+                "(Reply with a comment, or *skip* to just flag it)",
+                False,
+            )
+
+        # ── Priority 5: collect passive feedback ───────────────────────────
+        if self.redis_store.is_feedback_pending(user_id):
+            self.redis_store.clear_feedback_pending(user_id)
+            sentiment = self._is_feedback(user_message)
+            if sentiment:
                 self._record_feedback(
-                    user_id, feedback_type="report", sentiment="negative",
-                    raw=user_message, comment=comment,
-                    last_response=self.redis_store.get_last_response(user_id) or "",
+                    user_id, feedback_type="passive", sentiment=sentiment,
+                    raw=user_message,
                 )
-                return ChatReply("Thanks for the report! 🙏 We'll use it to improve. How else can I help?", False)
+                ack = "Thanks for the feedback! 🙏" if sentiment == "positive" \
+                    else "Sorry to hear that! 🙏 You can also type *report* anytime to flag a specific response."
+                return ChatReply(ack + " How else can I help you?", False)
+            # Not a feedback reply — fall through and treat as a new question
 
-            # ── Priority 2: help command ───────────────────────────────────────
-            if user_message.strip().lower() in {"help", "/help"}:
+        # ── Priority 6: content filter ─────────────────────────────────────
+        for word in ['fuck', 'shit', 'bitch', 'bastard']:
+            if re.search(r'\b' + re.escape(word) + r'\b', user_message.lower()):
                 return ChatReply(
-                    "Here's what I can help with:\n\n"
-                    "Ask me anything about Wells Middle School — staff, events, schedules, clubs, attendance, and more.\n\n"
-                    "Commands:\n"
-                    "- report — flag my last response if something seems wrong\n"
-                    "- clear — start a fresh conversation\n"
-                    "- donate — support Wells Middle School\n"
-                    "- help — show this message\n\n"
-                    "You can also reach the school directly:\n"
-                    "(925) 828-6227 | wms.dublinusd.org",
+                    "I'm sorry, but I can only respond to respectful inquiries. "
+                    "Please keep communication kind and respectful.",
                     False,
                 )
 
-            # ── Priority 3: donate command ─────────────────────────────────────
-            if re.search(r'\b(donate|donation|donations|support the school)\b', user_message.strip().lower()):
-                return ChatReply(
-                    "Thank you for supporting Wells Middle School!\n\n"
-                    "You can make a donation here:\n"
-                    "https://www.paypal.com/donate/?hosted_button_id=A7XCLC68BRATW\n\n"
-                    "Every contribution helps our students and programs. Thank you!",
-                    False,
-                )
+        # ── Normal chat flow ───────────────────────────────────────────────
+        history = self.redis_store.get_conversation(user_id)
+        messages = history + [{"role": "user", "content": user_message}]
 
-            # ── Priority 4: user-initiated report trigger ──────────────────────
-            if self._is_report_trigger(user_message):
-                if not self.redis_store.get_last_response(user_id):
-                    return ChatReply("There's no recent response to report. Ask me a question first!", False)
-                self.redis_store.mark_report_pending(user_id)
-                self.redis_store.clear_feedback_pending(user_id)  # cancel any pending passive ask
-                return ChatReply(
-                    "Thanks for flagging that! What was the issue with my last response?\n"
-                    "(Reply with a comment, or *skip* to just flag it)",
-                    False,
-                )
+        # Prepend dynamic context (date, school status) to the first user message so
+        # the system prompt stays byte-stable and prompt caching hits on every turn.
+        if len(messages) == 1:
+            messages[0] = {"role": "user", "content": f"{self._dynamic_context()}\n\n{messages[0]['content']}"}
 
-            # ── Priority 5: collect passive feedback ───────────────────────────
-            if self.redis_store.is_feedback_pending(user_id):
-                self.redis_store.clear_feedback_pending(user_id)
-                sentiment = self._is_feedback(user_message)
-                if sentiment:
-                    self._record_feedback(
-                        user_id, feedback_type="passive", sentiment=sentiment,
-                        raw=user_message,
-                    )
-                    ack = "Thanks for the feedback! 🙏" if sentiment == "positive" \
-                        else "Sorry to hear that! 🙏 You can also type *report* anytime to flag a specific response."
-                    return ChatReply(ack + " How else can I help you?", False)
-                # Not a feedback reply — fall through and treat as a new question
+        response = self._call_api(messages, channel=channel)
 
-            # ── Priority 6: content filter ─────────────────────────────────────
-            for word in ['fuck', 'shit', 'bitch', 'bastard']:
-                if re.search(r'\b' + re.escape(word) + r'\b', user_message.lower()):
-                    return ChatReply(
-                        "I'm sorry, but I can only respond to respectful inquiries. "
-                        "Please keep communication kind and respectful.",
-                        False,
-                    )
+        attach_map = False
 
-            # ── Normal chat flow ───────────────────────────────────────────────
-            history = self.redis_store.get_conversation(user_id)
-            messages = history + [{"role": "user", "content": user_message}]
+        # Agentic loop — process ALL tool_use blocks before next API call
+        while response.stop_reason == "tool_use":
+            tool_use_blocks = [b for b in response.content if b.type == "tool_use"]
+            if not tool_use_blocks:
+                break
 
-            # Prepend dynamic context (date, school status) to the first user message so
-            # the system prompt stays byte-stable and prompt caching hits on every turn.
-            if len(messages) == 1:
-                messages[0] = {"role": "user", "content": f"{self._dynamic_context()}\n\n{messages[0]['content']}"}
+            tool_results = []
+            for block in tool_use_blocks:
+                try:
+                    result, should_attach = self.process_tool_call(block.name, block.input)
+                except Exception as e:
+                    result, should_attach = f"Tool error: {str(e)}", False
+                if should_attach:
+                    attach_map = True
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": result
+                })
 
+            messages.append({"role": "assistant", "content": response.content})
+            messages.append({"role": "user", "content": tool_results})
             response = self._call_api(messages, channel=channel)
 
-            attach_map = False
+        final_response = "".join(
+            block.text for block in response.content if hasattr(block, "text")
+        ) or "I'm not sure how to help with that. Please contact Wells Middle School directly."
 
-            # Agentic loop — process ALL tool_use blocks before next API call
-            while response.stop_reason == "tool_use":
-                tool_use_blocks = [b for b in response.content if b.type == "tool_use"]
-                if not tool_use_blocks:
-                    break
+        final_response = final_response.strip()
 
-                tool_results = []
-                for block in tool_use_blocks:
-                    try:
-                        result, should_attach = self.process_tool_call(block.name, block.input)
-                    except Exception as e:
-                        result, should_attach = f"Tool error: {str(e)}", False
-                    if should_attach:
-                        attach_map = True
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": result
-                    })
+        # Persist only after the turn succeeds, so a failed API call never leaves a
+        # dangling user message in history.
+        self.redis_store.append_message(user_id, {"role": "user", "content": user_message})
+        self.redis_store.append_message(user_id, {"role": "assistant", "content": final_response})
+        self.redis_store.set_last_response(user_id, final_response)
 
-                messages.append({"role": "assistant", "content": response.content})
-                messages.append({"role": "user", "content": tool_results})
-                response = self._call_api(messages, channel=channel)
+        # Ask for passive feedback once per session
+        if not self.redis_store.is_feedback_asked(user_id):
+            self.redis_store.mark_feedback_asked(user_id)
+            self.redis_store.mark_feedback_pending(user_id)
+            final_response += (
+                "\n\n---\n"
+                "💬 *Was this helpful?* Reply *1* 👍 or *2* 👎\n"
+                "💡 Tip: Type *report* anytime to flag a response that seems wrong"
+            )
 
-            final_response = "".join(
-                block.text for block in response.content if hasattr(block, "text")
-            ) or "I'm not sure how to help with that. Please contact Wells Middle School directly."
-
-            final_response = final_response.strip()
-
-            # Persist only after the turn succeeds, so a failed API call never leaves a
-            # dangling user message in history.
-            self.redis_store.append_message(user_id, {"role": "user", "content": user_message})
-            self.redis_store.append_message(user_id, {"role": "assistant", "content": final_response})
-            self.redis_store.set_last_response(user_id, final_response)
-
-            # Ask for passive feedback once per session
-            if not self.redis_store.is_feedback_asked(user_id):
-                self.redis_store.mark_feedback_asked(user_id)
-                self.redis_store.mark_feedback_pending(user_id)
-                final_response += (
-                    "\n\n---\n"
-                    "💬 *Was this helpful?* Reply *1* 👍 or *2* 👎\n"
-                    "💡 Tip: Type *report* anytime to flag a response that seems wrong"
-                )
-
-            return ChatReply(final_response, attach_map)
-
-        except Exception as e:
-            return ChatReply(f"Sorry, I encountered an error: {str(e)}", False)
+        return ChatReply(final_response, attach_map)
 
 
 agent = WellsMiddleSchoolAgent()
