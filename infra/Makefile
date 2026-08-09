@@ -29,10 +29,18 @@ REPO_ROOT := $(abspath ..)
 # traceable to a commit; override with `TAG=... make deploy` for ad-hoc pushes.
 TAG ?= $(shell git -C $(REPO_ROOT) rev-parse --short HEAD 2>/dev/null)
 
-# Modules `make destroy` will tear down. Deliberately excludes module.secrets
-# and google_project_service.required so that (a) real secret values persist
-# across destroy/apply cycles and (b) APIs stay enabled (re-enabling adds
-# minutes to the next apply).
+# Resources `make destroy` will tear down. Deliberately preserves several
+# things that are cheap-to-keep or expensive-to-recreate:
+#   - module.secrets            — real secret values must survive destroy.
+#   - google_project_service    — APIs stay enabled; re-toggling adds minutes.
+#   - Most of module.network    — VPC, subnet, peering, IAM are all free.
+#     Destroying the peering (google_service_networking_connection) fails
+#     with "Producer services still using this connection" because Google's
+#     backend cleanup of Cloud SQL / MemoryStore lags behind Terraform's
+#     view by several minutes. Since peering is free, just keep it.
+#
+# The only paid piece inside module.network is the VPC Access connector
+# (~$5-10/mo for 2× e2-micro), so that's targeted explicitly for destroy.
 #
 # `google_secret_manager_secret_iam_member.cloud_run_access` is targeted so
 # the IAM bindings referencing the (about-to-be-destroyed) Cloud Run runtime
@@ -41,8 +49,8 @@ DESTROY_TARGETS := \
 	-target=module.cloud_run \
 	-target=module.cloud_sql \
 	-target=module.redis \
-	-target=module.network \
 	-target=module.artifact_registry \
+	-target=module.network.google_vpc_access_connector.connector \
 	-target=google_secret_manager_secret_iam_member.cloud_run_access
 
 .PHONY: help init fmt validate plan apply destroy destroy-all output console deploy _refresh
