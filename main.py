@@ -1,8 +1,9 @@
+import logging
 from pathlib import Path
 
 from fastapi import Cookie, Depends, FastAPI, Form, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -15,11 +16,29 @@ from app.security.middleware import enforce_max_body_size, limiter, session_or_i
 from app.security.sessions import issue_session_id, verify_session_id
 from app.store.postgres_store import store as postgres_store
 
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="Wells Middle School WhatsApp Bot")
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
+
+
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(request: Request, exc: Exception):
+    """Log every unhandled exception with full traceback + request context,
+    then return HTTP 500 with a generic body. Prevents the previous pattern
+    of catching exceptions inside the agent and returning HTTP 200 with the
+    raw error text — that hid failures from Cloud Run's error tracker and
+    leaked internal details to end users. The chatbox already renders a
+    friendly "Sorry, something went wrong (HTTP 500)" message on any non-2xx,
+    so users still get a graceful UX."""
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error. Please try again."},
+    )
 
 app.add_middleware(
     CORSMiddleware,
