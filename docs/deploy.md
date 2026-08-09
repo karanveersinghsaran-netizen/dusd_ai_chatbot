@@ -131,7 +131,10 @@ Cloud SQL + MemoryStore + VPC connector run ~$50/month even at zero traffic. Whe
 cd infra && make destroy
 ```
 
-`make destroy` uses `-target` to skip `module.secrets` (containers preserved) and `google_project_service.required` (APIs stay enabled, saves minutes on re-apply). Real secret values populated via `gcloud secrets versions add` — including `ANTHROPIC_API_KEY` and `SESSION_SIGNING_KEY` — survive. The `DB_PASSWORD` version written by Terraform will need regenerating on next `make apply` (it's tied to `random_password`), but that's automatic.
+`make destroy` uses `-target` to preserve several things:
+- **Secret Manager containers** (`module.secrets`) — real values from `gcloud secrets versions add` including `ANTHROPIC_API_KEY` and `SESSION_SIGNING_KEY` survive. `DB_PASSWORD` regenerates automatically on next apply.
+- **Enabled APIs** (`google_project_service.required`) — saves minutes by not re-toggling on re-apply.
+- **VPC network, subnet, peering, IAM** (most of `module.network`) — these are free anyway, and destroying the VPC peering hits Google's "producer services still using this" error because Cloud SQL / MemoryStore have residual backend state for several minutes after their Terraform destroy completes. Only the VPC Access connector (the ~$5-10/mo piece) is torn down.
 
 Rebuild anytime with `make apply` — takes ~15-20 min again because Cloud SQL is slow to provision.
 
