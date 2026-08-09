@@ -10,9 +10,10 @@
 # Common flow:
 #   make init TF_STATE_BUCKET=wms-chatbot-staging-tfstate   # one-time
 #   make plan                                                # dry-run
-#   make up                                                  # apply
+#   make apply                                               # provision infra
 #   make deploy                                              # build + push image, deploy Cloud Run
-#   make down                                                # destroy — zero the bill
+#   make destroy                                             # zero the bill — preserves secrets
+#   make destroy-all                                         # nuke everything, including secret containers
 #   make output                                              # show URLs, SAs, image base
 
 ENV ?= staging
@@ -28,7 +29,23 @@ REPO_ROOT := $(abspath ..)
 # traceable to a commit; override with `TAG=... make deploy` for ad-hoc pushes.
 TAG ?= $(shell git -C $(REPO_ROOT) rev-parse --short HEAD 2>/dev/null)
 
-.PHONY: help init fmt validate plan up down output console deploy _refresh
+# Modules `make destroy` will tear down. Deliberately excludes module.secrets
+# and google_project_service.required so that (a) real secret values persist
+# across destroy/apply cycles and (b) APIs stay enabled (re-enabling adds
+# minutes to the next apply).
+#
+# `google_secret_manager_secret_iam_member.cloud_run_access` is targeted so
+# the IAM bindings referencing the (about-to-be-destroyed) Cloud Run runtime
+# SA don't dangle in state after destroy.
+DESTROY_TARGETS := \
+	-target=module.cloud_run \
+	-target=module.cloud_sql \
+	-target=module.redis \
+	-target=module.network \
+	-target=module.artifact_registry \
+	-target=google_secret_manager_secret_iam_member.cloud_run_access
+
+.PHONY: help init fmt validate plan apply destroy destroy-all output console deploy _refresh
 
 help:
 	@echo "Targets (ENV=$(ENV)):"
@@ -36,9 +53,11 @@ help:
 	@echo "  fmt           terraform fmt -recursive"
 	@echo "  validate      terraform validate in $(ENV_DIR)"
 	@echo "  plan          terraform plan -var-file=$(TFVARS)"
-	@echo "  up            terraform apply -var-file=$(TFVARS)"
+	@echo "  apply         terraform apply -var-file=$(TFVARS) — provision infra"
 	@echo "  deploy        docker build + push + gcloud run deploy (TAG=$(TAG))"
-	@echo "  down          terraform destroy -var-file=$(TFVARS) — zero the bill"
+	@echo "  destroy       terraform destroy -target=<ephemeral modules> — zero the bill,"
+	@echo "                preserves Secret Manager containers + real values"
+	@echo "  destroy-all   terraform destroy (no targets) — nuke EVERYTHING, secrets included"
 	@echo "  output        terraform output"
 	@echo "  console       terraform console"
 
@@ -58,10 +77,19 @@ validate:
 plan:
 	terraform -chdir=$(ENV_DIR) plan $(TF_ARGS)
 
-up:
+apply:
 	terraform -chdir=$(ENV_DIR) apply $(TF_ARGS)
 
-down:
+# Destroys ephemeral resources (Cloud SQL, Redis, VPC, Cloud Run, Artifact
+# Registry) but preserves module.secrets — the containers and any real values
+# added via `gcloud secrets versions add` survive. Also preserves the API
+# enablement resources so the next `make apply` doesn't re-toggle them.
+destroy:
+	terraform -chdir=$(ENV_DIR) destroy $(DESTROY_TARGETS) $(TF_ARGS)
+
+# Full teardown, including secret containers. Real secret values will be
+# LOST. Only for permanent project retirement.
+destroy-all:
 	terraform -chdir=$(ENV_DIR) destroy $(TF_ARGS)
 
 output:
@@ -72,7 +100,7 @@ console:
 
 # Refresh state + outputs without touching any real resources. Used as a
 # prereq for `deploy` so newly-added `output` blocks land in state without
-# a full `make up`. Skips prompts; runs in ~10-30s.
+# a full `make apply`. Skips prompts; runs in ~10-30s.
 _refresh:
 	@terraform -chdir=$(ENV_DIR) apply -refresh-only -auto-approve $(TF_ARGS) >/dev/null
 

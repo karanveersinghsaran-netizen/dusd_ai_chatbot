@@ -73,7 +73,7 @@ cp terraform.tfvars.example terraform.tfvars
 # From infra/ using the Makefile:
 make init TF_STATE_BUCKET="${TF_STATE_BUCKET}"
 make plan
-make up
+make apply
 
 # Or raw terraform from infra/envs/staging/:
 terraform init -backend-config="bucket=${TF_STATE_BUCKET}"
@@ -128,10 +128,14 @@ This is the manual loop while PR4's GitHub Actions deploy workflow is being buil
 Cloud SQL + MemoryStore + VPC connector run ~$50/month even at zero traffic. When pausing work for more than a day:
 
 ```bash
-cd infra && make down
+cd infra && make destroy
 ```
 
-Rebuild anytime with `make up` — takes ~15-20 min again because Cloud SQL is slow to provision.
+`make destroy` uses `-target` to skip `module.secrets` (containers preserved) and `google_project_service.required` (APIs stay enabled, saves minutes on re-apply). Real secret values populated via `gcloud secrets versions add` — including `ANTHROPIC_API_KEY` and `SESSION_SIGNING_KEY` — survive. The `DB_PASSWORD` version written by Terraform will need regenerating on next `make apply` (it's tied to `random_password`), but that's automatic.
+
+Rebuild anytime with `make apply` — takes ~15-20 min again because Cloud SQL is slow to provision.
+
+For permanent project retirement, `make destroy-all` removes everything including the secret containers. Real values are lost at that point.
 
 ## What's still missing
 
