@@ -44,7 +44,7 @@ variable "disk_size_gb" {
 }
 
 variable "deletion_protection" {
-  description = "Whether Cloud SQL and Terraform should refuse to delete the instance. False on staging so `make down` works."
+  description = "Whether Cloud SQL and Terraform should refuse to delete the instance. False on staging so `make destroy` works."
   type        = bool
   default     = false
 }

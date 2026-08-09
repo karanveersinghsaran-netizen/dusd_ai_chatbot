@@ -1,6 +1,11 @@
 # One Secret Manager secret per entry in var.secret_ids. Real values are
 # populated out-of-band via `gcloud secrets versions add` — Terraform manages
-# the secret containers, a placeholder version, and IAM. Never real payloads.
+# the secret containers and a placeholder version. Never real payloads.
+#
+# NOTE: the IAM binding that grants a Cloud Run runtime SA read access is
+# NOT part of this module — it lives in the env root so `make destroy` can
+# target it (and the ephemeral Cloud Run SA) independently, while these
+# containers persist across destroy/apply cycles.
 resource "google_secret_manager_secret" "secret" {
   for_each  = toset(var.secret_ids)
   project   = var.project_id
@@ -29,15 +34,4 @@ resource "google_secret_manager_secret_version" "placeholder" {
   lifecycle {
     ignore_changes = [secret_data, enabled]
   }
-}
-
-# Grant the Cloud Run service account permission to read each secret at
-# request time (Cloud Run reads secrets on cold start / every request when
-# mounted as env vars with version = "latest").
-resource "google_secret_manager_secret_iam_member" "accessor" {
-  for_each  = google_secret_manager_secret.secret
-  project   = each.value.project
-  secret_id = each.value.secret_id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${var.accessor_service_account_email}"
 }

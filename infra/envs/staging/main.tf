@@ -111,7 +111,18 @@ module "secrets" {
     "DB_PASSWORD",
   ]
 
-  accessor_service_account_email = module.cloud_run.runtime_service_account_email
-
   depends_on = [google_project_service.required]
+}
+
+# IAM binding lives OUTSIDE modules/secrets so `make destroy` can target it
+# (along with the ephemeral Cloud Run SA) without touching the secret
+# containers themselves. Preserving containers across destroy/apply cycles
+# is what keeps real values populated via `gcloud secrets versions add`
+# from being wiped every time the datastore layer is torn down.
+resource "google_secret_manager_secret_iam_member" "cloud_run_access" {
+  for_each  = module.secrets.secret_ids
+  project   = var.project_id
+  secret_id = each.value
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${module.cloud_run.runtime_service_account_email}"
 }
