@@ -224,9 +224,13 @@ def test_no_dangling_history_entry_on_api_exception(agent):
          patch("app.agent.get_today_status", return_value=""), \
          patch("app.agent.get_upcoming_events", return_value=""), \
          patch("app.agent.get_upcoming_no_school_days", return_value=""):
-        reply = agent.chat("Hello", user_id="u6")
+        # agent.chat now lets upstream failures propagate so the /chat
+        # endpoint can return HTTP 500 (proper observability signal).
+        with pytest.raises(Exception, match="boom"):
+            agent.chat("Hello", user_id="u6")
 
-    assert "error" in reply.text.lower()
+    # The real invariant this test protects: even when the API call fails,
+    # we must not have left a partial user message in the persisted history.
     assert agent.redis_store.get_conversation("u6") == []
 
 
