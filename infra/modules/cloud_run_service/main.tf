@@ -21,13 +21,16 @@ resource "google_cloud_run_v2_service" "app" {
 
     # Route Cloud Run egress through a Serverless VPC Access connector when
     # one is provided — required for private-IP Cloud SQL and MemoryStore.
-    # ALL_TRAFFIC (not just private ranges) so external calls also go via
-    # the connector, letting us NAT egress through a fixed IP later if needed.
+    # PRIVATE_RANGES_ONLY sends only RFC1918 traffic through the connector;
+    # public traffic (Anthropic API, Twilio, GitHub, etc.) uses Cloud Run's
+    # default direct egress to the internet. With ALL_TRAFFIC every outbound
+    # call would hit the VPC edge, which has no Cloud NAT — the app then
+    # times out on external HTTPS calls with "Connection error".
     dynamic "vpc_access" {
       for_each = var.vpc_connector_id == null ? [] : [1]
       content {
         connector = var.vpc_connector_id
-        egress    = "ALL_TRAFFIC"
+        egress    = "PRIVATE_RANGES_ONLY"
       }
     }
 
