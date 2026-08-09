@@ -55,3 +55,21 @@ resource "google_vpc_access_connector" "connector" {
   min_instances = 2
   max_instances = 3
 }
+
+# Cloud Run's project-level Service Agent (Google-managed, distinct from any
+# runtime SA we create) needs roles/vpcaccess.user to actually attach a
+# service to a VPC connector. Without this, the first Cloud Run revision
+# using the connector fails with:
+#   Error waiting for Creating Service: Revision '…' is not ready and cannot
+#   serve traffic. Failed to prepare VPC connector. Please try again later
+# The "try again later" phrasing is misleading — it's a permissions gap,
+# not a transient one.
+data "google_project" "current" {
+  project_id = var.project_id
+}
+
+resource "google_project_iam_member" "cloud_run_vpc_user" {
+  project = var.project_id
+  role    = "roles/vpcaccess.user"
+  member  = "serviceAccount:service-${data.google_project.current.number}@serverless-robot-prod.iam.gserviceaccount.com"
+}
