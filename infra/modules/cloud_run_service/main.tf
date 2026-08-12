@@ -22,10 +22,10 @@ resource "google_cloud_run_v2_service" "app" {
     # Route Cloud Run egress through a Serverless VPC Access connector when
     # one is provided — required for private-IP Cloud SQL and MemoryStore.
     # PRIVATE_RANGES_ONLY sends only RFC1918 traffic through the connector;
-    # public traffic (Anthropic API, Twilio, GitHub, etc.) uses Cloud Run's
-    # default direct egress to the internet. With ALL_TRAFFIC every outbound
-    # call would hit the VPC edge, which has no Cloud NAT — the app then
-    # times out on external HTTPS calls with "Connection error".
+    # public traffic (Anthropic API, GitHub, etc.) uses Cloud Run's default
+    # direct egress to the internet. With ALL_TRAFFIC every outbound call
+    # would hit the VPC edge, which has no Cloud NAT — the app then times
+    # out on external HTTPS calls with "Connection error".
     dynamic "vpc_access" {
       for_each = var.vpc_connector_id == null ? [] : [1]
       content {
@@ -87,8 +87,8 @@ resource "google_cloud_run_v2_service" "app" {
   }
 }
 
-# Public HTTPS access — the chat endpoint needs to be reachable from browsers
-# and Twilio. Auth is handled inside the app (session cookies, Twilio signature).
+# Public HTTPS access — the chat endpoint needs to be reachable from browsers.
+# Auth is handled inside the app via session cookies.
 resource "google_cloud_run_v2_service_iam_member" "public_invoker" {
   count    = var.allow_unauthenticated ? 1 : 0
   project  = google_cloud_run_v2_service.app.project

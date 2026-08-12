@@ -1,8 +1,6 @@
 # Session cookie security
 
-Covers the `wms_session` cookie issued by `POST /chat`, the web-widget endpoint. Does not apply
-to the WhatsApp webhook, which uses Twilio's authenticated `From` phone number as the session
-identifier directly and never sets a cookie.
+Covers the `wms_session` cookie issued by `POST /chat`, the web-widget endpoint.
 
 ## Format
 
