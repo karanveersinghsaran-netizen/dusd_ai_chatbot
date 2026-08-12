@@ -1,9 +1,10 @@
-"""Unit tests for WellsMiddleSchoolAgent."""
+"""Unit tests for SchoolAgent."""
 from unittest.mock import MagicMock, patch, call
 import pytest
 
 import app.agent as agent_module
-from app.agent import WellsMiddleSchoolAgent
+from app.agent import SchoolAgent
+from app.schools import get_school
 from app.store.redis_store import RedisStore
 from tests.store.conftest import FakeRedisClient
 
@@ -13,7 +14,24 @@ def agent():
     with patch("app.agent.anthropic.Anthropic"):
         redis_store = RedisStore(client=FakeRedisClient())
         postgres_store = MagicMock()
-        return WellsMiddleSchoolAgent(redis_store=redis_store, postgres_store=postgres_store)
+        return SchoolAgent(
+            school=get_school("wells"),
+            redis_store=redis_store,
+            postgres_store=postgres_store,
+        )
+
+
+@pytest.fixture()
+def dhs_agent():
+    """A school with no campus_map_file configured (data/schools/dhs has none)."""
+    with patch("app.agent.anthropic.Anthropic"):
+        redis_store = RedisStore(client=FakeRedisClient())
+        postgres_store = MagicMock()
+        return SchoolAgent(
+            school=get_school("dhs"),
+            redis_store=redis_store,
+            postgres_store=postgres_store,
+        )
 
 
 def _text_response(text: str):
@@ -26,18 +44,18 @@ def _text_response(text: str):
 # ── Prompt caching: system prompt is static ───────────────────────────────────
 
 def test_system_prompt_has_no_today_placeholder(agent):
-    assert "{today}" not in agent._SYSTEM_PROMPT
+    assert "{today}" not in agent._system_prompt
 
 
 def test_system_prompt_is_stable_across_calls(agent):
-    first = agent._SYSTEM_PROMPT
-    second = agent._SYSTEM_PROMPT
+    first = agent._system_prompt
+    second = agent._system_prompt
     assert first == second
 
 
 def test_system_prompt_allows_markdown(agent):
-    assert "Markdown" in agent._SYSTEM_PROMPT
-    assert "**bold**" in agent._SYSTEM_PROMPT
+    assert "Markdown" in agent._system_prompt
+    assert "**bold**" in agent._system_prompt
 
 
 def test_chat_uses_system_prompt(agent):
@@ -50,7 +68,23 @@ def test_chat_uses_system_prompt(agent):
         agent.chat("Hello", user_id="u_web")
 
     _, kwargs = agent.client.beta.messages.create.call_args
-    assert kwargs["system"][0]["text"] == agent._SYSTEM_PROMPT
+    assert kwargs["system"][0]["text"] == agent._system_prompt
+
+
+# ── Per-school content ─────────────────────────────────────────────────────────
+
+def test_system_prompt_is_specific_to_school(agent, dhs_agent):
+    assert "Wells Middle School" in agent._system_prompt
+    assert "Dublin High School" in dhs_agent._system_prompt
+    assert agent._system_prompt != dhs_agent._system_prompt
+
+
+def test_get_campus_directions_tool_omitted_when_school_has_no_campus_map(dhs_agent):
+    assert "get_campus_directions" not in [t["name"] for t in dhs_agent.tools]
+
+
+def test_get_campus_directions_tool_present_when_school_has_campus_map(agent):
+    assert "get_campus_directions" in [t["name"] for t in agent.tools]
 
 
 # ── _call_api passes system as list with cache_control ────────────────────────
@@ -68,7 +102,7 @@ def test_call_api_system_is_list_with_cache_control(agent):
     assert len(system) == 1
     assert system[0]["type"] == "text"
     assert system[0]["cache_control"] == {"type": "ephemeral"}
-    assert system[0]["text"] == agent._SYSTEM_PROMPT
+    assert system[0]["text"] == agent._system_prompt
 
 
 def test_call_api_includes_prompt_caching_beta(agent):
@@ -99,6 +133,13 @@ def test_non_last_tools_have_no_cache_control(agent):
         assert "cache_control" not in tool
 
 
+def test_last_tool_has_cache_control_even_without_campus_map(dhs_agent):
+    """The cache_control breakpoint must land on whichever tool ends up last,
+    regardless of whether get_campus_directions is registered."""
+    last_tool = dhs_agent.tools[-1]
+    assert last_tool.get("cache_control") == {"type": "ephemeral"}
+
+
 # ── Dynamic context injected into first user message only ─────────────────────
 
 def test_dynamic_context_prepended_to_first_message(agent):
@@ -126,7 +167,7 @@ def test_dynamic_context_not_stored_in_history(agent):
          patch("app.agent.get_upcoming_no_school_days", return_value=""):
         agent.chat("Hello", user_id="test_user2")
 
-    stored = agent.redis_store.get_conversation("test_user2")
+    stored = agent.redis_store.get_conversation(agent._session_key("test_user2"))
     assert stored[0]["content"] == "Hello"
 
 
@@ -203,7 +244,7 @@ def test_no_dangling_history_entry_on_api_exception(agent):
 
     # The real invariant this test protects: even when the API call fails,
     # we must not have left a partial user message in the persisted history.
-    assert agent.redis_store.get_conversation("u6") == []
+    assert agent.redis_store.get_conversation(agent._session_key("u6")) == []
 
 
 # ── Feedback flow routes through the injected RedisStore ───────────────────────
@@ -218,21 +259,22 @@ def test_feedback_ask_suffix_added_once_per_session(agent):
         first = agent.chat("Hello", user_id="u7")
 
     assert "Was this helpful?" in first.text
-    assert agent.redis_store.is_feedback_asked("u7") is True
-    assert agent.redis_store.is_feedback_pending("u7") is True
+    assert agent.redis_store.is_feedback_asked(agent._session_key("u7")) is True
+    assert agent.redis_store.is_feedback_pending(agent._session_key("u7")) is True
 
 
 def test_passive_feedback_reply_records_and_acknowledges(agent):
-    agent.redis_store.mark_feedback_pending("u8")
+    agent.redis_store.mark_feedback_pending(agent._session_key("u8"))
 
     reply = agent.chat("1", user_id="u8")
 
     assert "Thanks for the feedback" in reply.text
-    assert agent.redis_store.is_feedback_pending("u8") is False
+    assert agent.redis_store.is_feedback_pending(agent._session_key("u8")) is False
     agent.postgres_store.record_feedback.assert_called_once()
     _, kwargs = agent.postgres_store.record_feedback.call_args
     assert kwargs["sentiment"] == "positive"
     assert kwargs["feedback_type"] == "passive"
+    assert kwargs["school_id"] == "wells"
 
 
 def test_report_trigger_requires_prior_response(agent):
@@ -241,14 +283,14 @@ def test_report_trigger_requires_prior_response(agent):
 
 
 def test_report_flow_records_feedback(agent):
-    agent.redis_store.set_last_response("u10", "previous answer")
+    agent.redis_store.set_last_response(agent._session_key("u10"), "previous answer")
     trigger_reply = agent.chat("report", user_id="u10")
-    assert agent.redis_store.is_report_pending("u10") is True
+    assert agent.redis_store.is_report_pending(agent._session_key("u10")) is True
 
     comment_reply = agent.chat("the phone number was wrong", user_id="u10")
 
     assert "Thanks for the report" in comment_reply.text
-    assert agent.redis_store.is_report_pending("u10") is False
+    assert agent.redis_store.is_report_pending(agent._session_key("u10")) is False
     agent.postgres_store.record_feedback.assert_called_once()
     _, kwargs = agent.postgres_store.record_feedback.call_args
     assert kwargs["feedback_type"] == "report"
@@ -256,16 +298,36 @@ def test_report_flow_records_feedback(agent):
 
 
 def test_system_prompt_instructs_scraped_content_is_untrusted(agent):
-    prompt = agent._SYSTEM_PROMPT
+    prompt = agent._system_prompt
     assert "<scraped_page>" in prompt
     assert "untrusted" in prompt.lower()
 
 
 def test_clear_conversation_clears_redis_session(agent):
-    agent.redis_store.append_message("u11", {"role": "user", "content": "hi"})
-    agent.redis_store.mark_feedback_asked("u11")
+    agent.redis_store.append_message(agent._session_key("u11"), {"role": "user", "content": "hi"})
+    agent.redis_store.mark_feedback_asked(agent._session_key("u11"))
 
     agent.clear_conversation("u11")
 
-    assert agent.redis_store.get_conversation("u11") == []
-    assert agent.redis_store.is_feedback_asked("u11") is False
+    assert agent.redis_store.get_conversation(agent._session_key("u11")) == []
+    assert agent.redis_store.is_feedback_asked(agent._session_key("u11")) is False
+
+
+# ── Redis keys are scoped per school ────────────────────────────────────────────
+
+def test_conversations_are_isolated_across_schools(agent, dhs_agent):
+    """Two schools' agents share the same underlying Redis client (as they do
+    in production). The same raw user_id — e.g. a reused signed session cookie
+    presented to both schools' widgets — must not leak conversation state
+    between them."""
+    shared_client = agent.redis_store.client
+    dhs_agent.redis_store = RedisStore(client=shared_client)
+
+    agent.redis_store.append_message(agent._session_key("shared-session"), {"role": "user", "content": "wells message"})
+    dhs_agent.redis_store.append_message(dhs_agent._session_key("shared-session"), {"role": "user", "content": "dhs message"})
+
+    wells_history = agent.redis_store.get_conversation(agent._session_key("shared-session"))
+    dhs_history = dhs_agent.redis_store.get_conversation(dhs_agent._session_key("shared-session"))
+
+    assert wells_history == [{"role": "user", "content": "wells message"}]
+    assert dhs_history == [{"role": "user", "content": "dhs message"}]

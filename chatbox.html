@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Wells Middle School Chat</title>
+<title>School Chat</title>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 <style>
@@ -33,14 +33,24 @@
   #input-row input { flex: 1; padding: 0.5rem; font-size: 1rem; min-width: 0; }
   #input-row button { padding: 0.5rem 1rem; font-size: 1rem; }
   #input-row button:disabled { opacity: 0.6; }
+  #school-picker { display: flex; gap: 1rem; padding: 0.5rem 1rem; border-bottom: 1px solid #ddd; font-size: 0.85rem; flex-shrink: 0; }
+  #school-picker label { display: flex; align-items: center; gap: 0.3rem; cursor: pointer; }
 </style>
 </head>
 <body>
-  <h1>Wells Middle School Chat</h1>
+  <h1>School Chat</h1>
+
+  <!-- Dev/testing convenience only: hidden once a real embed sets ?school=
+       via data-school on embed/wms-chatbot.js, since that already fixes the
+       school for the page. -->
+  <div id="school-picker" hidden>
+    <label><input type="radio" name="school" value="wells" checked> Wells Middle School</label>
+    <label><input type="radio" name="school" value="dhs"> Dublin High School</label>
+  </div>
 
   <div id="messages"></div>
   <div id="input-row">
-    <input id="input" type="text" placeholder="Ask about Wells Middle School..." autocomplete="off">
+    <input id="input" type="text" placeholder="Ask a question..." autocomplete="off">
     <button id="send">Send</button>
   </div>
 
@@ -48,6 +58,21 @@
     const messagesEl = document.getElementById("messages");
     const inputEl = document.getElementById("input");
     const sendEl = document.getElementById("send");
+    const schoolPickerEl = document.getElementById("school-picker");
+
+    const schoolRadios = Array.from(schoolPickerEl.querySelectorAll('input[name="school"]'));
+
+    let schoolId = new URLSearchParams(window.location.search).get("school");
+    const matchingRadio = schoolId && schoolRadios.find((r) => r.value === schoolId);
+    if (matchingRadio) {
+      matchingRadio.checked = true;
+    } else {
+      schoolPickerEl.hidden = false;
+      schoolId = schoolRadios.find((r) => r.checked).value;
+    }
+    schoolPickerEl.addEventListener("change", (e) => {
+      schoolId = e.target.value;
+    });
 
     function addMessage(role, text) {
       const wrapper = document.createElement("div");
@@ -55,7 +80,7 @@
 
       const roleEl = document.createElement("span");
       roleEl.className = "role";
-      roleEl.textContent = role === "user" ? "You" : "Wells Bot";
+      roleEl.textContent = role === "user" ? "You" : "Bot";
       wrapper.appendChild(roleEl);
 
       const bodyEl = document.createElement("div");
@@ -81,14 +106,14 @@
       inputEl.value = "";
       sendEl.disabled = true;
       addMessage("user", text);
-      const pending = addMessage("pending", "Wells Bot is typing...");
+      const pending = addMessage("pending", "Bot is typing...");
 
       try {
         const resp = await fetch("/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ message: text }),
+          body: JSON.stringify(schoolId ? { message: text, school_id: schoolId } : { message: text }),
         });
         pending.remove();
         if (!resp.ok) {

@@ -1,7 +1,6 @@
 import requests
 import urllib3
 from typing import List
-from app import config
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -15,8 +14,8 @@ HEADERS = {
 
 
 class WebsiteScraper:
-    def __init__(self):
-        self.base_url = config.SCHOOL_WEBSITE
+    def __init__(self, base_url: str):
+        self.base_url = base_url
         self.cache = {}
 
     def scrape_page(self, url: str) -> str:
@@ -47,6 +46,3 @@ class WebsiteScraper:
             content = self.scrape_page(url)
             all_content.append(f'<scraped_page url="{url}">\n{content}\n</scraped_page>')
         return "\n\n".join(all_content)
-
-
-scraper = WebsiteScraper()
