@@ -1,5 +1,5 @@
 """Unit tests for the FastAPI app in main.py: web /chat session-cookie flow."""
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -20,8 +20,19 @@ def client():
     main.limiter.reset()
 
 
+def _mock_agent(reply=ChatReply("Hello!", False), side_effect=None):
+    """A MagicMock standing in for a SchoolAgent instance, wired to
+    patch("main.get_agent", ...)."""
+    agent = MagicMock()
+    if side_effect is not None:
+        agent.chat.side_effect = side_effect
+    else:
+        agent.chat.return_value = reply
+    return agent
+
+
 def test_chat_without_cookie_sets_cookie(client):
-    with patch.object(main.agent, "chat", return_value=ChatReply("Hello!", False)):
+    with patch("main.get_agent", return_value=_mock_agent()):
         resp = client.post("/chat", json={"message": "hi"})
 
     assert resp.status_code == 200
@@ -33,28 +44,53 @@ def test_chat_without_cookie_sets_cookie(client):
 
 
 def test_chat_with_valid_cookie_reuses_session_id(client):
-    with patch.object(main.agent, "chat", return_value=ChatReply("Hello!", False)) as mock_chat:
+    mock_agent = _mock_agent()
+    with patch("main.get_agent", return_value=mock_agent):
         client.post("/chat", json={"message": "first"})
         client.post("/chat", json={"message": "second"})
 
-    first_session_id = mock_chat.call_args_list[0].kwargs["user_id"]
-    second_session_id = mock_chat.call_args_list[1].kwargs["user_id"]
+    first_session_id = mock_agent.chat.call_args_list[0].kwargs["user_id"]
+    second_session_id = mock_agent.chat.call_args_list[1].kwargs["user_id"]
     assert first_session_id == second_session_id
 
 
 def test_chat_tampered_cookie_returns_401(client):
     client.cookies.set("wms_session", "garbage.tampered")
-    with patch.object(main.agent, "chat", return_value=ChatReply("Hello!", False)):
+    with patch("main.get_agent", return_value=_mock_agent()):
         resp = client.post("/chat", json={"message": "hi"})
 
     assert resp.status_code == 401
 
 
 def test_chat_ignores_client_supplied_user_id(client):
-    with patch.object(main.agent, "chat", return_value=ChatReply("Hello!", False)) as mock_chat:
+    mock_agent = _mock_agent()
+    with patch("main.get_agent", return_value=mock_agent):
         client.post("/chat", json={"message": "hi", "user_id": "attacker-controlled"})
 
-    assert mock_chat.call_args.kwargs["user_id"] != "attacker-controlled"
+    assert mock_agent.chat.call_args.kwargs["user_id"] != "attacker-controlled"
+
+
+# ── school_id routing ────────────────────────────────────────────────────────
+
+def test_chat_without_school_id_resolves_default_school(client):
+    with patch("main.get_agent", return_value=_mock_agent()) as mock_get_agent:
+        client.post("/chat", json={"message": "hi"})
+
+    mock_get_agent.assert_called_once_with("wells")
+
+
+def test_chat_with_school_id_resolves_that_school(client):
+    with patch("main.get_agent", return_value=_mock_agent()) as mock_get_agent:
+        client.post("/chat", json={"message": "hi", "school_id": "dhs"})
+
+    mock_get_agent.assert_called_once_with("dhs")
+
+
+def test_chat_with_unknown_school_id_returns_400(client):
+    with patch("main.get_agent", return_value=None):
+        resp = client.post("/chat", json={"message": "hi", "school_id": "nonexistent"})
+
+    assert resp.status_code == 400
 
 
 # ── Server errors propagate as HTTP 5xx (not masked as 200) ─────────────────
@@ -75,7 +111,8 @@ def test_chat_returns_500_when_agent_raises_without_leaking_exception_text():
     with patch("main.postgres_store.init_schema"), \
          patch("app.config.SESSION_SIGNING_KEY", SIGNING_KEY):
         with TestClient(main.app, base_url="https://testserver", raise_server_exceptions=False) as c:
-            with patch.object(main.agent, "chat", side_effect=RuntimeError("upstream boom")):
+            mock_agent = _mock_agent(side_effect=RuntimeError("upstream boom"))
+            with patch("main.get_agent", return_value=mock_agent):
                 resp = c.post("/chat", json={"message": "hi"})
     main.limiter.reset()
 
@@ -91,12 +128,12 @@ def test_root_health_endpoint_returns_200_without_touching_agent(client):
     """Cloud Run and uptime checks poll `/` — it must respond 200 without
     invoking the LLM or the database, so a downstream outage doesn't take the
     container out of the load-balancer pool."""
-    with patch.object(main.agent, "chat") as mock_chat:
+    with patch("main.get_agent") as mock_get_agent:
         resp = client.get("/")
 
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
-    mock_chat.assert_not_called()
+    mock_get_agent.assert_not_called()
 
 
 # ── CORS ────────────────────────────────────────────────────────────────────
@@ -113,6 +150,22 @@ def test_cors_preflight_allows_configured_origin(client):
     assert resp.headers.get("access-control-allow-origin") == "https://wms.dublinusd.org"
 
 
+def test_cors_preflight_allows_any_dublinusd_subdomain(client):
+    """CORS is matched by regex against *.dublinusd.org, not an explicit
+    per-school list — so a school that isn't even in the registry yet (or any
+    other DUSD subdomain) is still allowed. Onboarding a new school needs no
+    CORS change."""
+    resp = client.options(
+        "/chat",
+        headers={
+            "origin": "https://not-yet-onboarded.dublinusd.org",
+            "access-control-request-method": "POST",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.headers.get("access-control-allow-origin") == "https://not-yet-onboarded.dublinusd.org"
+
+
 def test_cors_preflight_blocks_disallowed_origin(client):
     resp = client.options(
         "/chat",
@@ -125,8 +178,22 @@ def test_cors_preflight_blocks_disallowed_origin(client):
     assert "access-control-allow-origin" not in resp.headers
 
 
+def test_cors_preflight_blocks_dublinusd_suffix_spoofing(client):
+    """The regex must be anchored — otherwise an origin merely ending in
+    dublinusd.org (not actually a dublinusd.org host) would slip through."""
+    resp = client.options(
+        "/chat",
+        headers={
+            "origin": "https://dublinusd.org.evil.com",
+            "access-control-request-method": "POST",
+        },
+    )
+    assert resp.status_code == 400
+    assert "access-control-allow-origin" not in resp.headers
+
+
 def test_cors_actual_request_from_disallowed_origin_gets_no_acao_header(client):
-    with patch.object(main.agent, "chat", return_value=ChatReply("Hello!", False)):
+    with patch("main.get_agent", return_value=_mock_agent()):
         resp = client.post(
             "/chat",
             json={"message": "hi"},
@@ -141,7 +208,7 @@ def test_cors_actual_request_from_disallowed_origin_gets_no_acao_header(client):
 # ── Rate limiting ───────────────────────────────────────────────────────────
 
 def test_eleventh_request_in_a_minute_returns_429(client):
-    with patch.object(main.agent, "chat", return_value=ChatReply("Hello!", False)):
+    with patch("main.get_agent", return_value=_mock_agent()):
         for _ in range(10):
             resp = client.post("/chat", json={"message": "hi"})
             assert resp.status_code == 200
@@ -154,15 +221,15 @@ def test_eleventh_request_in_a_minute_returns_429(client):
 
 def test_oversized_request_body_is_rejected(client):
     huge_message = "a" * 3000
-    with patch.object(main.agent, "chat", return_value=ChatReply("Hello!", False)) as mock_chat:
+    with patch("main.get_agent", return_value=_mock_agent()) as mock_get_agent:
         resp = client.post("/chat", json={"message": huge_message})
 
     assert resp.status_code == 413
-    mock_chat.assert_not_called()
+    mock_get_agent.assert_not_called()
 
 
 def test_request_body_within_cap_is_accepted(client):
-    with patch.object(main.agent, "chat", return_value=ChatReply("Hello!", False)):
+    with patch("main.get_agent", return_value=_mock_agent()):
         resp = client.post("/chat", json={"message": "a" * 100})
 
     assert resp.status_code == 200
@@ -177,7 +244,7 @@ def test_chatbox_route_serves_html(client):
     assert resp.headers["content-type"].startswith("text/html")
     # Marker from chatbox.html's <title>; guards against the route silently
     # serving the wrong file.
-    assert "Wells Middle School Chat" in resp.text
+    assert "School Chat" in resp.text
 
 
 # ── /embed/wms-chatbot.js route (interim static hosting, pending #10) ──────────

@@ -1,11 +1,12 @@
 """
-Calendar service for Wells Middle School.
+Calendar service, shared across all schools.
 
 Combines two data sources:
-  1. RSS feed  — live school events (assemblies, sports, performances, etc.)
-  2. JSON data — DUSD instructional calendar (no-school days, breaks, min days)
-     Files live in data/calendars/<YYYY_YY>.json and are loaded automatically
-     based on the current school year.
+  1. RSS feed  — live school events (assemblies, sports, performances, etc.),
+     per school (each school passes its own rss_url).
+  2. JSON data — instructional calendar (no-school days, breaks, min days),
+     shared per district. Files live in data/calendars/<district_id>/<YYYY_YY>.json
+     and are loaded automatically based on the current school year.
 """
 import json
 import requests
@@ -19,7 +20,6 @@ from urllib.parse import urlparse, parse_qs
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-RSS_URL = "https://wms.dublinusd.org/apps/events/events_rss.jsp?id=0"
 DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "calendars"
 
 HEADERS = {
@@ -42,10 +42,11 @@ def _current_school_year_key() -> str:
     return f"{start_year}_{str(start_year + 1)[2:]}"
 
 
-def _load_district_calendar(year_key: str = None) -> dict:
-    """Load the JSON calendar for the given school year key (e.g. '2025_26'), or current year if omitted."""
+def _load_district_calendar(district_id: str, year_key: str = None) -> dict:
+    """Load the JSON calendar for the given district and school year key (e.g.
+    '2025_26'), or current year if omitted."""
     key = year_key or _current_school_year_key()
-    path = DATA_DIR / f"{key}.json"
+    path = DATA_DIR / district_id / f"{key}.json"
     if not path.exists():
         return {}
     with open(path, "r") as f:
@@ -76,12 +77,12 @@ def _next_school_day(after: date, cal: dict) -> date:
         d += timedelta(days=1)
 
 
-def get_school_day_status(today: date = None) -> str:
+def get_school_day_status(today: date, district_id: str) -> str:
     """Plain-English school status for a given date."""
     if today is None:
         today = date.today()
 
-    cal = _load_district_calendar()
+    cal = _load_district_calendar(district_id)
     if not cal:
         return ""
 
@@ -112,7 +113,7 @@ def get_school_day_status(today: date = None) -> str:
         return f"School has not started yet. First day is {cal['first_day'].strftime('%B %d, %Y')}."
 
     if today > cal.get("last_day", today):
-        next_cal = _load_district_calendar(_next_year_key(_current_school_year_key()))
+        next_cal = _load_district_calendar(district_id, _next_year_key(_current_school_year_key()))
         if next_cal and next_cal.get("first_day"):
             return (f"The school year has ended (last day was {cal['last_day'].strftime('%B %d, %Y')}). "
                     f"Next school year starts on {next_cal['first_day'].strftime('%B %d, %Y')}.")
@@ -127,14 +128,14 @@ def _next_year_key(key: str) -> str:
     return f"{start_year}_{str(start_year + 1)[2:]}"
 
 
-def get_upcoming_no_school_days(today: date = None, limit: int = 20) -> str:
+def get_upcoming_no_school_days(today: date, district_id: str, limit: int = 20) -> str:
     """Return the next few no-school days and breaks, spanning into next year if needed."""
     if today is None:
         today = date.today()
 
     current_key = _current_school_year_key()
     next_key = _next_year_key(current_key)
-    calendars = [_load_district_calendar(current_key), _load_district_calendar(next_key)]
+    calendars = [_load_district_calendar(district_id, current_key), _load_district_calendar(district_id, next_key)]
 
     upcoming = []
     for cal in calendars:
@@ -178,8 +179,8 @@ def _parse_end_date(link: str, start: date) -> date:
     return start
 
 
-def _fetch_rss_events() -> List[Dict]:
-    response = requests.get(RSS_URL, timeout=10, verify=False, headers=HEADERS)
+def _fetch_rss_events(rss_url: str) -> List[Dict]:
+    response = requests.get(rss_url, timeout=10, verify=False, headers=HEADERS)
     response.raise_for_status()
     root = ET.fromstring(response.content)
     channel = root.find("channel")
@@ -207,11 +208,11 @@ def _fetch_rss_events() -> List[Dict]:
     return events
 
 
-def get_today_status() -> str:
+def get_today_status(rss_url: str) -> str:
     """Return ongoing RSS events today (injected into system prompt)."""
     try:
         today = date.today()
-        ongoing = [e for e in _fetch_rss_events() if e["start"] <= today <= e["end"]]
+        ongoing = [e for e in _fetch_rss_events(rss_url) if e["start"] <= today <= e["end"]]
         if not ongoing:
             return ""
         titles = ", ".join(e["title"] for e in ongoing)
@@ -220,16 +221,16 @@ def get_today_status() -> str:
         return ""
 
 
-def get_upcoming_events() -> str:
+def get_upcoming_events(rss_url: str) -> str:
     """Return upcoming and ongoing RSS events sorted by start date."""
     try:
         today = date.today()
-        events = [e for e in _fetch_rss_events() if e["end"] >= today]
+        events = [e for e in _fetch_rss_events(rss_url) if e["end"] >= today]
         if not events:
             return "No upcoming events found on the school calendar."
 
         events.sort(key=lambda e: e["start"])
-        lines = ["Wells Middle School Events:\n"]
+        lines = ["Upcoming Events:\n"]
         for e in events:
             if e["start"] == e["end"]:
                 date_str = e["start"].strftime("%A, %B %d, %Y")
