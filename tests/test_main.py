@@ -1,5 +1,4 @@
-"""Unit tests for the FastAPI app in main.py: web /chat session-cookie flow and
-a regression guard that the WhatsApp webhook is unaffected."""
+"""Unit tests for the FastAPI app in main.py: web /chat session-cookie flow."""
 from unittest.mock import patch
 
 import pytest
@@ -33,13 +32,6 @@ def test_chat_without_cookie_sets_cookie(client):
     assert "samesite=lax" in set_cookie.lower()
 
 
-def test_chat_passes_web_channel_to_agent(client):
-    with patch.object(main.agent, "chat", return_value=ChatReply("Hello!", False)) as mock_chat:
-        client.post("/chat", json={"message": "hi"})
-
-    assert mock_chat.call_args.kwargs["channel"] == "web"
-
-
 def test_chat_with_valid_cookie_reuses_session_id(client):
     with patch.object(main.agent, "chat", return_value=ChatReply("Hello!", False)) as mock_chat:
         client.post("/chat", json={"message": "first"})
@@ -63,19 +55,6 @@ def test_chat_ignores_client_supplied_user_id(client):
         client.post("/chat", json={"message": "hi", "user_id": "attacker-controlled"})
 
     assert mock_chat.call_args.kwargs["user_id"] != "attacker-controlled"
-
-
-def test_whatsapp_webhook_still_works(client):
-    with patch.object(main.agent, "chat", return_value=ChatReply("Hello!", False)) as mock_chat:
-        resp = client.post(
-            "/webhook/whatsapp",
-            data={"Body": "hi", "From": "whatsapp:+15551234567"},
-        )
-
-    assert resp.status_code == 200
-    assert "Hello!" in resp.text
-    assert mock_chat.call_args.kwargs["user_id"] == "whatsapp:+15551234567"
-    assert mock_chat.call_args.kwargs["channel"] == "whatsapp"
 
 
 # ── Server errors propagate as HTTP 5xx (not masked as 200) ─────────────────

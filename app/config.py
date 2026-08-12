@@ -29,9 +29,6 @@ ALLOWED_ORIGINS = [
 # School Website
 SCHOOL_WEBSITE = "https://wms.dublinusd.org/"
 
-# Campus map image — raw GitHub URL (stable, no server config needed)
-CAMPUS_MAP_URL = "https://raw.githubusercontent.com/karanveersinghsaran-netizen/wms_ai_chatbot/master/data/campus_map.png"
-
 # School Info
 SCHOOL_NAME = "Wells Middle School"
 SCHOOL_DISTRICT = "Dublin Unified School District"
