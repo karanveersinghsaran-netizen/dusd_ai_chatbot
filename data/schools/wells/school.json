@@ -5,7 +5,6 @@
   "district_id": "dusd",
   "website": "https://wms.dublinusd.org/",
   "rss_url": "https://wms.dublinusd.org/apps/events/events_rss.jsp?id=0",
-  "allowed_origin": "https://wms.dublinusd.org",
   "phone": "(925) 828-6227",
   "fax": "(925) 829-8851",
   "address": "6800 Penn Drive, Dublin, CA 94568",

@@ -150,18 +150,20 @@ def test_cors_preflight_allows_configured_origin(client):
     assert resp.headers.get("access-control-allow-origin") == "https://wms.dublinusd.org"
 
 
-def test_cors_preflight_allows_every_registered_schools_origin(client):
-    """CORS allowlist is the union of every school's allowed_origin, computed
-    from the registry — not just the first/default school."""
+def test_cors_preflight_allows_any_dublinusd_subdomain(client):
+    """CORS is matched by regex against *.dublinusd.org, not an explicit
+    per-school list — so a school that isn't even in the registry yet (or any
+    other DUSD subdomain) is still allowed. Onboarding a new school needs no
+    CORS change."""
     resp = client.options(
         "/chat",
         headers={
-            "origin": "https://dhs.dublinusd.org",
+            "origin": "https://not-yet-onboarded.dublinusd.org",
             "access-control-request-method": "POST",
         },
     )
     assert resp.status_code == 200
-    assert resp.headers.get("access-control-allow-origin") == "https://dhs.dublinusd.org"
+    assert resp.headers.get("access-control-allow-origin") == "https://not-yet-onboarded.dublinusd.org"
 
 
 def test_cors_preflight_blocks_disallowed_origin(client):
@@ -169,6 +171,20 @@ def test_cors_preflight_blocks_disallowed_origin(client):
         "/chat",
         headers={
             "origin": "https://evil.example.com",
+            "access-control-request-method": "POST",
+        },
+    )
+    assert resp.status_code == 400
+    assert "access-control-allow-origin" not in resp.headers
+
+
+def test_cors_preflight_blocks_dublinusd_suffix_spoofing(client):
+    """The regex must be anchored — otherwise an origin merely ending in
+    dublinusd.org (not actually a dublinusd.org host) would slip through."""
+    resp = client.options(
+        "/chat",
+        headers={
+            "origin": "https://dublinusd.org.evil.com",
             "access-control-request-method": "POST",
         },
     )

@@ -33,12 +33,6 @@ def test_dhs_has_no_campus_map_file():
     assert dhs.campus_map_file is None
 
 
-def test_schools_have_distinct_allowed_origins():
-    schools = load_schools()
-    origins = [s.allowed_origin for s in schools.values()]
-    assert len(origins) == len(set(origins))
-
-
 def test_pages_is_dict_of_url_lists():
     wells = get_school("wells")
     assert isinstance(wells.pages, dict)

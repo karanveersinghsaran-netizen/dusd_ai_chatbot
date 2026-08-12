@@ -11,7 +11,6 @@ from slowapi.middleware import SlowAPIMiddleware
 import uvicorn
 from app import config
 from app.agent import get_agent
-from app.schools import load_schools
 from app.security.middleware import enforce_max_body_size, limiter, session_or_ip_key
 from app.security.sessions import issue_session_id, verify_session_id
 from app.store.postgres_store import store as postgres_store
@@ -42,9 +41,8 @@ async def _unhandled_exception_handler(request: Request, exc: Exception):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=sorted(
-        set(config.ALLOWED_ORIGINS) | {s.allowed_origin for s in load_schools().values()}
-    ),
+    allow_origins=config.ALLOWED_ORIGINS,
+    allow_origin_regex=config.ALLOWED_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["POST"],
     allow_headers=["Content-Type"],

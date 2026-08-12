@@ -21,7 +21,6 @@ class SchoolConfig:
     district_id: str
     website: str
     rss_url: str
-    allowed_origin: str
     phone: str
     address: str
     fax: str
@@ -47,7 +46,6 @@ def _load_school(school_dir: Path) -> SchoolConfig:
         district_id=raw["district_id"],
         website=raw["website"],
         rss_url=raw["rss_url"],
-        allowed_origin=raw["allowed_origin"],
         phone=raw.get("phone", ""),
         address=raw.get("address", ""),
         fax=raw.get("fax", ""),
