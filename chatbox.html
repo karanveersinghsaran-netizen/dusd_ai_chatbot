@@ -33,10 +33,20 @@
   #input-row input { flex: 1; padding: 0.5rem; font-size: 1rem; min-width: 0; }
   #input-row button { padding: 0.5rem 1rem; font-size: 1rem; }
   #input-row button:disabled { opacity: 0.6; }
+  #school-picker { display: flex; gap: 1rem; padding: 0.5rem 1rem; border-bottom: 1px solid #ddd; font-size: 0.85rem; flex-shrink: 0; }
+  #school-picker label { display: flex; align-items: center; gap: 0.3rem; cursor: pointer; }
 </style>
 </head>
 <body>
   <h1>School Chat</h1>
+
+  <!-- Dev/testing convenience only: hidden once a real embed sets ?school=
+       via data-school on embed/wms-chatbot.js, since that already fixes the
+       school for the page. -->
+  <div id="school-picker" hidden>
+    <label><input type="radio" name="school" value="wells" checked> Wells Middle School</label>
+    <label><input type="radio" name="school" value="dhs"> Dublin High School</label>
+  </div>
 
   <div id="messages"></div>
   <div id="input-row">
@@ -48,7 +58,21 @@
     const messagesEl = document.getElementById("messages");
     const inputEl = document.getElementById("input");
     const sendEl = document.getElementById("send");
-    const schoolId = new URLSearchParams(window.location.search).get("school");
+    const schoolPickerEl = document.getElementById("school-picker");
+
+    const schoolRadios = Array.from(schoolPickerEl.querySelectorAll('input[name="school"]'));
+
+    let schoolId = new URLSearchParams(window.location.search).get("school");
+    const matchingRadio = schoolId && schoolRadios.find((r) => r.value === schoolId);
+    if (matchingRadio) {
+      matchingRadio.checked = true;
+    } else {
+      schoolPickerEl.hidden = false;
+      schoolId = schoolRadios.find((r) => r.checked).value;
+    }
+    schoolPickerEl.addEventListener("change", (e) => {
+      schoolId = e.target.value;
+    });
 
     function addMessage(role, text) {
       const wrapper = document.createElement("div");
