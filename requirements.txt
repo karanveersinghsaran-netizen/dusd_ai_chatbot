@@ -4,12 +4,10 @@ pytest-asyncio==1.4.0
 uvicorn[standard]==0.52.0
 python-dotenv==1.2.2
 anthropic==0.120.2
-twilio==9.10.9
 beautifulsoup4==4.15.0
 requests==2.34.2
 pydantic==2.13.4
 httpx==0.28.1
-python-multipart==0.0.32
 urllib3==2.7.0
 pymupdf==1.28.0
 redis==8.1.0
