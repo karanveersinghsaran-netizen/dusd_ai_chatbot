@@ -80,7 +80,7 @@
 
       const roleEl = document.createElement("span");
       roleEl.className = "role";
-      roleEl.textContent = role === "user" ? "You" : "Bot";
+      roleEl.textContent = role === "user" ? "You" : "DUSD AI";
       wrapper.appendChild(roleEl);
 
       const bodyEl = document.createElement("div");
@@ -113,7 +113,7 @@
       inputEl.value = "";
       sendEl.disabled = true;
       addMessage("user", text);
-      const pending = addMessage("pending", "Bot is typing...");
+      const pending = addMessage("pending", "DUSD AI is typing...");
 
       try {
         const resp = await fetch("/chat", {
