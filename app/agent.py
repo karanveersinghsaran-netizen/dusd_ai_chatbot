@@ -4,11 +4,11 @@ import json
 import re
 import time
 from datetime import date
-from pathlib import Path
 from typing import Any, Dict, NamedTuple, Optional
 
 from app import config
-from app.services.scraper import scraper
+from app.schools import SchoolConfig, get_school
+from app.services.scraper import WebsiteScraper
 from app.services.calendar import (
     get_upcoming_events,
     get_upcoming_no_school_days,
@@ -24,24 +24,25 @@ class ChatReply(NamedTuple):
     attach_map: bool
 
 
-class WellsMiddleSchoolAgent:
-    CAMPUS_MAP_FILE = Path(__file__).resolve().parents[1] / "data" / "campus_map.json"
-
+class SchoolAgent:
     def __init__(
         self,
+        school: SchoolConfig,
         redis_store: Optional[RedisStore] = None,
         postgres_store: Optional[PostgresStore] = None,
     ):
+        self.school = school
         self.client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
         self.model = "claude-haiku-4-5-20251001"
         self.redis_store = redis_store or default_redis_store
         self.postgres_store = postgres_store or default_postgres_store
+        self.scraper = WebsiteScraper(base_url=school.website)
 
         self.tools = [
             {
                 "name": "get_school_information",
                 "description": (
-                    "Get information about Wells Middle School from the school website. "
+                    f"Get information about {school.name} from the school website. "
                     "Use this to answer questions about the school such as: staff, programs, "
                     "academics, clubs, contact info, and announcements. "
                     "Use the 'page_group' parameter to target specific sections: "
@@ -81,7 +82,7 @@ class WellsMiddleSchoolAgent:
             {
                 "name": "get_calendar_events",
                 "description": (
-                    "Get upcoming events and dates from the Wells Middle School calendar. "
+                    f"Get upcoming events and dates from the {school.name} calendar. "
                     "Use this for questions about events, schedules, dates, or upcoming activities."
                 ),
                 "input_schema": {"type": "object", "properties": {}}
@@ -89,17 +90,20 @@ class WellsMiddleSchoolAgent:
             {
                 "name": "get_no_school_days",
                 "description": (
-                    "Get upcoming no-school days, holidays, breaks, and key academic dates from the DUSD "
+                    f"Get upcoming no-school days, holidays, breaks, and key academic dates from the {school.district} "
                     "instructional calendar. Use this for questions about days off, holidays, breaks, "
                     "first day of school, last day of school, quarter/semester end dates, or the school calendar "
                     "for both the current and next school year."
                 ),
                 "input_schema": {"type": "object", "properties": {}}
             },
-            {
+        ]
+
+        if school.campus_map_file is not None:
+            self.tools.append({
                 "name": "get_campus_directions",
                 "description": (
-                    "Get directions and location info for rooms, buildings, areas, or classes on the Wells Middle School campus. "
+                    f"Get directions and location info for rooms, buildings, areas, or classes on the {school.name} campus. "
                     "Use this for any question about where something is on campus, how to get somewhere, "
                     "what building a room number belongs to, or which building a subject/class is held in. "
                     "Examples: 'where is the library', 'how do I get from B101 to the gym', 'where is room H5', "
@@ -120,10 +124,33 @@ class WellsMiddleSchoolAgent:
                     "required": ["destination"]
                 },
                 "cache_control": {"type": "ephemeral"},
-            }
-        ]
+            })
+        else:
+            # Still need exactly one tool carrying cache_control so the tools
+            # block itself is cached (Anthropic caches everything up to and
+            # including the last cache_control breakpoint).
+            self.tools[-1]["cache_control"] = {"type": "ephemeral"}
 
-    _SYSTEM_PROMPT = """You are a helpful assistant for Wells Middle School, part of the Dublin Unified School District in Dublin, California.
+        self._system_prompt = self._build_system_prompt(school)
+
+    @staticmethod
+    def _build_system_prompt(school: SchoolConfig) -> str:
+        """Assemble the system prompt for this school. Built once at construction
+        time from school data, so it's byte-stable across every chat() call on
+        this instance — required for prompt caching to hit."""
+        contact_lines = [
+            f"Name: {school.name}",
+            f"Address: {school.address}",
+            f"Phone: {school.phone}",
+        ]
+        if school.fax:
+            contact_lines.append(f"Fax: {school.fax}")
+        if school.office_hours:
+            contact_lines.append(f"Office Hours: {school.office_hours}")
+        contact_lines.append(f"Website: {school.website}")
+        contact_lines.append(f"District: {school.district}")
+
+        return f"""You are a helpful assistant for {school.name}, part of {school.district}.
 
 IMPORTANT FORMATTING RULE: This assistant runs in a web chat widget that renders
 Markdown. Use Markdown to make responses easy to scan: **bold** for emphasis,
@@ -132,67 +159,19 @@ headers (##) for sections when helpful, and bullet lists with * or - for lists.
 You help students, parents, and staff with questions about the school — including academics, staff, events, clubs, sports, schedules, and general information.
 
 SCHOOL INFORMATION:
-Name: Wells Middle School
-Address: 6800 Penn Drive, Dublin, CA 94568
-Phone: (925) 828-6227
-Fax: (925) 829-8851
-Office Hours: Monday–Friday, 8:00 AM – 4:00 PM
-Website: https://wms.dublinusd.org/
-District: Dublin Unified School District
+{chr(10).join(contact_lines)}
 
-BELL SCHEDULE (2025-26):
-Monday / Tuesday / Thursday / Friday:
-  Period 0:  7:40 AM – 8:30 AM
-  Period 1:  8:35 AM – 9:25 AM
-  Period 2:  9:29 AM – 10:19 AM
-  Break:     10:19 AM – 10:26 AM
-  AVID/Advisory: 10:30 AM – 10:55 AM
-  Period 3:  10:59 AM – 11:49 AM
-  Lunch A:   11:49 AM – 12:23 PM
-  Period 4 (Lunch A): 12:27 PM – 1:17 PM
-  Period 4 (Lunch B): 11:53 AM – 12:43 PM
-  Lunch B:   12:43 PM – 1:17 PM
-  Period 5:  1:21 PM – 2:11 PM
-  Period 6:  2:15 PM – 3:05 PM
-
-Wednesday:
-  Period 0:  7:45 AM – 8:30 AM
-  Period 1:  8:35 AM – 9:23 AM
-  Period 2:  9:27 AM – 10:10 AM
-  Break:     10:10 AM – 10:17 AM
-  Period 3:  10:21 AM – 11:04 AM
-  Lunch A:   11:04 AM – 11:39 AM
-  Period 4 (Lunch A): 11:43 AM – 12:26 PM
-  Period 4 (Lunch B): 11:08 AM – 11:51 AM
-  Lunch B:   11:51 AM – 12:26 PM
-  Period 5:  12:30 PM – 1:13 PM
-  Period 6:  1:17 PM – 2:00 PM
-
-Minimum Days:
-  Period 0:  8:05 AM – 8:30 AM
-  Period 1:  8:35 AM – 9:07 AM
-  Period 2:  9:11 AM – 9:41 AM
-  Period 3:  9:45 AM – 10:15 AM
-  Period 4:  10:22 AM – 10:52 AM
-  Period 5:  10:56 AM – 11:26 AM
-  Period 6:  11:30 AM – 12:00 PM (Lunch Grab & Go)
+BELL SCHEDULE:
+{school.bell_schedule}
 
 USEFUL LINKS (share these when relevant):
-- Donate to Wells Middle School: https://www.paypal.com/donate/?hosted_button_id=A7XCLC68BRATW
-- Bell Schedule PDF: https://drive.google.com/file/d/107PmZjvXZacDQgX_O6mpDd-09qWPgiIi/view
-- Athletics: https://sites.google.com/dublinusd.org/wmsathletics/home
-- AVID Program: https://sites.google.com/dublinusd.org/wells-middle-school-avid
-- Parent Portal (grades/attendance): https://icampus.dublinusd.org/campus/portal/dublin.jsp
-- Counseling Appointment Request: https://forms.gle/dXkFqP5bRxUGtFvi9
-- Wells Webstore: https://wellswebstore.myschoolcentral.com
-- Elective Handbook: https://drive.google.com/file/d/1uVqHtEqBH17XAKrkz9lu3OStBcIMVQ9G/view
-- Bullying Report Form: https://forms.gle/7xYV7TgBdpbYA8z87
+{school.useful_links}
 
 SOURCE CITATION:
 - At the end of every substantive response, add a compact source line on its own line.
 - Format: "📍 Source: <URL>" — use the URL from the url="..." attribute of the <scraped_page> tag or "SOURCE:" marker in the tool result.
-- For calendar events: 📍 Source: https://wms.dublinusd.org/apps/events/
-- For bell schedule or hardcoded school info: 📍 Source: https://wms.dublinusd.org/
+- For calendar events: 📍 Source: {school.website}apps/events/
+- For bell schedule or hardcoded school info: 📍 Source: {school.website}
 - One source line only — pick the most relevant URL if multiple pages were scraped.
 - Skip the source line for conversational replies, error messages, and feedback acknowledgments.
 
@@ -201,51 +180,27 @@ CRITICAL RULES:
 - NEVER guess, assume, or fabricate school information
 - ALWAYS call a tool before answering any factual question about the school — including follow-up questions. Do not rely on prior tool results already in the conversation; call the tool again.
 - Bell schedule and useful links above are hardcoded facts — you may answer those directly without calling a tool.
-- For ANY question about where a class, subject, or room is on campus, ALWAYS call get_campus_directions — never guess building names.
+- For ANY question about where a class, subject, or room is on campus, ALWAYS call get_campus_directions if it's available to you — never guess building names. If it isn't available, say you don't have campus map information for this school.
 - If you cannot find an answer from the tools, say so clearly and suggest contacting the school directly
 - Be friendly, concise, and helpful
-- Always be respectful, kind, and supportive — many users are middle school students. Never use sarcasm, dismissive language, or anything that could feel discouraging or embarrassing to a young student
+- Always be respectful, kind, and supportive — many users are middle school or high school students. Never use sarcasm, dismissive language, or anything that could feel discouraging or embarrassing to a young student
 - FORMAT FOR WEB: Use Markdown formatting — **bold** for emphasis, bullet lists with *, and headers where they aid readability. Keep formatting light and clean."""
 
-    # Page URL registry — add new URLs here as they become available
-    PAGES = {
-        "home": [
-            "/",
-            "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=449301&type=d&termREC_ID=&pREC_ID=921000",
-            "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=449301&type=d&termREC_ID=&pREC_ID=1132073",
-        ],
-        "principal": [
-            "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=449301&type=d&termREC_ID=&pREC_ID=921000",
-            "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=449301&type=d&termREC_ID=&pREC_ID=1132073",
-        ],
-        "staff": [
-            "https://wms.dublinusd.org/apps/staff/",
-        ],
-        "academics": [
-            "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=449299&type=d",   # About our School
-            "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=449323&type=d",   # Academic Opportunities
-            "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=449318&type=d",   # Homework Policy
-        ],
-        "counseling": [
-            "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=449306&type=d",   # Counseling Staff
-        ],
-        "attendance": [
-            "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=449304&type=d",   # Attendance
-        ],
-        "clubs": [
-            "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=449324&type=d",   # Student Clubs & Organizations
-            "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=449323&type=d",   # Academic Opportunities (lists programs)
-        ],
-    }
+    def _session_key(self, user_id: str) -> str:
+        """Namespace every Redis/Postgres key by school. Two schools' widgets are
+        served from the same app origin, so a browser could present the same
+        signed session cookie to both — scoping keys here keeps their
+        conversations and feedback independent even if that happens."""
+        return f"{self.school.id}:{user_id}"
 
     def _dynamic_context(self) -> str:
         """Build the per-request context line injected into the first user message."""
         today = date.today()
         parts = [f"Today is {today.strftime('%A, %B %d, %Y')}."]
-        school_status = get_school_day_status(today)
+        school_status = get_school_day_status(today, self.school.district_id)
         if school_status:
             parts.append(f"School status: {school_status}")
-        event_status = get_today_status()
+        event_status = get_today_status(self.school.rss_url)
         if event_status:
             parts.append(event_status)
         return "[Context: " + " ".join(parts) + "]"
@@ -254,18 +209,28 @@ CRITICAL RULES:
         """Return (tool_result_text, should_attach_map)."""
         if tool_name == "get_school_information":
             page_group = tool_input.get("page_group", "home")
-            pages = self.PAGES.get(page_group, self.PAGES["home"])
-            result = scraper.get_school_info(pages)
+            pages = self.school.pages.get(page_group, self.school.pages.get("home", []))
+            result = self.scraper.get_school_info(pages)
             if page_group == "staff":
-                result += "\n\n[NOTE: Please include a brief disclaimer in your response that the staff directory may not always be up to date, and users should contact the school directly at (925) 828-6227 to confirm current staff assignments.]"
+                result += (
+                    "\n\n[NOTE: Please include a brief disclaimer in your response that the staff "
+                    f"directory may not always be up to date, and users should contact the school "
+                    f"directly at {self.school.phone} to confirm current staff assignments.]"
+                )
             return (result, False)
         if tool_name == "get_calendar_events":
-            return ("SOURCE: https://wms.dublinusd.org/apps/events/\n\n" + get_upcoming_events(), False)
+            events_url = f"{self.school.website}apps/events/"
+            return (f"SOURCE: {events_url}\n\n" + get_upcoming_events(self.school.rss_url), False)
         if tool_name == "get_no_school_days":
-            return ("SOURCE: https://wms.dublinusd.org/apps/events/\n\n" + get_upcoming_no_school_days(), False)
+            events_url = f"{self.school.website}apps/events/"
+            return (
+                f"SOURCE: {events_url}\n\n"
+                + get_upcoming_no_school_days(date.today(), self.school.district_id),
+                False,
+            )
         if tool_name == "get_campus_directions":
             try:
-                campus = json.loads(self.CAMPUS_MAP_FILE.read_text(encoding="utf-8"))
+                campus = json.loads(self.school.campus_map_file.read_text(encoding="utf-8"))
                 return (
                     f"Campus map image: {campus['map_url']}\n\n"
                     f"{json.dumps(campus, indent=2)}",
@@ -294,8 +259,9 @@ CRITICAL RULES:
                          raw: str, comment: str = "", last_response: str = "") -> None:
         """Persist a feedback entry to Postgres."""
         try:
-            session_hash = hashlib.sha256(user_id.encode()).hexdigest()[:12]
+            session_hash = hashlib.sha256(self._session_key(user_id).encode()).hexdigest()[:12]
             self.postgres_store.record_feedback(
+                school_id=self.school.id,
                 session_hash=session_hash,
                 feedback_type=feedback_type,
                 sentiment=sentiment,
@@ -307,11 +273,11 @@ CRITICAL RULES:
             pass  # Never let feedback recording break the chat flow
 
     def clear_conversation(self, user_id: str = "default"):
-        self.redis_store.clear_session(user_id)
+        self.redis_store.clear_session(self._session_key(user_id))
 
     def _call_api(self, messages: list, retries: int = 3) -> Any:
         """Call Claude API with exponential backoff for transient errors."""
-        system = [{"type": "text", "text": self._SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}]
+        system = [{"type": "text", "text": self._system_prompt, "cache_control": {"type": "ephemeral"}}]
         for attempt in range(retries):
             try:
                 return self.client.beta.messages.create(
@@ -335,15 +301,16 @@ CRITICAL RULES:
     ) -> ChatReply:
         # Unexpected exceptions propagate to the caller so the /chat endpoint
         # can return HTTP 500 and alerts fire, instead of masking failures.
+        key = self._session_key(user_id)
 
         # ── Priority 1: collect active report comment ──────────────────────
-        if self.redis_store.is_report_pending(user_id):
-            self.redis_store.clear_report_pending(user_id)
+        if self.redis_store.is_report_pending(key):
+            self.redis_store.clear_report_pending(key)
             comment = "" if user_message.strip().lower() == "skip" else user_message
             self._record_feedback(
                 user_id, feedback_type="report", sentiment="negative",
                 raw=user_message, comment=comment,
-                last_response=self.redis_store.get_last_response(user_id) or "",
+                last_response=self.redis_store.get_last_response(key) or "",
             )
             return ChatReply("Thanks for the report! 🙏 We'll use it to improve. How else can I help?", False)
 
@@ -351,33 +318,35 @@ CRITICAL RULES:
         if user_message.strip().lower() in {"help", "/help"}:
             return ChatReply(
                 "Here's what I can help with:\n\n"
-                "Ask me anything about Wells Middle School — staff, events, schedules, clubs, attendance, and more.\n\n"
+                f"Ask me anything about {self.school.name} — staff, events, schedules, clubs, attendance, and more.\n\n"
                 "Commands:\n"
                 "- report — flag my last response if something seems wrong\n"
                 "- clear — start a fresh conversation\n"
-                "- donate — support Wells Middle School\n"
-                "- help — show this message\n\n"
+                + ("- donate — support the school\n" if self.school.donation_url else "")
+                + "- help — show this message\n\n"
                 "You can also reach the school directly:\n"
-                "(925) 828-6227 | wms.dublinusd.org",
+                f"{self.school.phone} | {self.school.website}",
                 False,
             )
 
         # ── Priority 3: donate command ─────────────────────────────────────
-        if re.search(r'\b(donate|donation|donations|support the school)\b', user_message.strip().lower()):
+        if self.school.donation_url and re.search(
+            r'\b(donate|donation|donations|support the school)\b', user_message.strip().lower()
+        ):
             return ChatReply(
-                "Thank you for supporting Wells Middle School!\n\n"
+                f"Thank you for supporting {self.school.name}!\n\n"
                 "You can make a donation here:\n"
-                "https://www.paypal.com/donate/?hosted_button_id=A7XCLC68BRATW\n\n"
+                f"{self.school.donation_url}\n\n"
                 "Every contribution helps our students and programs. Thank you!",
                 False,
             )
 
         # ── Priority 4: user-initiated report trigger ──────────────────────
         if self._is_report_trigger(user_message):
-            if not self.redis_store.get_last_response(user_id):
+            if not self.redis_store.get_last_response(key):
                 return ChatReply("There's no recent response to report. Ask me a question first!", False)
-            self.redis_store.mark_report_pending(user_id)
-            self.redis_store.clear_feedback_pending(user_id)  # cancel any pending passive ask
+            self.redis_store.mark_report_pending(key)
+            self.redis_store.clear_feedback_pending(key)  # cancel any pending passive ask
             return ChatReply(
                 "Thanks for flagging that! What was the issue with my last response?\n"
                 "(Reply with a comment, or *skip* to just flag it)",
@@ -385,8 +354,8 @@ CRITICAL RULES:
             )
 
         # ── Priority 5: collect passive feedback ───────────────────────────
-        if self.redis_store.is_feedback_pending(user_id):
-            self.redis_store.clear_feedback_pending(user_id)
+        if self.redis_store.is_feedback_pending(key):
+            self.redis_store.clear_feedback_pending(key)
             sentiment = self._is_feedback(user_message)
             if sentiment:
                 self._record_feedback(
@@ -408,7 +377,7 @@ CRITICAL RULES:
                 )
 
         # ── Normal chat flow ───────────────────────────────────────────────
-        history = self.redis_store.get_conversation(user_id)
+        history = self.redis_store.get_conversation(key)
         messages = history + [{"role": "user", "content": user_message}]
 
         # Prepend dynamic context (date, school status) to the first user message so
@@ -446,20 +415,20 @@ CRITICAL RULES:
 
         final_response = "".join(
             block.text for block in response.content if hasattr(block, "text")
-        ) or "I'm not sure how to help with that. Please contact Wells Middle School directly."
+        ) or f"I'm not sure how to help with that. Please contact {self.school.name} directly."
 
         final_response = final_response.strip()
 
         # Persist only after the turn succeeds, so a failed API call never leaves a
         # dangling user message in history.
-        self.redis_store.append_message(user_id, {"role": "user", "content": user_message})
-        self.redis_store.append_message(user_id, {"role": "assistant", "content": final_response})
-        self.redis_store.set_last_response(user_id, final_response)
+        self.redis_store.append_message(key, {"role": "user", "content": user_message})
+        self.redis_store.append_message(key, {"role": "assistant", "content": final_response})
+        self.redis_store.set_last_response(key, final_response)
 
         # Ask for passive feedback once per session
-        if not self.redis_store.is_feedback_asked(user_id):
-            self.redis_store.mark_feedback_asked(user_id)
-            self.redis_store.mark_feedback_pending(user_id)
+        if not self.redis_store.is_feedback_asked(key):
+            self.redis_store.mark_feedback_asked(key)
+            self.redis_store.mark_feedback_pending(key)
             final_response += (
                 "\n\n---\n"
                 "💬 *Was this helpful?* Reply *1* 👍 or *2* 👎\n"
@@ -469,11 +438,30 @@ CRITICAL RULES:
         return ChatReply(final_response, attach_map)
 
 
-agent = WellsMiddleSchoolAgent()
+_agents: Dict[str, SchoolAgent] = {}
+
+
+def get_agent(school_id: str) -> Optional[SchoolAgent]:
+    """Return the shared SchoolAgent for this school, building it lazily on
+    first use. One agent instance per school for the life of the process."""
+    if school_id not in _agents:
+        school = get_school(school_id)
+        if school is None:
+            return None
+        _agents[school_id] = SchoolAgent(school=school)
+    return _agents[school_id]
 
 
 if __name__ == "__main__":
-    print("Wells Middle School AI Chatbot")
+    import sys
+
+    school_id = sys.argv[1] if len(sys.argv) > 1 else "wells"
+    agent = get_agent(school_id)
+    if agent is None:
+        print(f"Unknown school: {school_id}")
+        raise SystemExit(1)
+
+    print(f"{agent.school.name} AI Chatbot")
     print("Type 'quit' to exit, 'clear' to reset conversation.\n")
     while True:
         user_input = input("You: ").strip()
