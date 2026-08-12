@@ -21,7 +21,7 @@ can't reach into it (or vice versa).
 | Attribute        | Required | Description |
 |-------------------|----------|-------------|
 | `data-api-base`   | Yes      | Origin of the deployed bot (scheme + host, no trailing slash). The script loads `/chatbox` from this origin inside the iframe. |
-| `data-school`     | No       | School identifier, forwarded to the chatbox as a `?school=` query param. Not yet used server-side — this wires up routing ahead of Sprint 2's multi-school support. |
+| `data-school`     | No       | School identifier (e.g. `wells`, `dhs` — see `data/schools/`), forwarded to the chatbox as a `?school=` query param and from there to every `/chat` request. Omitting it falls back to `DEFAULT_SCHOOL_ID` server-side. |
 
 `<app-host>` is the same origin that serves `/chat` and `/chatbox` — currently
 wherever the FastAPI app is deployed (e.g. an ngrok tunnel or Cloud Run URL).

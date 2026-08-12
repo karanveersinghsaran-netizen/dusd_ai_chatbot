@@ -10,14 +10,15 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 import uvicorn
 from app import config
-from app.agent import agent
+from app.agent import get_agent
+from app.schools import load_schools
 from app.security.middleware import enforce_max_body_size, limiter, session_or_ip_key
 from app.security.sessions import issue_session_id, verify_session_id
 from app.store.postgres_store import store as postgres_store
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Wells Middle School Chatbot")
+app = FastAPI(title="DUSD School Chatbot")
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -41,7 +42,9 @@ async def _unhandled_exception_handler(request: Request, exc: Exception):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=config.ALLOWED_ORIGINS,
+    allow_origins=sorted(
+        set(config.ALLOWED_ORIGINS) | {s.allowed_origin for s in load_schools().values()}
+    ),
     allow_credentials=True,
     allow_methods=["POST"],
     allow_headers=["Content-Type"],
@@ -56,6 +59,7 @@ EMBED_JS = Path(__file__).parent / "embed" / "wms-chatbot.js"
 
 class ChatRequest(BaseModel):
     message: str
+    school_id: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -70,7 +74,7 @@ async def on_startup():
 
 @app.get("/")
 async def root():
-    return {"status": "ok", "message": "Wells Middle School Chatbot is running"}
+    return {"status": "ok", "message": "DUSD School Chatbot is running"}
 
 
 @app.get("/chatbox")
@@ -114,10 +118,15 @@ async def chat(
         if session_id is None:
             raise HTTPException(status_code=401, detail="Invalid session cookie")
 
+    school_id = chat_request.school_id or config.DEFAULT_SCHOOL_ID
+    agent = get_agent(school_id)
+    if agent is None:
+        raise HTTPException(status_code=400, detail=f"Unknown school: {school_id}")
+
     reply = agent.chat(chat_request.message, user_id=session_id)
     return ChatResponse(reply=reply.text, attach_map=reply.attach_map)
 
 
 if __name__ == "__main__":
-    print(f"Starting Wells Middle School Chatbot on port {config.PORT}")
+    print(f"Starting DUSD School Chatbot on port {config.PORT}")
     uvicorn.run(app, host="0.0.0.0", port=config.PORT)

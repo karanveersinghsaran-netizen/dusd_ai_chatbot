@@ -36,6 +36,7 @@ def test_init_schema_is_idempotent(postgres_store):
 
 def test_record_feedback_inserts_row(postgres_store):
     postgres_store.record_feedback(
+        school_id="wells",
         session_hash="abc123",
         feedback_type="report",
         sentiment="negative",
@@ -64,7 +65,7 @@ def test_record_feedback_inserts_row(postgres_store):
 
 def test_record_feedback_optional_fields_default_null(postgres_store):
     postgres_store.record_feedback(
-        session_hash="xyz789", feedback_type="passive", sentiment="positive", raw="1",
+        school_id="wells", session_hash="xyz789", feedback_type="passive", sentiment="positive", raw="1",
     )
 
     with psycopg.connect(postgres_store.dsn) as conn:
