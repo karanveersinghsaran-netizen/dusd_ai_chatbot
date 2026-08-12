@@ -1,14 +1,13 @@
 import logging
 from pathlib import Path
 
-from fastapi import Cookie, Depends, FastAPI, Form, HTTPException, Request, Response
+from fastapi import Cookie, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from twilio.twiml.messaging_response import MessagingResponse
 import uvicorn
 from app import config
 from app.agent import agent
@@ -18,7 +17,7 @@ from app.store.postgres_store import store as postgres_store
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Wells Middle School WhatsApp Bot")
+app = FastAPI(title="Wells Middle School Chatbot")
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -71,7 +70,7 @@ async def on_startup():
 
 @app.get("/")
 async def root():
-    return {"status": "ok", "message": "Wells Middle School WhatsApp Bot is running"}
+    return {"status": "ok", "message": "Wells Middle School Chatbot is running"}
 
 
 @app.get("/chatbox")
@@ -87,28 +86,6 @@ async def embed_script():
     """Serves the iframe-embed snippet. Interim hosting until Sprint 1.7 (#10)
     provisions Cloud Storage + Cloud CDN for static assets."""
     return FileResponse(EMBED_JS, media_type="application/javascript")
-
-
-@app.post("/webhook/whatsapp")
-async def whatsapp_webhook(
-    Body: str = Form(...),
-    From: str = Form(...),
-    To: str = Form(None),
-    MessageSid: str = Form(None)
-):
-    """Webhook endpoint for Twilio WhatsApp messages."""
-    print(f"Received message from {From}: {Body}")
-    reply = agent.chat(Body, user_id=From, channel="whatsapp")
-    twiml_response = MessagingResponse()
-    msg = twiml_response.message(reply.text)
-    if reply.attach_map:
-        msg.media(config.CAMPUS_MAP_URL)
-    return PlainTextResponse(content=str(twiml_response), media_type="application/xml")
-
-
-@app.get("/webhook/whatsapp")
-async def whatsapp_webhook_get():
-    return {"message": "WhatsApp webhook is active. Send POST requests here."}
 
 
 @app.post("/chat", response_model=ChatResponse, dependencies=[Depends(enforce_max_body_size)])
@@ -137,12 +114,10 @@ async def chat(
         if session_id is None:
             raise HTTPException(status_code=401, detail="Invalid session cookie")
 
-    reply = agent.chat(chat_request.message, user_id=session_id, channel="web")
+    reply = agent.chat(chat_request.message, user_id=session_id)
     return ChatResponse(reply=reply.text, attach_map=reply.attach_map)
 
 
 if __name__ == "__main__":
-    print(f"Starting Wells Middle School WhatsApp Bot on port {config.PORT}")
-    print(f"Webhook URL: http://localhost:{config.PORT}/webhook/whatsapp")
-    print("Use ngrok to expose this to the internet for Twilio.")
+    print(f"Starting Wells Middle School Chatbot on port {config.PORT}")
     uvicorn.run(app, host="0.0.0.0", port=config.PORT)

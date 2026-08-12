@@ -2,19 +2,18 @@
 
 [![tests](https://github.com/karanveersinghsaran-netizen/wms_ai_chatbot/actions/workflows/tests.yml/badge.svg)](https://github.com/karanveersinghsaran-netizen/wms_ai_chatbot/actions/workflows/tests.yml)
 
-A WhatsApp chatbot for Wells Middle School (Dublin Unified School District) powered by Claude AI. It answers questions about the school by scraping the school website in real time.
+A web chatbot for Wells Middle School (Dublin Unified School District) powered by Claude AI. It answers questions about the school by scraping the school website in real time.
 
 ## Features
 
-- WhatsApp integration via Twilio
 - AI-powered responses using Claude (Anthropic)
 - Live school website scraping for up-to-date information
-- Per-user conversation history
+- Per-session conversation history
+- Embeddable web widget (iframe snippet) for the school website
 
 ## Tech Stack
 
-- **FastAPI** — REST API and webhook handler
-- **Twilio** — WhatsApp messaging
+- **FastAPI** — REST API and web chat endpoint
 - **Anthropic Claude** — AI agent
 - **BeautifulSoup** — Website scraping
 - **Redis** — per-session conversation history and feedback-flow state
@@ -26,7 +25,6 @@ A WhatsApp chatbot for Wells Middle School (Dublin Unified School District) powe
 
 - Python 3.10+
 - Redis and Postgres (or Docker, to run them via `docker compose`)
-- Twilio account with WhatsApp sandbox
 - Anthropic API key
 
 ### Installation
@@ -44,7 +42,7 @@ pip install -r requirements.txt
 ```bash
 cp .env.example .env
 # Edit .env and fill in your API keys, plus REDIS_URL / DATABASE_URL if not using the defaults
-# SESSION_SIGNING_KEY is required for the web /chat endpoint (not needed for WhatsApp only)
+# SESSION_SIGNING_KEY is required for the /chat endpoint
 ```
 
 ### Running
@@ -67,25 +65,24 @@ Or run the whole stack (app + Redis + Postgres) together, optionally with multip
 docker compose up --build --scale app=3
 ```
 
-Expose to the internet with ngrok:
-
-```bash
-ngrok http 8000
-```
-
-Then set your Twilio WhatsApp sandbox webhook to:
-```
-https://<your-ngrok-url>/webhook/whatsapp
-```
+Open the chat widget at `http://localhost:8000/chatbox`, or embed it on another page — see `docs/embed.md`.
 
 ## Project Structure
 
 ```
 wms_ai_chatbot/
-├── main.py              # FastAPI app and Twilio webhook
-├── agent.py             # Claude AI agent with tools
-├── website_scraper.py   # School website scraper
-├── config.py            # Configuration and env vars
+├── main.py                    # FastAPI app: /chat, /chatbox, /embed
+├── chatbox.html                # Web chat widget UI
+├── embed/wms-chatbot.js        # Iframe-embed snippet for school sites
+├── app/
+│   ├── agent.py                 # Claude AI agent with tools
+│   ├── config.py                # Configuration and env vars
+│   ├── security/                # Session cookie signing, rate limiting
+│   ├── services/                # Website scraper, calendar
+│   └── store/                   # Redis (sessions) and Postgres (feedback)
+├── data/                       # Campus map, instructional calendars
+├── db/schema.sql               # Postgres schema
+├── infra/                      # Terraform (GCP: Cloud Run, Cloud SQL, Redis)
 ├── requirements.txt
 └── .env.example
 ```
