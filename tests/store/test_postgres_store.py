@@ -1,7 +1,7 @@
 """Unit tests for PostgresStore (app/store/postgres_store.py) — psycopg is mocked."""
 from unittest.mock import MagicMock, patch
 
-from app.store.postgres_store import PostgresStore, SCHOOL_ID
+from app.store.postgres_store import PostgresStore
 
 
 @patch("app.store.postgres_store.psycopg.connect")
@@ -25,6 +25,7 @@ def test_record_feedback_inserts_expected_row(mock_connect):
 
     store = PostgresStore(dsn="postgresql://fake")
     store.record_feedback(
+        school_id="wells",
         session_hash="abc123",
         feedback_type="report",
         sentiment="negative",
@@ -37,7 +38,7 @@ def test_record_feedback_inserts_expected_row(mock_connect):
     sql, params = mock_conn.execute.call_args[0]
     assert "INSERT INTO feedback" in sql
     assert params == (
-        SCHOOL_ID,
+        "wells",
         "abc123",
         "report",
         "negative",
@@ -55,6 +56,7 @@ def test_record_feedback_empty_optional_fields_become_none(mock_connect):
 
     store = PostgresStore(dsn="postgresql://fake")
     store.record_feedback(
+        school_id="wells",
         session_hash="abc123",
         feedback_type="passive",
         sentiment="positive",
@@ -67,14 +69,14 @@ def test_record_feedback_empty_optional_fields_become_none(mock_connect):
 
 
 @patch("app.store.postgres_store.psycopg.connect")
-def test_record_feedback_uses_school_id_default(mock_connect):
+def test_record_feedback_uses_explicit_school_id(mock_connect):
     mock_conn = MagicMock()
     mock_connect.return_value.__enter__.return_value = mock_conn
 
     store = PostgresStore(dsn="postgresql://fake")
     store.record_feedback(
-        session_hash="abc123", feedback_type="passive", sentiment="positive", raw="1",
+        school_id="dhs", session_hash="abc123", feedback_type="passive", sentiment="positive", raw="1",
     )
 
     _, params = mock_conn.execute.call_args[0]
-    assert params[0] == "wells"
+    assert params[0] == "dhs"

@@ -5,8 +5,6 @@ import psycopg
 
 from app import config
 
-SCHOOL_ID = "wells"  # fixed literal; multi-school config lands in Sprint 2
-
 _SCHEMA_FILE = Path(__file__).resolve().parents[2] / "db" / "schema.sql"
 
 
@@ -23,13 +21,13 @@ class PostgresStore:
 
     def record_feedback(
         self,
+        school_id: str,
         session_hash: str,
         feedback_type: str,
         sentiment: str,
         raw: str,
         comment: str = "",
         last_response: str = "",
-        school_id: str = SCHOOL_ID,
     ) -> None:
         with psycopg.connect(self.dsn) as conn:
             conn.execute(
