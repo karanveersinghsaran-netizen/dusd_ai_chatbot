@@ -8,6 +8,7 @@ from typing import Any, Dict, NamedTuple, Optional
 
 from app import config
 from app.schools import SchoolConfig, get_school
+from app.services.clubs import get_club_list
 from app.services.scraper import WebsiteScraper
 from app.services.calendar import (
     get_upcoming_events,
@@ -123,13 +124,25 @@ class SchoolAgent:
                     },
                     "required": ["destination"]
                 },
-                "cache_control": {"type": "ephemeral"},
             })
-        else:
-            # Still need exactly one tool carrying cache_control so the tools
-            # block itself is cached (Anthropic caches everything up to and
-            # including the last cache_control breakpoint).
-            self.tools[-1]["cache_control"] = {"type": "ephemeral"}
+
+        if school.clubs_sheet_url is not None:
+            self.tools.append({
+                "name": "get_club_list",
+                "description": (
+                    f"Get the live roster of student clubs at {school.name}, including each club's "
+                    "meeting day, time, room, and advisor. Use this for questions about a specific "
+                    "club's schedule, meeting location, or advisor — more precise than "
+                    "get_school_information's general 'clubs' page for that kind of detail."
+                ),
+                "input_schema": {"type": "object", "properties": {}},
+            })
+
+        # Whichever tool ends up last carries the cache_control breakpoint —
+        # Anthropic caches everything up to and including it, so the tools
+        # block itself is cached regardless of which optional tools a given
+        # school has registered above.
+        self.tools[-1]["cache_control"] = {"type": "ephemeral"}
 
         self._system_prompt = self._build_system_prompt(school)
 
@@ -181,6 +194,7 @@ CRITICAL RULES:
 - ALWAYS call a tool before answering any factual question about the school — including follow-up questions. Do not rely on prior tool results already in the conversation; call the tool again.
 - Bell schedule and useful links above are hardcoded facts — you may answer those directly without calling a tool.
 - For ANY question about where a class, subject, or room is on campus, ALWAYS call get_campus_directions if it's available to you — never guess building names. If it isn't available, say you don't have campus map information for this school.
+- For ANY question about a specific club's meeting day, time, room, or advisor, ALWAYS call get_club_list if it's available to you instead of get_school_information — it has the current, precise roster; get_school_information's 'clubs' page group is only for general "what clubs exist" browsing. If get_club_list isn't available, fall back to get_school_information with page_group='clubs'.
 - If you cannot find an answer from the tools, say so clearly and suggest contacting the school directly
 - Be friendly, concise, and helpful
 - Always be respectful, kind, and supportive — many users are middle school or high school students. Never use sarcasm, dismissive language, or anything that could feel discouraging or embarrassing to a young student
@@ -238,6 +252,11 @@ CRITICAL RULES:
                 )
             except Exception as e:
                 return (f"Campus map data unavailable: {e}", False)
+        if tool_name == "get_club_list":
+            # Cite the human-viewable sheet, not the raw CSV export endpoint
+            # actually fetched — clicking a CSV download link isn't useful.
+            sheet_url = self.school.clubs_sheet_url.replace("export?format=csv&gid=", "edit?gid=")
+            return (f"SOURCE: {sheet_url}\n\n" + get_club_list(self.school.clubs_sheet_url), False)
         return ("Tool not found", False)
 
     def _is_feedback(self, message: str) -> str | None:

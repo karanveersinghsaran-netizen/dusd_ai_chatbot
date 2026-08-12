@@ -30,6 +30,7 @@ class SchoolConfig:
     pages: Dict[str, List[str]] = field(default_factory=dict)
     campus_map_file: Optional[Path] = None
     donation_url: Optional[str] = None
+    clubs_sheet_url: Optional[str] = None
 
 
 def _load_school(school_dir: Path) -> SchoolConfig:
@@ -55,6 +56,7 @@ def _load_school(school_dir: Path) -> SchoolConfig:
         pages=raw.get("pages", {}),
         campus_map_file=campus_map_file,
         donation_url=raw.get("donation_url"),
+        clubs_sheet_url=raw.get("clubs_sheet_url"),
     )
 
 
