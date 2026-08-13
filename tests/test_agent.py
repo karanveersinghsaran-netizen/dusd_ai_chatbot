@@ -1,4 +1,5 @@
 """Unit tests for SchoolAgent."""
+from dataclasses import replace
 from unittest.mock import MagicMock, patch, call
 import pytest
 
@@ -23,12 +24,25 @@ def agent():
 
 @pytest.fixture()
 def dhs_agent():
-    """A school with no campus_map_file configured (data/schools/dhs has none)."""
     with patch("app.agent.anthropic.Anthropic"):
         redis_store = RedisStore(client=FakeRedisClient())
         postgres_store = MagicMock()
         return SchoolAgent(
             school=get_school("dhs"),
+            redis_store=redis_store,
+            postgres_store=postgres_store,
+        )
+
+
+@pytest.fixture()
+def agent_without_campus_map():
+    """A school with no campus_map_file configured, to exercise the tool-omission path."""
+    with patch("app.agent.anthropic.Anthropic"):
+        redis_store = RedisStore(client=FakeRedisClient())
+        postgres_store = MagicMock()
+        school = replace(get_school("dhs"), campus_map_file=None)
+        return SchoolAgent(
+            school=school,
             redis_store=redis_store,
             postgres_store=postgres_store,
         )
@@ -79,12 +93,22 @@ def test_system_prompt_is_specific_to_school(agent, dhs_agent):
     assert agent._system_prompt != dhs_agent._system_prompt
 
 
-def test_get_campus_directions_tool_omitted_when_school_has_no_campus_map(dhs_agent):
-    assert "get_campus_directions" not in [t["name"] for t in dhs_agent.tools]
+def test_get_campus_directions_tool_omitted_when_school_has_no_campus_map(agent_without_campus_map):
+    assert "get_campus_directions" not in [t["name"] for t in agent_without_campus_map.tools]
 
 
-def test_get_campus_directions_tool_present_when_school_has_campus_map(agent):
+def test_get_campus_directions_tool_present_when_school_has_campus_map(agent, dhs_agent):
     assert "get_campus_directions" in [t["name"] for t in agent.tools]
+    assert "get_campus_directions" in [t["name"] for t in dhs_agent.tools]
+
+
+def test_get_campus_directions_parses_dhs_campus_map(dhs_agent):
+    result, attach_map = dhs_agent.process_tool_call(
+        "get_campus_directions", {"destination": "library"}
+    )
+    assert "Library/Hub" in result
+    assert "campus_map.jpg" in result
+    assert attach_map is True
 
 
 def test_get_club_list_tool_present_when_school_has_clubs_sheet(dhs_agent):
@@ -151,11 +175,17 @@ def test_non_last_tools_have_no_cache_control(agent):
         assert "cache_control" not in tool
 
 
-def test_last_tool_has_cache_control_even_without_campus_map(dhs_agent):
+def test_last_tool_has_cache_control_for_dhs(dhs_agent):
     """The cache_control breakpoint must land on whichever tool ends up last
     (get_club_list, for DHS), regardless of which optional tools — campus
     directions, club roster — a given school has registered."""
     last_tool = dhs_agent.tools[-1]
+    assert last_tool["name"] == "get_club_list"
+    assert last_tool.get("cache_control") == {"type": "ephemeral"}
+
+
+def test_last_tool_has_cache_control_without_campus_map(agent_without_campus_map):
+    last_tool = agent_without_campus_map.tools[-1]
     assert last_tool["name"] == "get_club_list"
     assert last_tool.get("cache_control") == {"type": "ephemeral"}
 
