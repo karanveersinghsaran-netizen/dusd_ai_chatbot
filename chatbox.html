@@ -80,7 +80,7 @@
 
       const roleEl = document.createElement("span");
       roleEl.className = "role";
-      roleEl.textContent = role === "user" ? "You" : "Bot";
+      roleEl.textContent = role === "user" ? "You" : "DUSD AI";
       wrapper.appendChild(roleEl);
 
       const bodyEl = document.createElement("div");
@@ -89,6 +89,13 @@
         // Bot replies render as Markdown; sanitize before injecting since the
         // reply may echo untrusted content the agent scraped from the web.
         bodyEl.innerHTML = DOMPurify.sanitize(marked.parse(text));
+        // Open links (e.g. the "📍 Source:" citation) in a new tab instead of
+        // navigating away from the chat. Set as DOM attributes after
+        // sanitizing rather than trusting them through DOMPurify's output.
+        bodyEl.querySelectorAll("a").forEach((a) => {
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+        });
       } else {
         // User input and error/pending text are never rendered as Markdown/HTML.
         bodyEl.textContent = text;
@@ -106,7 +113,7 @@
       inputEl.value = "";
       sendEl.disabled = true;
       addMessage("user", text);
-      const pending = addMessage("pending", "Bot is typing...");
+      const pending = addMessage("pending", "DUSD AI is typing...");
 
       try {
         const resp = await fetch("/chat", {
