@@ -1,0 +1,115 @@
+{
+  "map_url": "https://raw.githubusercontent.com/karanveersinghsaran-netizen/wms_ai_chatbot/master/data/schools/dhs/campus_map.jpg",
+
+  "buildings": {
+    "A": {
+      "name": "Admin Building A",
+      "position": "center of campus",
+      "notes": "Main administration building, next to the Library/Hub and Building B."
+    },
+    "B": {
+      "name": "Building B",
+      "position": "center of campus, next to Admin Building A and the Library/Hub"
+    },
+    "C": {
+      "name": "Building C",
+      "position": "north side of campus, next to the PAC"
+    },
+    "E": {
+      "name": "Gym (Building E)",
+      "position": "center-north side of campus, between Building C and Building F"
+    },
+    "F": {
+      "name": "Building F",
+      "position": "east-center side of campus, between the Gym and the Sports Complex"
+    },
+    "J": {
+      "name": "Building J",
+      "position": "south-center of campus, next to the Student Union and Building K"
+    },
+    "K": {
+      "name": "Building K",
+      "position": "south side of campus along Brighton Drive, next to Building L and Building J"
+    },
+    "L": {
+      "name": "Building L",
+      "position": "south side of campus along Brighton Drive, between Building M and Building K"
+    },
+    "M": {
+      "name": "Building M",
+      "position": "southwest side of campus, between Building N and Building L"
+    },
+    "N": {
+      "name": "Building N",
+      "position": "southwest side of campus, near Village Parkway, next to Building M"
+    }
+  },
+
+  "key_locations": {
+    "Library": {
+      "building": "Library/Hub",
+      "position": "center of campus",
+      "description": "Library/Hub, in the center of campus next to Admin Building A and Building B."
+    },
+    "Office": {
+      "building": "Admin Building A",
+      "position": "center of campus",
+      "description": "Main Admin office, center of campus next to the Library/Hub."
+    },
+    "PAC": {
+      "building": "PAC",
+      "position": "north side of campus",
+      "description": "Performing Arts Center, north side of campus next to Building C."
+    },
+    "Gym": {
+      "building": "Gym (Building E)",
+      "position": "center-north side of campus",
+      "description": "Gym, center-north of campus between Building C and Building F."
+    },
+    "Student Union": {
+      "building": "Student Union",
+      "position": "south-center of campus",
+      "description": "Student Union, south-center of campus near Building J and Building F."
+    },
+    "Sports Complex": {
+      "building": "Sports Complex",
+      "position": "east side of campus, next to the Track & Field",
+      "description": "Sports Complex, east side of campus next to the Track & Field and Parking Lot J."
+    },
+    "Track & Field": {
+      "building": "Standalone",
+      "position": "east side of campus",
+      "description": "Track and field, east side of campus next to the Sports Complex."
+    },
+    "Tennis Courts": {
+      "building": "Standalone",
+      "position": "north-center of campus",
+      "description": "Tennis courts, north-center of campus near the Sports Field and portables."
+    },
+    "Sports Field": {
+      "building": "Standalone",
+      "position": "center of campus, north side",
+      "description": "Main sports field in the center-north of campus."
+    },
+    "Spec. Ed. Building": {
+      "building": "Spec. Ed. Bldg. 1",
+      "position": "north side of campus",
+      "description": "Special Education building, north side of campus near the portables and PAC."
+    }
+  },
+
+  "parking": {
+    "Parking Lot 1": "West side of campus, along Village Parkway",
+    "Parking Lot 2": "West side of campus, along Village Parkway, next to Parking Lot 1",
+    "Parking Lot J": "Southeast side of campus, near the Sports Complex and Building K"
+  },
+
+  "navigation_notes": [
+    "Village Parkway runs along the west side of campus; Brighton Drive runs along the south side.",
+    "The PAC and Building C are on the north side of campus, next to the Gym (Building E) and Building F.",
+    "Admin Building A, the Library/Hub, and Building B are clustered in the center of campus.",
+    "The Student Union, Building J, Building K, Building L, Building M, and Building N are on the south side of campus, closest to Brighton Drive.",
+    "The Sports Complex and Track & Field are on the east side of campus.",
+    "A pedestrian bridge connects the north end of campus to the Iron Horse Trail."
+  ]
+}

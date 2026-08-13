@@ -26,11 +26,10 @@ def test_wells_has_campus_map_file():
     assert wells.campus_map_file.exists()
 
 
-def test_dhs_has_no_campus_map_file():
-    """DHS has no authored floor plan, so get_campus_directions shouldn't be
-    registered for it (see app/agent.py's conditional tool)."""
+def test_dhs_has_campus_map_file():
     dhs = get_school("dhs")
-    assert dhs.campus_map_file is None
+    assert isinstance(dhs.campus_map_file, Path)
+    assert dhs.campus_map_file.exists()
 
 
 def test_pages_is_dict_of_url_lists():
