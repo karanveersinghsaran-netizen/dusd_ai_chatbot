@@ -87,6 +87,24 @@ def test_get_campus_directions_tool_present_when_school_has_campus_map(agent):
     assert "get_campus_directions" in [t["name"] for t in agent.tools]
 
 
+def test_get_club_list_tool_present_when_school_has_clubs_sheet(dhs_agent):
+    assert "get_club_list" in [t["name"] for t in dhs_agent.tools]
+
+
+def test_get_club_list_tool_omitted_when_school_has_no_clubs_sheet(agent):
+    assert "get_club_list" not in [t["name"] for t in agent.tools]
+
+
+def test_get_club_list_cites_the_human_viewable_sheet_not_the_csv_export(dhs_agent):
+    with patch("app.agent.get_club_list", return_value="Student Clubs:\n- Chess Club"):
+        result, attach_map = dhs_agent.process_tool_call("get_club_list", {})
+
+    assert "SOURCE: https://docs.google.com/spreadsheets/d/" in result
+    assert "/edit?gid=" in result
+    assert "export?format=csv" not in result
+    assert attach_map is False
+
+
 # ── _call_api passes system as list with cache_control ────────────────────────
 
 def test_call_api_system_is_list_with_cache_control(agent):
@@ -134,9 +152,11 @@ def test_non_last_tools_have_no_cache_control(agent):
 
 
 def test_last_tool_has_cache_control_even_without_campus_map(dhs_agent):
-    """The cache_control breakpoint must land on whichever tool ends up last,
-    regardless of whether get_campus_directions is registered."""
+    """The cache_control breakpoint must land on whichever tool ends up last
+    (get_club_list, for DHS), regardless of which optional tools — campus
+    directions, club roster — a given school has registered."""
     last_tool = dhs_agent.tools[-1]
+    assert last_tool["name"] == "get_club_list"
     assert last_tool.get("cache_control") == {"type": "ephemeral"}
 
 
