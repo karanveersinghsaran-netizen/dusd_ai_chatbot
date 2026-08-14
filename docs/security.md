@@ -1,6 +1,6 @@
-# Session cookie security
+# Session cookie & access-token security
 
-Covers the `wms_session` cookie issued by `POST /chat`, the web-widget endpoint.
+Covers the `wms_session` cookie issued by `POST /chat`, and the `/chatbox` access token.
 
 ## Format
 
@@ -45,3 +45,41 @@ out of a plain env var — that's the natural point to add rotation support.
 A cookie that fails verification (tampered, malformed, signed with an old/wrong key) causes
 `POST /chat` to return `401`, not a silent new session. This surfaces forgery attempts and
 signing-key mismatches as errors instead of masking them.
+
+# `/chatbox` access token
+
+Covers the `token` query-param gate on `GET /chatbox`, used to keep the staging demo from being
+publicly loadable before a school is onboarded — e.g. sharing a preview link with a school CTO.
+
+## Format
+
+`token` is `{expires_at_unix}.{signature}`:
+- `expires_at_unix` — plaintext unix timestamp the token stops being valid at. Not sensitive:
+  knowing when a link expires reveals nothing exploitable.
+- `signature` — `hmac_sha256(CHATBOX_TOKEN_SIGNING_KEY, expires_at_unix)`, hex-encoded.
+
+Implemented in `app/security/chatbox_token.py` (`issue_chatbox_token`, `verify_chatbox_token`),
+same stdlib-only approach as the session cookie above. Deliberately keyed by a **separate**
+signing key from `SESSION_SIGNING_KEY`, so rotating chatbox-demo access doesn't invalidate live
+chat sessions and vice versa. Unlike the session id, the token carries no identity — there's
+nothing to hand back to the caller on success, only a valid/invalid verdict.
+
+## Rotation strategy
+
+Unlike the session cookie, this token is *meant* to be rotated routinely — minting a fresh
+7-day link is the normal way to (re)grant or extend access, and it's a pure local computation
+(`scripts/generate_chatbox_token.py`) against the already-deployed signing key. No redeploy
+needed for that path; see `docs/deploy.md` § 6b.
+
+Revoking every previously issued link at once (e.g. one leaked) means rotating
+`CHATBOX_TOKEN_SIGNING_KEY` itself, which does need a new Cloud Run revision — every outstanding
+token immediately fails signature verification. This is coarse, all-or-nothing revocation (no
+per-token denylist, no server-side state at all), an acceptable tradeoff given what's gated is a
+preview of a staging chatbot UI, not production data.
+
+## Failure handling
+
+Missing, malformed, tampered, or expired tokens all fail identically: `GET /chatbox` returns a
+generic `404`, not `403` and not a body with a reason. A `403` would confirm to a prober that the
+route exists and is deliberately gated, inviting further guessing; `404` gives no signal that the
+route is meaningful at all.
