@@ -43,6 +43,7 @@ pip install -r requirements.txt
 cp .env.example .env
 # Edit .env and fill in your API keys, plus REDIS_URL / DATABASE_URL if not using the defaults
 # SESSION_SIGNING_KEY is required for the /chat endpoint
+# CHATBOX_TOKEN_SIGNING_KEY is required for the /chatbox endpoint (see docs/security.md)
 ```
 
 ### Running
@@ -65,7 +66,7 @@ Or run the whole stack (app + Redis + Postgres) together, optionally with multip
 docker compose up --build --scale app=3
 ```
 
-Open the chat widget at `http://localhost:8000/chatbox`, or embed it on another page — see `docs/embed.md`.
+`GET /chatbox` requires a `token` query param (see `docs/security.md`); mint one with `python -m scripts.generate_chatbox_token --base-url http://localhost:8000`, then open the printed URL, or embed the widget on another page — see `docs/embed.md`.
 
 ## Project Structure
 
@@ -83,6 +84,7 @@ wms_ai_chatbot/
 ├── data/                       # Campus map, instructional calendars
 ├── db/schema.sql               # Postgres schema
 ├── infra/                      # Terraform (GCP: Cloud Run, Cloud SQL, Redis)
+├── scripts/                    # Operator CLIs (e.g. mint a /chatbox access token)
 ├── requirements.txt
 └── .env.example
 ```

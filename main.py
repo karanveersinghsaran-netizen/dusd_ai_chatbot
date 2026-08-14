@@ -1,7 +1,7 @@
 import logging
 from pathlib import Path
 
-from fastapi import Cookie, Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Cookie, Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
@@ -11,6 +11,7 @@ from slowapi.middleware import SlowAPIMiddleware
 import uvicorn
 from app import config
 from app.agent import get_agent
+from app.security.chatbox_token import verify_chatbox_token
 from app.security.middleware import enforce_max_body_size, limiter, session_or_ip_key
 from app.security.sessions import issue_session_id, verify_session_id
 from app.store.postgres_store import store as postgres_store
@@ -76,10 +77,17 @@ async def root():
 
 
 @app.get("/chatbox")
-async def chatbox():
+async def chatbox(token: str | None = Query(default=None)):
     """Serves the standalone web chat widget from the same origin as /chat, so
     the session cookie is first-party. Opening chatbox.html via file:// breaks
-    cookie storage under browsers' cross-origin Secure-cookie rules."""
+    cookie storage under browsers' cross-origin Secure-cookie rules.
+
+    Gated behind a signed, self-expiring token (app/security/chatbox_token.py)
+    so the demo isn't publicly loadable by default — 404 on any missing,
+    invalid, or expired token, rather than 403, so a prober can't tell the
+    route apart from one that doesn't exist."""
+    if token is None or not verify_chatbox_token(token):
+        raise HTTPException(status_code=404)
     return FileResponse(CHATBOX_HTML, media_type="text/html")
 
 
