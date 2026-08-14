@@ -97,11 +97,47 @@ printf '%s' "$ANTHROPIC_API_KEY" | \
 
 python -c "import secrets; print(secrets.token_hex(32))" | \
   gcloud secrets versions add SESSION_SIGNING_KEY --data-file=-
+
+printf '%s' "$(python -c "import secrets; print(secrets.token_hex(32))")" | \
+  gcloud secrets versions add CHATBOX_TOKEN_SIGNING_KEY --data-file=-
 ```
+
+`CHATBOX_TOKEN_SIGNING_KEY` is written with `printf '%s'` (no trailing newline), unlike `SESSION_SIGNING_KEY` above — this key gets fetched back out by a human (`gcloud secrets versions access`) to mint `/chatbox` links locally, and bash's `$(...)` strips trailing newlines on read. If the stored secret has one and the local read doesn't, minted tokens silently fail to verify. `SESSION_SIGNING_KEY` doesn't have this problem since it's only ever read by the app itself, never re-typed locally.
 
 **`DB_PASSWORD` is handled automatically by Terraform** from PR3 onwards — the `cloud_sql` module generates a random password via `random_password`, creates the Cloud SQL user with it, and writes it to a new version of the `DB_PASSWORD` secret. No manual `gcloud secrets versions add DB_PASSWORD` required. If you ever need to see the password, `terraform output -raw` on `database_url` (marked sensitive) will print it.
 
 Terraform's `lifecycle { ignore_changes = [secret_data] }` on the placeholder version means the real values you add above aren't reverted on the next `terraform apply`.
+
+## 6b. Mint a `/chatbox` access link for a stakeholder demo
+
+`GET /chatbox` is gated behind a signed token (`app/security/chatbox_token.py`, see `docs/security.md`).
+
+**Adding this secret to an environment for the first time** needs a `terraform apply` (not just `make deploy`) so Cloud Run's service spec gets the new `secret_key_ref` env var wired in — `make deploy`'s `gcloud run deploy` doesn't add new env vars on its own, it only pushes a new image on top of whatever env config the service already has:
+
+```bash
+terraform -chdir=envs/staging apply -target=module.cloud_run -var-file=terraform.tfvars
+```
+
+**Updating the value of an existing key** (e.g. rotating it) doesn't need this — Cloud Run resolves `secret_key_ref { version = "latest" }` at container start, so any `make deploy` (or other action that forces a new revision) picks up the newest secret version automatically.
+
+Once `CHATBOX_TOKEN_SIGNING_KEY` is populated (step 6 above) and a Cloud Run revision has picked it up:
+
+```bash
+cd infra && make chatbox-token          # DAYS=n to override the default 7
+```
+
+Under the hood: pulls `project_id` / `cloud_run_url` from terraform outputs, fetches the signing key fresh from Secret Manager, and runs `scripts/generate_chatbox_token.py` with it — equivalent to:
+
+```bash
+export CHATBOX_TOKEN_SIGNING_KEY=$(gcloud secrets versions access latest \
+  --secret=CHATBOX_TOKEN_SIGNING_KEY --project="$PROJECT_ID")
+
+python -m scripts.generate_chatbox_token \
+  --base-url "$(terraform -chdir=envs/staging output -raw cloud_run_url)" \
+  --days 7
+```
+
+Prints a full `https://.../chatbox?token=...` URL, valid for 7 days from generation — share it directly, no redeploy required. Run the command again any time to mint a fresh link (e.g. once the old one is close to expiring); it's a pure local computation against the already-deployed signing key. To revoke every outstanding link early (rare — e.g. a link leaked), rotate `CHATBOX_TOKEN_SIGNING_KEY` (new `gcloud secrets versions add` + `make deploy`) — every previously issued token stops verifying immediately.
 
 ## 7. Verify
 
@@ -132,7 +168,7 @@ cd infra && make destroy
 ```
 
 `make destroy` uses `-target` to preserve several things:
-- **Secret Manager containers** (`module.secrets`) — real values from `gcloud secrets versions add` including `ANTHROPIC_API_KEY` and `SESSION_SIGNING_KEY` survive. `DB_PASSWORD` regenerates automatically on next apply.
+- **Secret Manager containers** (`module.secrets`) — real values from `gcloud secrets versions add` including `ANTHROPIC_API_KEY`, `SESSION_SIGNING_KEY`, and `CHATBOX_TOKEN_SIGNING_KEY` survive. `DB_PASSWORD` regenerates automatically on next apply.
 - **Enabled APIs** (`google_project_service.required`) — saves minutes by not re-toggling on re-apply.
 - **VPC network, subnet, peering, IAM** (most of `module.network`) — these are free anyway, and destroying the VPC peering hits Google's "producer services still using this" error because Cloud SQL / MemoryStore have residual backend state for several minutes after their Terraform destroy completes. Only the VPC Access connector (the ~$5-10/mo piece) is torn down.
 

@@ -6,15 +6,18 @@ from fastapi.testclient import TestClient
 
 import main
 from app.agent import ChatReply
+from app.security.chatbox_token import issue_chatbox_token
 
 SIGNING_KEY = "test-signing-key"
+CHATBOX_TOKEN_KEY = "test-chatbox-token-key"
 
 
 @pytest.fixture()
 def client():
     main.limiter.reset()
     with patch("main.postgres_store.init_schema"), \
-         patch("app.config.SESSION_SIGNING_KEY", SIGNING_KEY):
+         patch("app.config.SESSION_SIGNING_KEY", SIGNING_KEY), \
+         patch("app.config.CHATBOX_TOKEN_SIGNING_KEY", CHATBOX_TOKEN_KEY):
         with TestClient(main.app, base_url="https://testserver") as c:
             yield c
     main.limiter.reset()
@@ -237,14 +240,34 @@ def test_request_body_within_cap_is_accepted(client):
 
 # ── /chatbox route (same-origin dev widget) ─────────────────────────────────
 
-def test_chatbox_route_serves_html(client):
-    resp = client.get("/chatbox")
+def test_chatbox_route_serves_html_with_valid_token(client):
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+    resp = client.get(f"/chatbox?token={token}")
 
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/html")
     # Marker from chatbox.html's <title>; guards against the route silently
     # serving the wrong file.
     assert "School Chat" in resp.text
+
+
+def test_chatbox_route_rejects_missing_token(client):
+    resp = client.get("/chatbox")
+
+    assert resp.status_code == 404
+
+
+def test_chatbox_route_rejects_invalid_token(client):
+    resp = client.get("/chatbox?token=garbage")
+
+    assert resp.status_code == 404
+
+
+def test_chatbox_route_rejects_expired_token(client):
+    expired = issue_chatbox_token(days_valid=-1, signing_key=CHATBOX_TOKEN_KEY)
+    resp = client.get(f"/chatbox?token={expired}")
+
+    assert resp.status_code == 404
 
 
 # ── /embed/wms-chatbot.js route (interim static hosting, pending #10) ──────────

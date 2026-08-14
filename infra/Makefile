@@ -12,6 +12,7 @@
 #   make plan                                                # dry-run
 #   make apply                                               # provision infra
 #   make deploy                                              # build + push image, deploy Cloud Run
+#   make chatbox-token                                       # mint a /chatbox access link (DAYS=7)
 #   make destroy                                             # zero the bill — preserves secrets
 #   make destroy-all                                         # nuke everything, including secret containers
 #   make output                                              # show URLs, SAs, image base
@@ -28,6 +29,9 @@ REPO_ROOT := $(abspath ..)
 # Image tag for `make deploy`. Defaults to git short SHA so every deploy is
 # traceable to a commit; override with `TAG=... make deploy` for ad-hoc pushes.
 TAG ?= $(shell git -C $(REPO_ROOT) rev-parse --short HEAD 2>/dev/null)
+
+# Validity window for `make chatbox-token`. Override with `DAYS=... make chatbox-token`.
+DAYS ?= 7
 
 # Resources `make destroy` will tear down. Deliberately preserves several
 # things that are cheap-to-keep or expensive-to-recreate:
@@ -53,7 +57,7 @@ DESTROY_TARGETS := \
 	-target=module.network.google_vpc_access_connector.connector \
 	-target=google_secret_manager_secret_iam_member.cloud_run_access
 
-.PHONY: help init fmt validate plan apply destroy destroy-all output console deploy _refresh
+.PHONY: help init fmt validate plan apply destroy destroy-all output console deploy chatbox-token _refresh
 
 help:
 	@echo "Targets (ENV=$(ENV)):"
@@ -63,6 +67,7 @@ help:
 	@echo "  plan          terraform plan -var-file=$(TFVARS)"
 	@echo "  apply         terraform apply -var-file=$(TFVARS) — provision infra"
 	@echo "  deploy        docker build + push + gcloud run deploy (TAG=$(TAG))"
+	@echo "  chatbox-token mint a /chatbox access link, valid DAYS=$(DAYS) days"
 	@echo "  destroy       terraform destroy -target=<ephemeral modules> — zero the bill,"
 	@echo "                preserves Secret Manager containers + real values"
 	@echo "  destroy-all   terraform destroy (no targets) — nuke EVERYTHING, secrets included"
@@ -129,3 +134,19 @@ deploy: _refresh
 	 gcloud run deploy $$SERVICE --region=$$REGION --image=$$IMG && \
 	 echo "==> Deployed. Health check:" && \
 	 curl -sSf "$$(terraform -chdir=$(ENV_DIR) output -raw cloud_run_url)/" && echo
+
+# Mints a signed, self-expiring /chatbox access link — no redeploy required,
+# it's a pure local computation against the already-deployed signing key
+# (see docs/security.md § /chatbox access token). Fetches the key fresh from
+# Secret Manager each run rather than relying on a local .env, so the link
+# always matches what the running Cloud Run revision actually verifies
+# against. Runs from REPO_ROOT (not infra/) so `scripts`/`app` are importable
+# via `python -m`, and prefers the repo's own .venv if one exists.
+chatbox-token:
+	@PROJECT_ID=$$(terraform -chdir=$(ENV_DIR) output -raw project_id) && \
+	 URL=$$(terraform -chdir=$(ENV_DIR) output -raw cloud_run_url) && \
+	 SIGNING_KEY=$$(gcloud secrets versions access latest \
+	   --secret=CHATBOX_TOKEN_SIGNING_KEY --project=$$PROJECT_ID) && \
+	 PYTHON=$$( [ -x $(REPO_ROOT)/.venv/bin/python3 ] && echo $(REPO_ROOT)/.venv/bin/python3 || echo python3 ) && \
+	 cd $(REPO_ROOT) && \
+	 CHATBOX_TOKEN_SIGNING_KEY=$$SIGNING_KEY $$PYTHON -m scripts.generate_chatbox_token --base-url "$$URL" --days $(DAYS)

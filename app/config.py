@@ -18,6 +18,10 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://wms:wms@localhost:5432/wm
 # Session Cookie Signing (web chat widget)
 SESSION_SIGNING_KEY = os.getenv("SESSION_SIGNING_KEY")
 
+# Chatbox link-gate token signing — separate key from SESSION_SIGNING_KEY so
+# rotating one doesn't invalidate the other.
+CHATBOX_TOKEN_SIGNING_KEY = os.getenv("CHATBOX_TOKEN_SIGNING_KEY")
+
 # CORS: every DUSD school site is a *.dublinusd.org subdomain (or the apex
 # domain itself), so a single regex covers the whole district — onboarding a
 # new school (app/schools.py) needs no CORS change. Anchored at both ends so

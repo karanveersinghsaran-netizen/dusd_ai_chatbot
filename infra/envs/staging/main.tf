@@ -108,6 +108,7 @@ module "secrets" {
   secret_ids = [
     "ANTHROPIC_API_KEY",
     "SESSION_SIGNING_KEY",
+    "CHATBOX_TOKEN_SIGNING_KEY",
     "DB_PASSWORD",
   ]
 
