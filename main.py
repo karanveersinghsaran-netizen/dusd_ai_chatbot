@@ -3,7 +3,7 @@ from pathlib import Path
 
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -53,7 +53,9 @@ SESSION_COOKIE_NAME = "wms_session"
 SESSION_COOKIE_MAX_AGE = 24 * 60 * 60  # matches RedisStore's conversation TTL
 
 CHATBOX_HTML = Path(__file__).parent / "chatbox.html"
+EXPIRED_LINK_HTML = Path(__file__).parent / "static" / "expired-link.html"
 EMBED_JS = Path(__file__).parent / "embed" / "wms-chatbot.js"
+STATIC_DIR = Path(__file__).parent / "static"
 
 
 class ChatRequest(BaseModel):
@@ -68,6 +70,15 @@ class ChatResponse(BaseModel):
 
 @app.on_event("startup")
 async def on_startup():
+    # Dev-only escape hatch for previewing UI changes without a local
+    # Postgres. /chat will still fail if hit, but /chatbox + PWA assets serve
+    # normally. Never set in production — Cloud Run leaves it unset so the
+    # startup schema check catches DB misconfiguration before the first
+    # request lands.
+    import os
+    if os.getenv("SKIP_DB_INIT"):
+        logger.warning("SKIP_DB_INIT set — skipping postgres_store.init_schema()")
+        return
     postgres_store.init_schema()
 
 
@@ -82,13 +93,29 @@ async def chatbox(token: str | None = Query(default=None)):
     the session cookie is first-party. Opening chatbox.html via file:// breaks
     cookie storage under browsers' cross-origin Secure-cookie rules.
 
-    Gated behind a signed, self-expiring token (app/security/chatbox_token.py)
-    so the demo isn't publicly loadable by default — 404 on any missing,
-    invalid, or expired token, rather than 403, so a prober can't tell the
-    route apart from one that doesn't exist."""
+    Gated behind a signed, self-expiring token (app/security/chatbox_token.py).
+    Missing/invalid tokens render a friendly HTML "link expired" page (with a
+    404 status) instead of a raw JSON error, because installed PWAs commonly
+    land here after their embedded token expires — showing them "detail not
+    found" was the worst possible first impression."""
     if token is None or not verify_chatbox_token(token):
-        raise HTTPException(status_code=404)
-    return FileResponse(CHATBOX_HTML, media_type="text/html")
+        return HTMLResponse(
+            EXPIRED_LINK_HTML.read_text(),
+            status_code=404,
+            headers={"cache-control": "no-store"},
+        )
+    # Server-side interpolation of the manifest URL so the token is present
+    # BEFORE any JS runs. iOS Safari fetches the manifest early — often before
+    # a client-side updater has a chance to rewrite the href — so relying on
+    # JS to inject the token race-conditions the install: the manifest gets
+    # cached with the wrong start_url, and the installed PWA opens /chatbox
+    # with no token and 404s. Interpolating at HTML delivery time avoids the
+    # race entirely.
+    html = CHATBOX_HTML.read_text().replace(
+        '<link rel="manifest" href="/manifest.webmanifest">',
+        f'<link rel="manifest" href="/manifest.webmanifest?token={token}">',
+    )
+    return HTMLResponse(html, headers={"cache-control": "no-store"})
 
 
 @app.get("/embed/wms-chatbot.js")
@@ -96,6 +123,40 @@ async def embed_script():
     """Serves the iframe-embed snippet. Interim hosting until Sprint 1.7 (#10)
     provisions Cloud Storage + Cloud CDN for static assets."""
     return FileResponse(EMBED_JS, media_type="application/javascript")
+
+
+@app.get("/manifest.webmanifest")
+async def pwa_manifest(token: str | None = Query(default=None)):
+    """PWA manifest for iOS/Android "Add to Home Screen" installs.
+
+    Dynamic so `start_url` can preserve the caller's chatbox token — otherwise
+    launching the installed app from the home screen would land on /chatbox
+    with no token and 404. When the token expires the icon still opens, but
+    hits the 404; the user then requests a fresh link. Invalid/missing tokens
+    fall back to a plain /chatbox start_url so the manifest still installs
+    cleanly (useful during local dev without the token gate)."""
+    import json
+
+    manifest = json.loads((STATIC_DIR / "manifest.webmanifest").read_text())
+    if token and verify_chatbox_token(token):
+        manifest["start_url"] = f"/chatbox?token={token}"
+    return JSONResponse(manifest, media_type="application/manifest+json")
+
+
+@app.get("/icons/{filename}")
+async def pwa_icon(filename: str):
+    """Static PNG icons for the PWA manifest + iOS apple-touch-icon.
+
+    Not token-gated: the browser fetches these before/during install, from a
+    context (Safari's install sheet) where cookies/tokens don't reliably ride
+    along. The icons are non-sensitive branded assets, so open access is fine."""
+    # Guard against path traversal — reject anything not a plain filename.
+    if "/" in filename or ".." in filename or not filename.endswith(".png"):
+        raise HTTPException(status_code=404)
+    icon_path = STATIC_DIR / "icons" / filename
+    if not icon_path.is_file():
+        raise HTTPException(status_code=404)
+    return FileResponse(icon_path, media_type="image/png")
 
 
 @app.post("/chat", response_model=ChatResponse, dependencies=[Depends(enforce_max_body_size)])
