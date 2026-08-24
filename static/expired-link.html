@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<title>Link expired · DUSD Chat</title>
+<style>
+  :root {
+    --bg: #f5f5f7;
+    --surface: #ffffff;
+    --border: #d1d1d6;
+    --text: #000000;
+    --text-muted: #6e6e73;
+    --accent: #007aff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000000;
+      --surface: #1c1c1e;
+      --border: #38383a;
+      --text: #ffffff;
+      --text-muted: #98989d;
+      --accent: #0a84ff;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    padding-top: calc(env(safe-area-inset-top) + 24px);
+    padding-bottom: calc(env(safe-area-inset-bottom) + 24px);
+  }
+  main {
+    max-width: 380px;
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px 24px;
+    text-align: center;
+  }
+  .icon {
+    width: 56px; height: 56px;
+    margin: 0 auto 16px;
+    border-radius: 14px;
+    background: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 1.6rem;
+  }
+  h1 { font-size: 1.15rem; margin: 0 0 8px; }
+  p { color: var(--text-muted); line-height: 1.4; margin: 8px 0; font-size: 0.95rem; }
+  .hint { font-size: 0.8rem; color: var(--text-muted); margin-top: 20px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="icon" aria-hidden="true">⏱</div>
+  <h1>Your access link has expired</h1>
+  <p>
+    This preview link is only valid for a limited time.
+    Ask Karanveer for a fresh link and try again.
+  </p>
+  <p class="hint">
+    If you installed this app from an expired link, delete the icon and add
+    it again from the new link.
+  </p>
+</main>
+</body>
+</html>
