@@ -1,9 +1,9 @@
 fastapi==0.141.1
 pytest==9.1.1
 pytest-asyncio==1.4.0
-uvicorn[standard]==0.52.1
+uvicorn[standard]==0.52.3
 python-dotenv==1.2.2
-anthropic==0.121.0
+anthropic==0.122.0
 beautifulsoup4==4.15.0
 requests==2.34.2
 pydantic==2.13.4
