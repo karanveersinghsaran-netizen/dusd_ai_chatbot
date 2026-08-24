@@ -252,15 +252,23 @@ def test_chatbox_route_serves_html_with_valid_token(client):
 
 
 def test_chatbox_route_rejects_missing_token(client):
+    """Status stays 404 (semantically the resource isn't reachable), but the
+    body is now a friendly HTML page — installed PWAs land here after their
+    embedded token expires, and the old raw JSON body ("detail: Not Found")
+    made the app look broken on first launch from home screen."""
     resp = client.get("/chatbox")
 
     assert resp.status_code == 404
+    assert resp.headers["content-type"].startswith("text/html")
+    assert "expired" in resp.text.lower()
 
 
 def test_chatbox_route_rejects_invalid_token(client):
     resp = client.get("/chatbox?token=garbage")
 
     assert resp.status_code == 404
+    assert resp.headers["content-type"].startswith("text/html")
+    assert "expired" in resp.text.lower()
 
 
 def test_chatbox_route_rejects_expired_token(client):
@@ -268,6 +276,20 @@ def test_chatbox_route_rejects_expired_token(client):
     resp = client.get(f"/chatbox?token={expired}")
 
     assert resp.status_code == 404
+    assert resp.headers["content-type"].startswith("text/html")
+    assert "expired" in resp.text.lower()
+
+
+def test_chatbox_route_injects_token_into_manifest_link(client):
+    """Server-side interpolation of the manifest URL is what makes the
+    installed PWA actually reopen with a valid token — relying on client-side
+    JS to update the manifest href race-conditioned iOS Safari, which fetches
+    the manifest early and can miss the JS update."""
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+    resp = client.get(f"/chatbox?token={token}")
+
+    assert resp.status_code == 200
+    assert f'<link rel="manifest" href="/manifest.webmanifest?token={token}">' in resp.text
 
 
 # ── /embed/wms-chatbot.js route (interim static hosting, pending #10) ──────────
@@ -280,3 +302,102 @@ def test_embed_script_route_serves_js(client):
     # Marker from wms-chatbot.js; guards against the route silently serving
     # the wrong file.
     assert "data-api-base" in resp.text
+
+
+# ── PWA: /manifest.webmanifest + /icons/* ──────────────────────────────────
+
+def test_manifest_route_serves_json_with_default_start_url(client):
+    """Without a valid token, the manifest still serves — otherwise the PWA
+    could never be installed. `start_url` falls back to bare /chatbox (which
+    404s on launch until the user has a token, but that's a graceful failure
+    mode vs. a broken install)."""
+    resp = client.get("/manifest.webmanifest")
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("application/manifest+json")
+    body = resp.json()
+    assert body["name"] == "DUSD School Chat"
+    assert body["display"] == "standalone"
+    assert body["start_url"] == "/chatbox"
+    # Icons must be declared in three sizes for iOS + Android + maskable to
+    # all resolve to a real file. Missing icons = install prompts refuse.
+    icon_srcs = {i["src"] for i in body["icons"]}
+    assert icon_srcs == {
+        "/icons/icon-192.png",
+        "/icons/icon-512.png",
+        "/icons/icon-512-maskable.png",
+    }
+
+
+def test_manifest_route_embeds_token_in_start_url_when_valid(client):
+    """When a valid token is passed, `start_url` includes it so launching the
+    installed PWA from the home screen reuses the same token instead of 404ing."""
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+    resp = client.get(f"/manifest.webmanifest?token={token}")
+
+    assert resp.status_code == 200
+    assert resp.json()["start_url"] == f"/chatbox?token={token}"
+
+
+def test_manifest_route_ignores_invalid_token(client):
+    """An invalid/tampered token silently falls back to the plain start_url —
+    not an error, since the manifest itself is public and the caller isn't
+    granted /chatbox access just by fetching it."""
+    resp = client.get("/manifest.webmanifest?token=garbage")
+
+    assert resp.status_code == 200
+    assert resp.json()["start_url"] == "/chatbox"
+
+
+def test_icon_route_serves_png(client):
+    resp = client.get("/icons/icon-192.png")
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/png"
+    # PNG magic bytes — guards against the route silently serving the wrong file.
+    assert resp.content.startswith(b"\x89PNG\r\n\x1a\n")
+
+
+def test_icon_route_serves_apple_touch_icon(client):
+    """apple-touch-icon.png is the one iOS Safari reads for home-screen
+    installs; if this 404s, the installed app gets a blank icon."""
+    resp = client.get("/icons/apple-touch-icon.png")
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/png"
+
+
+def test_icon_route_rejects_missing_file(client):
+    resp = client.get("/icons/nonexistent.png")
+
+    assert resp.status_code == 404
+
+
+def test_icon_route_rejects_path_traversal(client):
+    """FastAPI's path parameter normally forbids slashes, but the guard is
+    also enforced in the handler for defense-in-depth against future refactors
+    that might switch to a catch-all route."""
+    # `../secrets` inside a single path segment — FastAPI keeps it as a
+    # literal filename; the handler must still refuse to serve it.
+    resp = client.get("/icons/..%2Fsecrets.png")
+    assert resp.status_code == 404
+
+
+def test_icon_route_rejects_non_png(client):
+    """Only PNG served — prevents the route from accidentally handing out
+    arbitrary files if someone drops other extensions in static/icons/."""
+    resp = client.get("/icons/manifest.webmanifest")
+    assert resp.status_code == 404
+
+
+def test_chatbox_html_links_to_manifest_and_apple_touch_icon(client):
+    """The HTML must actually reference the PWA manifest + apple-touch-icon —
+    without these tags, no browser will offer an "Install" prompt regardless
+    of what /manifest.webmanifest returns."""
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+    resp = client.get(f"/chatbox?token={token}")
+
+    assert resp.status_code == 200
+    assert '<link rel="manifest"' in resp.text
+    assert 'apple-touch-icon' in resp.text
+    assert 'apple-mobile-web-app-capable' in resp.text
