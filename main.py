@@ -68,6 +68,11 @@ class ChatResponse(BaseModel):
     attach_map: bool
 
 
+class LikeRequest(BaseModel):
+    message: str
+    school_id: str | None = None
+
+
 @app.on_event("startup")
 async def on_startup():
     # Dev-only escape hatch for previewing UI changes without a local
@@ -192,6 +197,30 @@ async def chat(
 
     reply = agent.chat(chat_request.message, user_id=session_id)
     return ChatResponse(reply=reply.text, attach_map=reply.attach_map)
+
+
+@app.post("/feedback/like", dependencies=[Depends(enforce_max_body_size)])
+@limiter.limit("10/minute")
+@limiter.limit("30/minute", key_func=session_or_ip_key)
+async def like(
+    request: Request,
+    like_request: LikeRequest,
+    wms_session: str | None = Cookie(default=None),
+):
+    """Thumbs-up on a specific bot reply. Requires an existing valid session
+    (unlike /chat, this never issues a fresh one) — liking only makes sense
+    after at least one real chat turn has already happened."""
+    session_id = verify_session_id(wms_session) if wms_session else None
+    if session_id is None:
+        raise HTTPException(status_code=401, detail="Invalid session cookie")
+
+    school_id = like_request.school_id or config.DEFAULT_SCHOOL_ID
+    agent = get_agent(school_id)
+    if agent is None:
+        raise HTTPException(status_code=400, detail=f"Unknown school: {school_id}")
+
+    agent.record_like(user_id=session_id, response_text=like_request.message)
+    return {"status": "ok"}
 
 
 if __name__ == "__main__":

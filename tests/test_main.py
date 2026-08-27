@@ -96,6 +96,53 @@ def test_chat_with_unknown_school_id_returns_400(client):
     assert resp.status_code == 400
 
 
+# ── /feedback/like ───────────────────────────────────────────────────────────
+
+def test_like_without_cookie_returns_401(client):
+    with patch("main.get_agent", return_value=_mock_agent()):
+        resp = client.post("/feedback/like", json={"message": "the reply text"})
+
+    assert resp.status_code == 401
+
+
+def test_like_with_tampered_cookie_returns_401(client):
+    client.cookies.set("wms_session", "garbage.tampered")
+    with patch("main.get_agent", return_value=_mock_agent()):
+        resp = client.post("/feedback/like", json={"message": "the reply text"})
+
+    assert resp.status_code == 401
+
+
+def test_like_with_valid_cookie_records_reaction(client):
+    mock_agent = _mock_agent()
+    with patch("main.get_agent", return_value=mock_agent):
+        client.post("/chat", json={"message": "hi"})  # mints the session cookie
+        resp = client.post("/feedback/like", json={"message": "the reply text"})
+
+    assert resp.status_code == 200
+    session_id = mock_agent.chat.call_args.kwargs["user_id"]
+    mock_agent.record_like.assert_called_once_with(user_id=session_id, response_text="the reply text")
+
+
+def test_like_with_school_id_resolves_that_school(client):
+    mock_agent = _mock_agent()
+    with patch("main.get_agent", return_value=mock_agent) as mock_get_agent:
+        client.post("/chat", json={"message": "hi", "school_id": "dhs"})
+        mock_get_agent.reset_mock()
+        client.post("/feedback/like", json={"message": "text", "school_id": "dhs"})
+
+    mock_get_agent.assert_called_once_with("dhs")
+
+
+def test_like_with_unknown_school_id_returns_400(client):
+    mock_agent = _mock_agent()
+    with patch("main.get_agent", side_effect=[mock_agent, None]):
+        client.post("/chat", json={"message": "hi"})
+        resp = client.post("/feedback/like", json={"message": "text", "school_id": "nonexistent"})
+
+    assert resp.status_code == 400
+
+
 # ── Server errors propagate as HTTP 5xx (not masked as 200) ─────────────────
 
 def test_chat_returns_500_when_agent_raises_without_leaking_exception_text():
@@ -401,3 +448,24 @@ def test_chatbox_html_links_to_manifest_and_apple_touch_icon(client):
     assert '<link rel="manifest"' in resp.text
     assert 'apple-touch-icon' in resp.text
     assert 'apple-mobile-web-app-capable' in resp.text
+
+
+def test_chatbox_html_has_theme_toggle_and_help_button(client):
+    """Guards against the light/dark toggle and help/support button silently
+    disappearing from the served HTML."""
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+    resp = client.get(f"/chatbox?token={token}")
+
+    assert resp.status_code == 200
+    assert 'id="theme-toggle-btn"' in resp.text
+    assert 'id="help-btn"' in resp.text
+    assert "/report" in resp.text
+
+
+def test_chatbox_html_has_ai_disclaimer(client):
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+    resp = client.get(f"/chatbox?token={token}")
+
+    assert resp.status_code == 200
+    assert 'id="disclaimer"' in resp.text
+    assert "AI can make mistakes" in resp.text

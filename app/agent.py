@@ -294,6 +294,15 @@ CRITICAL RULES:
     def clear_conversation(self, user_id: str = "default"):
         self.redis_store.clear_session(self._session_key(user_id))
 
+    def record_like(self, user_id: str, response_text: str) -> None:
+        """Persist a thumbs-up on a specific bot reply. Takes the liked text
+        directly from the caller (rather than reading redis_store's
+        "last response") so the like button works on any bot bubble still
+        visible on screen, not just the most recent one."""
+        self._record_feedback(
+            user_id, feedback_type="reaction", sentiment="positive", raw=response_text,
+        )
+
     def _call_api(self, messages: list, retries: int = 3) -> Any:
         """Call Claude API with exponential backoff for transient errors."""
         system = [{"type": "text", "text": self._system_prompt, "cache_control": {"type": "ephemeral"}}]

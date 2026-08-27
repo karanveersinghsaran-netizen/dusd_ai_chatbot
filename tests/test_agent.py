@@ -347,6 +347,16 @@ def test_report_flow_records_feedback(agent):
     assert kwargs["last_response"] == "previous answer"
 
 
+def test_record_like_persists_positive_reaction(agent):
+    agent.record_like(user_id="u12", response_text="the office is in building A")
+
+    agent.postgres_store.record_feedback.assert_called_once()
+    _, kwargs = agent.postgres_store.record_feedback.call_args
+    assert kwargs["feedback_type"] == "reaction"
+    assert kwargs["sentiment"] == "positive"
+    assert kwargs["raw"] == "the office is in building A"
+
+
 def test_system_prompt_instructs_scraped_content_is_untrusted(agent):
     prompt = agent._system_prompt
     assert "<scraped_page>" in prompt
