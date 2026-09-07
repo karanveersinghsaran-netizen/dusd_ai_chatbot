@@ -8,7 +8,7 @@ from app import config
 CONV_TTL_SECONDS = 24 * 60 * 60           # 24h, refreshed on every append
 LAST_RESPONSE_TTL_SECONDS = 24 * 60 * 60  # tied to conversation lifetime
 FEEDBACK_ASKED_TTL_SECONDS = 24 * 60 * 60 # "ask once" window
-PENDING_TTL_SECONDS = 30 * 60             # window for user to answer 1/2 or a report comment
+PENDING_TTL_SECONDS = 30 * 60             # window for user to answer 1/2
 MAX_HISTORY = 20
 
 
@@ -26,10 +26,6 @@ def _feedback_asked_key(session_id: str) -> str:
 
 def _feedback_pending_key(session_id: str) -> str:
     return f"wms:feedback_pending:{session_id}"
-
-
-def _report_pending_key(session_id: str) -> str:
-    return f"wms:report_pending:{session_id}"
 
 
 class RedisStore:
@@ -80,15 +76,6 @@ class RedisStore:
     def clear_feedback_pending(self, session_id: str) -> None:
         self.client.delete(_feedback_pending_key(session_id))
 
-    def is_report_pending(self, session_id: str) -> bool:
-        return bool(self.client.exists(_report_pending_key(session_id)))
-
-    def mark_report_pending(self, session_id: str) -> None:
-        self.client.setex(_report_pending_key(session_id), PENDING_TTL_SECONDS, "1")
-
-    def clear_report_pending(self, session_id: str) -> None:
-        self.client.delete(_report_pending_key(session_id))
-
     # ── convenience ──────────────────────────────────────────────────────────
     def clear_session(self, session_id: str) -> None:
         """Delete conversation, last_response, and all pending/asked flags for a session."""
@@ -97,7 +84,6 @@ class RedisStore:
             _last_response_key(session_id),
             _feedback_asked_key(session_id),
             _feedback_pending_key(session_id),
-            _report_pending_key(session_id),
         )
 
 
