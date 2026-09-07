@@ -719,6 +719,25 @@ def test_icon_route_rejects_non_png(client):
     assert resp.status_code == 404
 
 
+# ── /schools/{school_id}/campus-map ──────────────────────────────────────────
+
+def test_campus_map_route_serves_dhs_image(client):
+    resp = client.get("/schools/dhs/campus-map")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/jpeg"
+
+
+def test_campus_map_route_serves_wells_image(client):
+    resp = client.get("/schools/wells/campus-map")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/png"
+
+
+def test_campus_map_route_rejects_unknown_school(client):
+    resp = client.get("/schools/nonexistent/campus-map")
+    assert resp.status_code == 404
+
+
 # ── Accessibility: /fonts/* (issue #64) ─────────────────────────────────────
 
 def test_font_route_serves_woff2(client):
