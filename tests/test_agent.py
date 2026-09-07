@@ -374,14 +374,23 @@ def test_clear_command_wipes_conversation_and_confirms(agent):
 
     reply = agent.chat("clear", user_id="u_clear")
 
-    assert reply.text == "New conversation started. What can I help you with?"
+    assert reply.text == "New conversation started for Wells Middle School. What can I help you with?"
     assert agent.redis_store.get_conversation(agent._session_key("u_clear")) == []
 
 
 @pytest.mark.parametrize("trigger", ["clear", "CLEAR", "Clear", "/clear", "/CLEAR", "  clear  "])
 def test_clear_command_is_case_insensitive_and_trims_whitespace(agent, trigger):
     reply = agent.chat(trigger, user_id="u_clear2")
-    assert reply.text == "New conversation started. What can I help you with?"
+    assert reply.text == "New conversation started for Wells Middle School. What can I help you with?"
+
+
+def test_clear_confirmation_names_the_pinned_school(dhs_agent):
+    """Two schools' widgets share one origin and can share a session cookie
+    (see _session_key's docstring) — the confirmation must name the school
+    whose conversation actually got cleared, not a generic message that could
+    read as ambiguous when a browser has chatted with both."""
+    reply = dhs_agent.chat("clear", user_id="u_clear_dhs")
+    assert reply.text == "New conversation started for Dublin High School. What can I help you with?"
 
 
 def test_clear_command_resets_feedback_state_too(agent):

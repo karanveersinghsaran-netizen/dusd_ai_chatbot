@@ -390,7 +390,9 @@ CRITICAL RULES:
         # ── Priority 1: clear-conversation command ──────────────────────────
         if user_message.strip().lower() in {"clear", "/clear"}:
             self.clear_conversation(user_id)
-            return ChatReply("New conversation started. What can I help you with?", False)
+            return ChatReply(
+                f"New conversation started for {self.school.name}. What can I help you with?", False,
+            )
 
         # ── Priority 2: help command ───────────────────────────────────────
         if user_message.strip().lower() in {"help", "/help"}:
