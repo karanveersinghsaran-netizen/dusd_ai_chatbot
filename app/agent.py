@@ -391,7 +391,7 @@ CRITICAL RULES:
         if user_message.strip().lower() in {"clear", "/clear"}:
             self.clear_conversation(user_id)
             return ChatReply(
-                f"New conversation started for {self.school.name}. What can I help you with?", False,
+                f"Context cleared for {self.school.name}. What can I help you with?", False,
             )
 
         # ── Priority 2: help command ───────────────────────────────────────
