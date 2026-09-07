@@ -62,3 +62,16 @@ def test_clear_session_against_real_redis(redis_store):
     assert redis_store.get_conversation("u1") == []
     assert redis_store.get_last_response("u1") is None
     assert redis_store.is_feedback_asked("u1") is False
+
+
+def test_daily_message_count_against_real_redis(redis_store, redis_container):
+    """Exercises real Redis INCR/EXPIRE (#71) — the FakeRedisClient used in
+    unit tests reimplements these, so this guards against that reimplementation
+    silently diverging from actual redis-py/Redis semantics."""
+    assert redis_store.increment_daily_message_count("u1", "2026-01-01", 3600) == 1
+    assert redis_store.increment_daily_message_count("u1", "2026-01-01", 3600) == 2
+    assert redis_store.get_daily_message_count("u1", "2026-01-01") == 2
+
+    client = redis_container.get_client(decode_responses=True)
+    ttl = client.ttl("wms:msgcount:u1:2026-01-01")
+    assert 0 < ttl <= 3600

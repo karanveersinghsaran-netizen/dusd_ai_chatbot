@@ -46,3 +46,19 @@ DEFAULT_SCHOOL_ID = os.getenv("DEFAULT_SCHOOL_ID", "wells")
 # a relative path won't reliably render as a clickable link there. Unset in
 # local dev; set this once the app has a stable deployed URL.
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
+
+# Daily message cap (#71): a cost/abuse guard on /chat. Default per-user cap
+# when a school doesn't override it via daily_message_cap in its school.json
+# (app/schools.py). 20/day is a starting point, pending real usage telemetry.
+DEFAULT_DAILY_MESSAGE_CAP = int(os.getenv("DEFAULT_DAILY_MESSAGE_CAP", "20"))
+
+# Session ids exempt from the daily message cap — staff/testing accounts
+# (#71). A session id is only known after a user's first /chat request (it's
+# embedded in their signed wms_session cookie, app/security/sessions.py), so
+# whitelisting is a manual, after-the-fact step: pull the id for a known
+# staff browser (e.g. from server logs) and add it here.
+DAILY_CAP_WHITELIST = {
+    session_id.strip()
+    for session_id in os.getenv("DAILY_CAP_WHITELIST", "").split(",")
+    if session_id.strip()
+}

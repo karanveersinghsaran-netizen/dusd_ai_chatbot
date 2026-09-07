@@ -6,8 +6,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 import main
+from app import config
 from app.agent import ChatReply
 from app.security.chatbox_token import issue_chatbox_token
+from app.store.redis_store import RedisStore
+from tests.store.conftest import FakeRedisClient
 
 SIGNING_KEY = "test-signing-key"
 CHATBOX_TOKEN_KEY = "test-chatbox-token-key"
@@ -16,9 +19,15 @@ CHATBOX_TOKEN_KEY = "test-chatbox-token-key"
 @pytest.fixture()
 def client():
     main.limiter.reset()
+    # Fresh, isolated fake Redis per test: main.py's /chat handler now checks
+    # the daily message cap (#71) directly against app.store.redis_store's
+    # module-level `store`, which would otherwise require a live Redis
+    # (unavailable in the unit-test job) and leak counters across tests.
+    fake_redis_store = RedisStore(client=FakeRedisClient())
     with patch("main.postgres_store.init_schema"), \
          patch("app.config.SESSION_SIGNING_KEY", SIGNING_KEY), \
-         patch("app.config.CHATBOX_TOKEN_SIGNING_KEY", CHATBOX_TOKEN_KEY):
+         patch("app.config.CHATBOX_TOKEN_SIGNING_KEY", CHATBOX_TOKEN_KEY), \
+         patch("main.redis_store", fake_redis_store):
         with TestClient(main.app, base_url="https://testserver") as c:
             yield c
     main.limiter.reset()
@@ -226,7 +235,8 @@ def test_chat_returns_500_when_agent_raises_without_leaking_exception_text():
     so the 500 is returned as a response instead of re-raising in-process."""
     main.limiter.reset()
     with patch("main.postgres_store.init_schema"), \
-         patch("app.config.SESSION_SIGNING_KEY", SIGNING_KEY):
+         patch("app.config.SESSION_SIGNING_KEY", SIGNING_KEY), \
+         patch("main.redis_store", RedisStore(client=FakeRedisClient())):
         with TestClient(main.app, base_url="https://testserver", raise_server_exceptions=False) as c:
             mock_agent = _mock_agent(side_effect=RuntimeError("upstream boom"))
             with patch("main.get_agent", return_value=mock_agent):
@@ -332,6 +342,112 @@ def test_eleventh_request_in_a_minute_returns_429(client):
         resp = client.post("/chat", json={"message": "hi"})
 
     assert resp.status_code == 429
+
+
+# ── Daily message cap (#71) ─────────────────────────────────────────────────
+
+def test_chat_within_daily_cap_succeeds(client, monkeypatch):
+    monkeypatch.setattr(config, "DEFAULT_DAILY_MESSAGE_CAP", 5)
+    with patch("main.get_agent", return_value=_mock_agent()):
+        for _ in range(2):
+            resp = client.post("/chat", json={"message": "hi"})
+            assert resp.status_code == 200
+
+
+def test_chat_at_daily_cap_succeeds(client, monkeypatch):
+    monkeypatch.setattr(config, "DEFAULT_DAILY_MESSAGE_CAP", 2)
+    with patch("main.get_agent", return_value=_mock_agent()):
+        for _ in range(2):
+            resp = client.post("/chat", json={"message": "hi"})
+            assert resp.status_code == 200
+
+
+def test_chat_above_daily_cap_returns_429_with_retry_after_and_friendly_message(client, monkeypatch):
+    monkeypatch.setattr(config, "DEFAULT_DAILY_MESSAGE_CAP", 2)
+    with patch("main.get_agent", return_value=_mock_agent()):
+        for _ in range(2):
+            resp = client.post("/chat", json={"message": "hi"})
+            assert resp.status_code == 200
+        resp = client.post("/chat", json={"message": "hi"})
+
+    assert resp.status_code == 429
+    assert "Retry-After" in resp.headers
+    assert int(resp.headers["Retry-After"]) > 0
+    assert resp.json()["detail"] == (
+        "You've reached today's message limit. Try again tomorrow, or contact "
+        "the school office if you need help right now."
+    )
+
+
+def test_chat_above_daily_cap_does_not_call_the_agent(client, monkeypatch):
+    """The cap must be enforced before the (billed) Claude API call, not
+    after — otherwise it wouldn't be a cost guard at all."""
+    monkeypatch.setattr(config, "DEFAULT_DAILY_MESSAGE_CAP", 1)
+    mock_agent = _mock_agent()
+    with patch("main.get_agent", return_value=mock_agent):
+        client.post("/chat", json={"message": "hi"})
+        client.post("/chat", json={"message": "hi"})
+
+    assert mock_agent.chat.call_count == 1
+
+
+def test_chat_daily_cap_whitelist_bypasses_the_cap(client, monkeypatch):
+    from app.security.sessions import issue_session_id
+
+    session_id, cookie_value = issue_session_id(signing_key=SIGNING_KEY)
+    client.cookies.set("wms_session", cookie_value)
+
+    monkeypatch.setattr(config, "DEFAULT_DAILY_MESSAGE_CAP", 1)
+    monkeypatch.setattr(config, "DAILY_CAP_WHITELIST", {session_id})
+
+    with patch("main.get_agent", return_value=_mock_agent()):
+        for _ in range(3):
+            resp = client.post("/chat", json={"message": "hi"})
+            assert resp.status_code == 200
+
+
+def test_chat_reply_gets_warning_note_when_approaching_cap(client, monkeypatch):
+    # cap 4, WARNING_THRESHOLD 2 (app/daily_cap.py): remaining goes 3, 2, 1, 0
+    # across the 4 allowed messages -> no warning, warning, warning, no
+    # warning (the last allowed message doesn't warn — the *next* one just
+    # gets the hard block message instead, so there's nothing new to add).
+    monkeypatch.setattr(config, "DEFAULT_DAILY_MESSAGE_CAP", 4)
+    with patch("main.get_agent", return_value=_mock_agent()):
+        resp = client.post("/chat", json={"message": "hi"})
+        assert resp.json()["reply"] == "Hello!"  # remaining=3, above threshold
+
+        resp = client.post("/chat", json={"message": "hi"})
+        assert "You have 2 messages left today." in resp.json()["reply"]
+
+        resp = client.post("/chat", json={"message": "hi"})
+        assert "You have 1 message left today." in resp.json()["reply"]
+
+        resp = client.post("/chat", json={"message": "hi"})
+        assert resp.json()["reply"] == "Hello!"  # remaining=0, last allowed message
+
+
+def test_chat_reply_has_no_warning_note_with_plenty_of_headroom(client, monkeypatch):
+    monkeypatch.setattr(config, "DEFAULT_DAILY_MESSAGE_CAP", 50)
+    with patch("main.get_agent", return_value=_mock_agent()):
+        resp = client.post("/chat", json={"message": "hi"})
+    assert resp.json()["reply"] == "Hello!"
+
+
+def test_chat_daily_cap_uses_school_override(client, monkeypatch):
+    """A school.json daily_message_cap override takes precedence over the
+    district-wide default."""
+    from dataclasses import replace
+    from app.schools import get_school
+
+    monkeypatch.setattr(config, "DEFAULT_DAILY_MESSAGE_CAP", 100)
+    capped_wells = replace(get_school("wells"), daily_message_cap=1)
+
+    with patch("main.get_school", return_value=capped_wells), \
+         patch("main.get_agent", return_value=_mock_agent()):
+        resp = client.post("/chat", json={"message": "hi"})
+        assert resp.status_code == 200
+        resp = client.post("/chat", json={"message": "hi"})
+        assert resp.status_code == 429
 
 
 # ── Request size cap ────────────────────────────────────────────────────────

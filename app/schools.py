@@ -39,6 +39,10 @@ class SchoolConfig:
     primary_bubble_color: Optional[str] = None
     background_tint: Optional[str] = None
     logo_url: Optional[str] = None
+    # Per-user daily message cap override (#71) — cost/abuse guard on /chat.
+    # None means "use the district-wide default" (config.DEFAULT_DAILY_MESSAGE_CAP);
+    # set here only for a school that needs a different number.
+    daily_message_cap: Optional[int] = None
 
 
 def _load_school(school_dir: Path) -> SchoolConfig:
@@ -69,6 +73,7 @@ def _load_school(school_dir: Path) -> SchoolConfig:
         primary_bubble_color=raw.get("primary_bubble_color"),
         background_tint=raw.get("background_tint"),
         logo_url=raw.get("logo_url"),
+        daily_message_cap=raw.get("daily_message_cap"),
     )
 
 
