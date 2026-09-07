@@ -802,6 +802,7 @@ def test_chatbox_html_has_theme_toggle_and_help_button(client):
     assert 'id="help-btn"' in resp.text
     assert 'id="report-open-btn"' in resp.text
     assert 'id="thanks-btn"' in resp.text
+    assert 'id="clear-btn"' in resp.text
 
 
 def test_chatbox_html_has_accessibility_settings_panel(client):

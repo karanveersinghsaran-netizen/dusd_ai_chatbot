@@ -245,6 +245,20 @@
   #install-btn.visible { display: inline-block; }
   #install-btn:active { opacity: 0.6; }
 
+  /* Same pill style as #install-btn (see note above), but always visible —
+     unlike install, clearing isn't conditional on platform capability. */
+  #clear-btn {
+    padding: 6px 10px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  #clear-btn:active { opacity: 0.6; }
+
   /* Per-school logo placeholder (#52): a colored initials circle next to the
      title once a school is pinned. Hidden — no real logo assets exist yet —
      until JS adds .visible with the school's brand color + initials. */
@@ -612,6 +626,7 @@
               aria-label="Turn on spoken replies" title="Turn on spoken replies">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10v4h4l5 5V5L7 10H3zm13.5 2c0-1.77-1.02-3.29-2.5-4.03v8.06c1.48-.74 2.5-2.26 2.5-4.03zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
       </button>
+      <button id="clear-btn" type="button" aria-label="Clear conversation">Clear</button>
       <button id="install-btn" type="button" aria-label="Install app">Install</button>
     </div>
   </header>
@@ -842,6 +857,17 @@
           // Best-effort — the toast already told the user it went through,
           // and there's nothing actionable to show for a failed background ping.
         }
+      });
+    })();
+
+    (function wireClearButton() {
+      // Same server-side path as typing "clear" in the input box (#72,
+      // app/agent.py's clear-conversation priority branch) — this button is
+      // just a confirmed shortcut for it, not a separate code path.
+      const btn = document.getElementById("clear-btn");
+      btn.addEventListener("click", () => {
+        if (!confirm("Clear this conversation? This can't be undone.")) return;
+        sendMessage("clear");
       });
     })();
 
@@ -1182,10 +1208,13 @@
       return wrapper;
     }
 
-    async function sendMessage() {
-      const text = inputEl.value.trim();
+    async function sendMessage(overrideText) {
+      // overrideText lets callers (e.g. the "New conversation" button) send a
+      // specific message without it ever having been typed into #input.
+      const fromInput = overrideText === undefined;
+      const text = (fromInput ? inputEl.value : overrideText).trim();
       if (!text) return;
-      inputEl.value = "";
+      if (fromInput) inputEl.value = "";
       sendEl.disabled = true;
       addMessage("user", text);
       const pending = addMessage("pending", "");
