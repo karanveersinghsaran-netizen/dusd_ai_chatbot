@@ -881,7 +881,7 @@
         helpPopover.classList.remove("visible");
         showToast("🙏 Thanks sent!");
         try {
-          await fetch("/feedback/thanks", {
+          await fetch(withToken("/feedback/thanks"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
@@ -930,7 +930,7 @@
         if (schoolId) formData.set("school_id", schoolId);
 
         try {
-          const resp = await fetch("/feedback/report", {
+          const resp = await fetch(withToken("/feedback/report"), {
             method: "POST",
             credentials: "include",
             body: formData,
@@ -1125,6 +1125,18 @@
     // so a saved preference never overrides that.
     const SCHOOL_PREF_KEY = "wms-school";
 
+    // Chatbox token (#51): forwarded into every /chat, /feedback/thanks, and
+    // /feedback/report call so the backend can resolve a stable user_id from
+    // it instead of the (per-cookie-jar) session cookie. This is what keeps
+    // a Safari tab and a home-screen-installed PWA opened from the SAME link
+    // sharing the same conversation, even though iOS gives the installed
+    // PWA its own isolated cookie jar. Falls back to cookie-only identity
+    // when absent, so the plain iframe embed (no token) is unaffected.
+    const chatboxToken = new URLSearchParams(window.location.search).get("token");
+    function withToken(path) {
+      return chatboxToken ? `${path}?token=${encodeURIComponent(chatboxToken)}` : path;
+    }
+
     let schoolId = new URLSearchParams(window.location.search).get("school");
     const matchingRadio = schoolId && schoolRadios.find((r) => r.value === schoolId);
     if (matchingRadio) {
@@ -1285,7 +1297,7 @@
       try {
         const payload = { message: text, language: chatLanguage };
         if (schoolId) payload.school_id = schoolId;
-        const resp = await fetch("/chat", {
+        const resp = await fetch(withToken("/chat"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
