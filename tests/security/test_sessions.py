@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.security.sessions import issue_session_id, verify_session_id
+from app.security.sessions import issue_session_id, sign_session_id, verify_session_id
 
 KEY = "test-signing-key"
 
@@ -47,3 +47,19 @@ def test_two_issued_ids_are_unique():
     first, _ = issue_session_id(KEY)
     second, _ = issue_session_id(KEY)
     assert first != second
+
+
+# ── sign_session_id (#51: refresh a cookie's expiry without rotating id) ────
+
+def test_sign_session_id_verifies_back_to_the_same_id():
+    session_id, _ = issue_session_id(KEY)
+    resigned = sign_session_id(session_id, KEY)
+    assert verify_session_id(resigned, KEY) == session_id
+
+
+def test_sign_session_id_matches_issue_session_id_output():
+    """issue_session_id's cookie_value is just a fresh id run through
+    sign_session_id — re-signing the same id twice must be byte-identical
+    (same key, deterministic HMAC) so refreshing a cookie doesn't churn it."""
+    session_id, cookie_value = issue_session_id(KEY)
+    assert sign_session_id(session_id, KEY) == cookie_value

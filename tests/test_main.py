@@ -105,6 +105,78 @@ def test_chat_without_language_forwards_none(client):
     assert mock_agent.chat.call_args.kwargs["language"] is None
 
 
+# ── #51: chatbox token overrides cookie identity ────────────────────────────
+
+def test_chat_with_token_uses_token_user_id(client):
+    """A valid chatbox token's embedded user_id wins over the session
+    cookie — this is what gives a Safari tab and an installed PWA opened
+    from the same link a shared conversation, even though iOS gives them
+    separate cookie jars."""
+    mock_agent = _mock_agent()
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY, user_id="admin-1")
+    with patch("main.get_agent", return_value=mock_agent):
+        resp = client.post(f"/chat?token={token}", json={"message": "hi"})
+
+    assert resp.status_code == 200
+    assert mock_agent.chat.call_args.kwargs["user_id"] == "admin-1"
+
+
+def test_chat_without_token_falls_back_to_cookie_session_id(client):
+    """No token on the request (e.g. the plain desktop-website iframe embed)
+    keeps working exactly as before: identity comes from the cookie."""
+    mock_agent = _mock_agent()
+    with patch("main.get_agent", return_value=mock_agent):
+        resp = client.post("/chat", json={"message": "hi"})
+
+    assert resp.status_code == 200
+    assert mock_agent.chat.call_args.kwargs["user_id"]
+    assert "wms_session=" in resp.headers.get("set-cookie", "")
+
+
+def test_chat_with_expired_token_falls_back_to_cookie_session_id(client):
+    mock_agent = _mock_agent()
+    expired = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY, user_id="admin-1", days_valid=-1)
+    with patch("main.get_agent", return_value=mock_agent):
+        resp = client.post(f"/chat?token={expired}", json={"message": "hi"})
+
+    assert resp.status_code == 200
+    assert mock_agent.chat.call_args.kwargs["user_id"] != "admin-1"
+
+
+def test_chat_with_valid_token_ignores_tampered_cookie(client):
+    """A tampered cookie would normally 401 the request (see
+    test_chat_tampered_cookie_returns_401) — but a valid token already
+    proves identity, so a bad cookie shouldn't block the request."""
+    mock_agent = _mock_agent()
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY, user_id="admin-1")
+    client.cookies.set("wms_session", "garbage.tampered")
+    with patch("main.get_agent", return_value=mock_agent):
+        resp = client.post(f"/chat?token={token}", json={"message": "hi"})
+
+    assert resp.status_code == 200
+    assert mock_agent.chat.call_args.kwargs["user_id"] == "admin-1"
+
+
+def test_chat_same_token_lands_in_same_bucket_across_separate_cookie_jars(client):
+    """Simulates a Safari tab and a home-screen-installed PWA: two requests
+    carrying the same token but no shared cookie jar (each a fresh
+    TestClient) must resolve to the same user_id — the actual #51 scenario."""
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY, user_id="admin-1")
+    mock_agent = _mock_agent()
+
+    with patch("main.get_agent", return_value=mock_agent), \
+         patch("app.config.SESSION_SIGNING_KEY", SIGNING_KEY), \
+         patch("app.config.CHATBOX_TOKEN_SIGNING_KEY", CHATBOX_TOKEN_KEY):
+        with TestClient(main.app, base_url="https://testserver") as safari_client:
+            safari_client.post(f"/chat?token={token}", json={"message": "hi"})
+        with TestClient(main.app, base_url="https://testserver") as pwa_client:
+            pwa_client.post(f"/chat?token={token}", json={"message": "hi"})
+
+    safari_user_id = mock_agent.chat.call_args_list[0].kwargs["user_id"]
+    pwa_user_id = mock_agent.chat.call_args_list[1].kwargs["user_id"]
+    assert safari_user_id == pwa_user_id == "admin-1"
+
+
 # ── school_id routing ────────────────────────────────────────────────────────
 
 def test_chat_without_school_id_resolves_default_school(client):
@@ -163,6 +235,16 @@ def test_thanks_with_unknown_school_id_returns_400(client):
     assert resp.status_code == 400
 
 
+def test_thanks_with_token_uses_token_user_id(client):
+    mock_agent = _mock_agent()
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY, user_id="admin-1")
+    with patch("main.get_agent", return_value=mock_agent):
+        resp = client.post(f"/feedback/thanks?token={token}", json={})
+
+    assert resp.status_code == 200
+    assert mock_agent.record_thanks.call_args.kwargs["user_id"] == "admin-1"
+
+
 # ── /feedback/report ─────────────────────────────────────────────────────────
 
 def _report_form(**overrides):
@@ -192,6 +274,16 @@ def test_report_with_tampered_cookie_returns_401(client):
         resp = client.post("/feedback/report", data=_report_form())
 
     assert resp.status_code == 401
+
+
+def test_report_with_token_uses_token_user_id(client):
+    mock_agent = _mock_agent()
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY, user_id="admin-1")
+    with patch("main.get_agent", return_value=mock_agent):
+        resp = client.post(f"/feedback/report?token={token}", data=_report_form())
+
+    assert resp.status_code == 200
+    assert mock_agent.record_report.call_args.kwargs["user_id"] == "admin-1"
 
 
 def test_report_missing_name_returns_422(client):

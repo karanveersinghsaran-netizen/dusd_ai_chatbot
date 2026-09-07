@@ -1,13 +1,19 @@
 """Unit tests for RedisStore (app/store/redis_store.py)."""
 import pytest
 
-from app.store.redis_store import RedisStore, _msgcount_key
+from app.store.redis_store import CONV_TTL_SECONDS, RedisStore, _msgcount_key
 from tests.store.conftest import FakeRedisClient
 
 
 @pytest.fixture()
 def redis_store():
     return RedisStore(client=FakeRedisClient())
+
+
+# ── TTL (#51: conversations persist 30d, refreshed on every append) ────────
+
+def test_conv_ttl_is_30_days():
+    assert CONV_TTL_SECONDS == 30 * 24 * 60 * 60
 
 
 # ── conversation history ────────────────────────────────────────────────────

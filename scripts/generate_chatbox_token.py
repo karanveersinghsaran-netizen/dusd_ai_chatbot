@@ -10,6 +10,11 @@ Usage:
     python -m scripts.generate_chatbox_token \
         --base-url https://wms-chatbot-staging-xxxxx.run.app \
         --days 7
+
+Re-issuing a link for someone whose old token expired: pass --user-id with
+the value printed alongside their original link so the new link resolves to
+the SAME Redis identity (#51) instead of starting them over with a fresh,
+empty conversation.
 """
 import argparse
 
@@ -29,11 +34,22 @@ def main() -> None:
         default=DEFAULT_VALID_DAYS,
         help=f"Token validity window in days (default: {DEFAULT_VALID_DAYS}).",
     )
+    parser.add_argument(
+        "--user-id",
+        default=None,
+        help=(
+            "Reuse this stable user_id instead of generating a new random one "
+            "(#51) — pass the user_id printed by a previous run to re-issue a "
+            "link for the same person without losing their Redis history."
+        ),
+    )
     args = parser.parse_args()
 
-    token = issue_chatbox_token(days_valid=args.days)
+    token = issue_chatbox_token(days_valid=args.days, user_id=args.user_id)
+    user_id = token.split(".", 2)[1]
     url = f"{args.base_url.rstrip('/')}/chatbox?token={token}"
     print(url)
+    print(f"user_id: {user_id}  (save this to re-issue a link for the same identity later)")
 
 
 if __name__ == "__main__":

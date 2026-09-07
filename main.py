@@ -16,13 +16,13 @@ from app.agent import get_agent
 from app.daily_cap import FRIENDLY_CAP_MESSAGE, check_and_increment
 from app.schools import get_school, load_schools
 from app.security.chatbox_token import verify_chatbox_token
+from app.security.identity import resolve_user_id
 from app.security.middleware import (
     enforce_max_body_size,
     enforce_report_body_size,
     limiter,
     session_or_ip_key,
 )
-from app.security.sessions import issue_session_id, verify_session_id
 from app.store.postgres_store import store as postgres_store
 from app.store.redis_store import store as redis_store
 
@@ -58,9 +58,6 @@ app.add_middleware(
     allow_methods=["POST"],
     allow_headers=["Content-Type"],
 )
-
-SESSION_COOKIE_NAME = "wms_session"
-SESSION_COOKIE_MAX_AGE = 24 * 60 * 60  # matches RedisStore's conversation TTL
 
 CHATBOX_HTML = Path(__file__).parent / "chatbox.html"
 EXPIRED_LINK_HTML = Path(__file__).parent / "static" / "expired-link.html"
@@ -296,28 +293,6 @@ async def campus_map_image(school_id: str):
     return FileResponse(image_path, media_type=media_type, headers={"cache-control": "public, max-age=86400"})
 
 
-def _resolve_session_id(wms_session: str | None, response: Response) -> str:
-    """Reuse a valid session cookie, or mint and set a fresh one. Raises 401 if
-    a cookie was presented but fails signature verification. Session identity
-    always comes from this server-signed cookie — the client cannot claim an
-    arbitrary user_id."""
-    if wms_session is None:
-        session_id, cookie_value = issue_session_id()
-        response.set_cookie(
-            key=SESSION_COOKIE_NAME,
-            value=cookie_value,
-            httponly=True,
-            secure=True,
-            samesite="lax",
-            max_age=SESSION_COOKIE_MAX_AGE,
-        )
-        return session_id
-    session_id = verify_session_id(wms_session)
-    if session_id is None:
-        raise HTTPException(status_code=401, detail="Invalid session cookie")
-    return session_id
-
-
 @app.get("/fonts/{filename}")
 async def a11y_font(filename: str):
     """Serves the OpenDyslexic webfont bundled for the chatbox's accessibility
@@ -342,9 +317,15 @@ async def chat(
     chat_request: ChatRequest,
     response: Response,
     wms_session: str | None = Cookie(default=None),
+    token: str | None = Query(default=None),
 ):
-    """Endpoint for the web chat widget."""
-    session_id = _resolve_session_id(wms_session, response)
+    """Endpoint for the web chat widget.
+
+    `token` (#51) is the same chatbox link token used to gate /chatbox — when
+    the frontend forwards it here (see chatbox.html), it resolves to a
+    stable user_id shared across Safari and an installed PWA's separate
+    cookie jar. See app/security/identity.py for the resolution order."""
+    user_id = resolve_user_id(token, wms_session, response)
 
     school_id = chat_request.school_id or config.DEFAULT_SCHOOL_ID
     school = get_school(school_id)
@@ -354,7 +335,7 @@ async def chat(
 
     # Cost/abuse guard (#71): per-user daily message cap, checked before the
     # request reaches the (billed) Claude API call in agent.chat.
-    cap_result = check_and_increment(session_id, school, redis_store=redis_store)
+    cap_result = check_and_increment(user_id, school, redis_store=redis_store)
     if not cap_result.allowed:
         raise HTTPException(
             status_code=429,
@@ -362,7 +343,7 @@ async def chat(
             headers={"Retry-After": str(cap_result.retry_after_seconds)},
         )
 
-    reply = agent.chat(chat_request.message, user_id=session_id, language=chat_request.language)
+    reply = agent.chat(chat_request.message, user_id=user_id, language=chat_request.language)
     text = reply.text
     if cap_result.approaching_limit:
         plural = "s" if cap_result.remaining != 1 else ""
@@ -378,17 +359,18 @@ async def thanks(
     thanks_request: ThanksRequest,
     response: Response,
     wms_session: str | None = Cookie(default=None),
+    token: str | None = Query(default=None),
 ):
     """One-tap 'send thanks' from the help popover — lightweight positive
     feedback with no form to fill out."""
-    session_id = _resolve_session_id(wms_session, response)
+    user_id = resolve_user_id(token, wms_session, response)
 
     school_id = thanks_request.school_id or config.DEFAULT_SCHOOL_ID
     agent = get_agent(school_id)
     if agent is None:
         raise HTTPException(status_code=400, detail=f"Unknown school: {school_id}")
 
-    agent.record_thanks(user_id=session_id)
+    agent.record_thanks(user_id=user_id)
     return {"status": "ok"}
 
 
@@ -404,6 +386,7 @@ async def report(
     school_id: str | None = Form(default=None),
     screenshot: UploadFile | None = File(default=None),
     wms_session: str | None = Cookie(default=None),
+    token: str | None = Query(default=None),
 ):
     """Problem-report form surfaced from the help popover: name, email, a
     description of the issue, and an optional screenshot. Replaces the old
@@ -416,7 +399,7 @@ async def report(
     if not EMAIL_RE.match(email):
         raise HTTPException(status_code=422, detail="Enter a valid email address")
 
-    session_id = _resolve_session_id(wms_session, response)
+    user_id = resolve_user_id(token, wms_session, response)
 
     resolved_school_id = school_id or config.DEFAULT_SCHOOL_ID
     agent = get_agent(resolved_school_id)
@@ -434,7 +417,7 @@ async def report(
         screenshot_content_type = screenshot.content_type
 
     agent.record_report(
-        user_id=session_id,
+        user_id=user_id,
         name=name,
         email=email,
         message=message,

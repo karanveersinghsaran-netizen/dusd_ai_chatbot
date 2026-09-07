@@ -5,7 +5,7 @@ import redis
 
 from app import config
 
-CONV_TTL_SECONDS = 24 * 60 * 60           # 24h, refreshed on every append
+CONV_TTL_SECONDS = 30 * 24 * 60 * 60      # 30d (#51), refreshed on every append
 LAST_RESPONSE_TTL_SECONDS = 24 * 60 * 60  # tied to conversation lifetime
 FEEDBACK_ASKED_TTL_SECONDS = 24 * 60 * 60 # "ask once" window
 PENDING_TTL_SECONDS = 30 * 60             # window for user to answer 1/2
