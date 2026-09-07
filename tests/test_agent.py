@@ -360,6 +360,59 @@ def test_no_dangling_history_entry_on_api_exception(agent):
     assert agent.redis_store.get_conversation(agent._session_key("u6")) == []
 
 
+# ── Clear-conversation command (#72) ────────────────────────────────────────
+
+def test_clear_command_wipes_conversation_and_confirms(agent):
+    agent.client.beta.messages.create.return_value = _text_response("Answer")
+    with patch("app.agent.get_school_day_status", return_value=""), \
+         patch("app.agent.get_today_status", return_value=""), \
+         patch("app.agent.get_upcoming_events", return_value=""), \
+         patch("app.agent.get_upcoming_no_school_days", return_value=""):
+        agent.chat("Hello", user_id="u_clear")
+
+    assert agent.redis_store.get_conversation(agent._session_key("u_clear")) != []
+
+    reply = agent.chat("clear", user_id="u_clear")
+
+    assert reply.text == "New conversation started. What can I help you with?"
+    assert agent.redis_store.get_conversation(agent._session_key("u_clear")) == []
+
+
+@pytest.mark.parametrize("trigger", ["clear", "CLEAR", "Clear", "/clear", "/CLEAR", "  clear  "])
+def test_clear_command_is_case_insensitive_and_trims_whitespace(agent, trigger):
+    reply = agent.chat(trigger, user_id="u_clear2")
+    assert reply.text == "New conversation started. What can I help you with?"
+
+
+def test_clear_command_resets_feedback_state_too(agent):
+    key = agent._session_key("u_clear3")
+    agent.redis_store.mark_feedback_asked(key)
+    agent.redis_store.mark_feedback_pending(key)
+
+    agent.chat("clear", user_id="u_clear3")
+
+    assert agent.redis_store.is_feedback_asked(key) is False
+    assert agent.redis_store.is_feedback_pending(key) is False
+
+
+def test_next_message_after_clear_has_no_prior_history(agent):
+    agent.client.beta.messages.create.return_value = _text_response("Answer")
+    with patch("app.agent.get_school_day_status", return_value=""), \
+         patch("app.agent.get_today_status", return_value=""), \
+         patch("app.agent.get_upcoming_events", return_value=""), \
+         patch("app.agent.get_upcoming_no_school_days", return_value=""):
+        agent.chat("First question", user_id="u_clear4")
+        agent.chat("clear", user_id="u_clear4")
+        agent.chat("Second question", user_id="u_clear4")
+
+    last_call_messages = agent.client.beta.messages.create.call_args_list[-1][1]["messages"]
+    # Only the fresh post-clear turn is present — no bleed-through from the
+    # conversation that existed before "clear" wiped it.
+    assert len(last_call_messages) == 1
+    assert "First question" not in last_call_messages[0]["content"]
+    assert "Second question" in last_call_messages[0]["content"]
+
+
 # ── Feedback flow routes through the injected RedisStore ───────────────────────
 
 def test_feedback_ask_suffix_added_once_per_session(agent):

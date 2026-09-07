@@ -636,6 +636,7 @@
     <div class="help-actions">
       <button id="report-open-btn" type="button" class="help-action-btn">🐞 Report a problem</button>
       <button id="thanks-btn" type="button" class="help-action-btn">🙏 Send thanks</button>
+      <button id="new-conversation-btn" type="button" class="help-action-btn">🔄 New conversation</button>
     </div>
   </div>
 
@@ -845,6 +846,20 @@
       });
     })();
 
+    (function wireNewConversationButton() {
+      // Same server-side path as typing "clear" in the input box (#72,
+      // app/agent.py's clear-conversation priority branch) — this button is
+      // just a confirmed shortcut for it, not a separate code path.
+      const btn = document.getElementById("new-conversation-btn");
+      const helpPopover = document.getElementById("help-popover");
+
+      btn.addEventListener("click", () => {
+        if (!confirm("Clear this conversation? This can't be undone.")) return;
+        helpPopover.classList.remove("visible");
+        sendMessage("clear");
+      });
+    })();
+
     (function wireReportForm() {
       const openBtn = document.getElementById("report-open-btn");
       const helpPopover = document.getElementById("help-popover");
@@ -1043,7 +1058,7 @@
     document.addEventListener("click", (e) => {
       document.querySelectorAll(".popover.visible").forEach((popover) => {
         if (popover.contains(e.target)) return;
-        if (e.target.closest("#help-btn, #install-btn, #report-open-btn, #a11y-settings-btn")) return;
+        if (e.target.closest("#help-btn, #install-btn, #report-open-btn, #a11y-settings-btn, #new-conversation-btn")) return;
         popover.classList.remove("visible");
         // Keep any trigger button's aria-expanded in sync when its popover
         // gets dismissed this way rather than via its own close button.
@@ -1182,10 +1197,13 @@
       return wrapper;
     }
 
-    async function sendMessage() {
-      const text = inputEl.value.trim();
+    async function sendMessage(overrideText) {
+      // overrideText lets callers (e.g. the "New conversation" button) send a
+      // specific message without it ever having been typed into #input.
+      const fromInput = overrideText === undefined;
+      const text = (fromInput ? inputEl.value : overrideText).trim();
       if (!text) return;
-      inputEl.value = "";
+      if (fromInput) inputEl.value = "";
       sendEl.disabled = true;
       addMessage("user", text);
       const pending = addMessage("pending", "");
