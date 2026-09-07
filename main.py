@@ -13,6 +13,7 @@ from slowapi.middleware import SlowAPIMiddleware
 import uvicorn
 from app import config
 from app.agent import get_agent
+from app.daily_cap import FRIENDLY_CAP_MESSAGE, check_and_increment
 from app.schools import get_school, load_schools
 from app.security.chatbox_token import verify_chatbox_token
 from app.security.middleware import (
@@ -23,6 +24,7 @@ from app.security.middleware import (
 )
 from app.security.sessions import issue_session_id, verify_session_id
 from app.store.postgres_store import store as postgres_store
+from app.store.redis_store import store as redis_store
 
 logger = logging.getLogger(__name__)
 
@@ -340,12 +342,27 @@ async def chat(
     session_id = _resolve_session_id(wms_session, response)
 
     school_id = chat_request.school_id or config.DEFAULT_SCHOOL_ID
+    school = get_school(school_id)
     agent = get_agent(school_id)
     if agent is None:
         raise HTTPException(status_code=400, detail=f"Unknown school: {school_id}")
 
+    # Cost/abuse guard (#71): per-user daily message cap, checked before the
+    # request reaches the (billed) Claude API call in agent.chat.
+    cap_result = check_and_increment(session_id, school, redis_store=redis_store)
+    if not cap_result.allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=FRIENDLY_CAP_MESSAGE,
+            headers={"Retry-After": str(cap_result.retry_after_seconds)},
+        )
+
     reply = agent.chat(chat_request.message, user_id=session_id)
-    return ChatResponse(reply=reply.text, attach_map=reply.attach_map)
+    text = reply.text
+    if cap_result.approaching_limit:
+        plural = "s" if cap_result.remaining != 1 else ""
+        text += f"\n\n_You have {cap_result.remaining} message{plural} left today._"
+    return ChatResponse(reply=text, attach_map=reply.attach_map)
 
 
 @app.post("/feedback/thanks", dependencies=[Depends(enforce_max_body_size)])

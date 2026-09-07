@@ -1,7 +1,7 @@
 """Unit tests for RedisStore (app/store/redis_store.py)."""
 import pytest
 
-from app.store.redis_store import RedisStore
+from app.store.redis_store import RedisStore, _msgcount_key
 from tests.store.conftest import FakeRedisClient
 
 
@@ -99,3 +99,43 @@ def test_clear_session_removes_everything(redis_store):
     assert redis_store.get_last_response("u1") is None
     assert redis_store.is_feedback_asked("u1") is False
     assert redis_store.is_feedback_pending("u1") is False
+
+
+# ── daily message cap (#71) ──────────────────────────────────────────────────
+
+def test_increment_daily_message_count_starts_at_one(redis_store):
+    assert redis_store.increment_daily_message_count("u1", "2026-01-01", 3600) == 1
+
+
+def test_increment_daily_message_count_increments_on_repeated_calls(redis_store):
+    redis_store.increment_daily_message_count("u1", "2026-01-01", 3600)
+    redis_store.increment_daily_message_count("u1", "2026-01-01", 3600)
+    assert redis_store.increment_daily_message_count("u1", "2026-01-01", 3600) == 3
+
+
+def test_increment_daily_message_count_sets_ttl_only_on_first_call(redis_store):
+    """TTL should be pinned to end-of-day-Pacific from the first message of
+    the day, not pushed forward on every subsequent message."""
+    redis_store.increment_daily_message_count("u1", "2026-01-01", 3600)
+    redis_store.increment_daily_message_count("u1", "2026-01-01", 999)
+    assert redis_store.client.ttl(_msgcount_key("u1", "2026-01-01")) == 3600
+
+
+def test_daily_message_count_is_per_user(redis_store):
+    redis_store.increment_daily_message_count("u1", "2026-01-01", 3600)
+    assert redis_store.get_daily_message_count("u2", "2026-01-01") == 0
+
+
+def test_daily_message_count_is_per_day(redis_store):
+    redis_store.increment_daily_message_count("u1", "2026-01-01", 3600)
+    assert redis_store.get_daily_message_count("u1", "2026-01-02") == 0
+
+
+def test_get_daily_message_count_default_zero(redis_store):
+    assert redis_store.get_daily_message_count("u1", "2026-01-01") == 0
+
+
+def test_get_daily_message_count_reflects_increments(redis_store):
+    redis_store.increment_daily_message_count("u1", "2026-01-01", 3600)
+    redis_store.increment_daily_message_count("u1", "2026-01-01", 3600)
+    assert redis_store.get_daily_message_count("u1", "2026-01-01") == 2
