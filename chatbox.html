@@ -1086,16 +1086,26 @@
 
     const schoolRadios = Array.from(schoolPickerEl.querySelectorAll('input[name="school"]'));
 
+    // Remembers the picker's last choice for the unpinned case only (no
+    // ?school= — local dev, or a generic non-school-specific link/PWA
+    // install). Real embeds always pin ?school= explicitly per school site,
+    // so a saved preference never overrides that.
+    const SCHOOL_PREF_KEY = "wms-school";
+
     let schoolId = new URLSearchParams(window.location.search).get("school");
     const matchingRadio = schoolId && schoolRadios.find((r) => r.value === schoolId);
     if (matchingRadio) {
       matchingRadio.checked = true;
     } else {
       schoolPickerEl.classList.add("visible");
+      const savedSchoolId = localStorage.getItem(SCHOOL_PREF_KEY);
+      const savedRadio = savedSchoolId && schoolRadios.find((r) => r.value === savedSchoolId);
+      if (savedRadio) savedRadio.checked = true;
       schoolId = schoolRadios.find((r) => r.checked).value;
     }
     schoolPickerEl.addEventListener("change", (e) => {
       schoolId = e.target.value;
+      try { localStorage.setItem(SCHOOL_PREF_KEY, schoolId); } catch (err) {}
     });
 
     // Per-school theming (#52): reads the theme data island embedded by
