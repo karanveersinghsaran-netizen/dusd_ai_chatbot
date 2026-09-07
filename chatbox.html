@@ -25,6 +25,26 @@
 <script id="school-theme-data" type="application/json">{}</script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<script>
+  // Apply saved accessibility settings (issue #64) before the stylesheet
+  // below is parsed, so a returning visitor's font/size/contrast/motion
+  // choice is correct from the very first paint instead of flashing the
+  // defaults first. try/catch guards localStorage access, which throws in
+  // some browsers' private-browsing mode — that must never block rendering.
+  (function () {
+    try {
+      var root = document.documentElement;
+      var apply = function (key, attr, defaultValue) {
+        var value = localStorage.getItem(key);
+        if (value && value !== defaultValue) root.setAttribute(attr, value);
+      };
+      apply("wms-a11y-font", "data-font", "default");
+      apply("wms-a11y-text-size", "data-text-size", "m");
+      apply("wms-a11y-contrast", "data-contrast", "default");
+      apply("wms-a11y-motion", "data-motion", "auto");
+    } catch (e) {}
+  })();
+</script>
 <style>
   :root {
     --bg: #f5f5f7;
@@ -90,6 +110,80 @@
     --error-bubble-text: #ff8a80;
     --link: #6ea8ff;
   }
+
+  /* ── Accessibility settings (issue #64) ──────────────────────────────────
+     Font / text size / contrast / motion, toggled from the "Aa" header
+     button and persisted to localStorage (see the early-apply script above
+     and wireA11yPanel() below). Kept in its own block after the theme rules
+     rather than folded into them. */
+
+  /* OpenDyslexic, bundled locally under static/fonts/ and served from
+     GET /fonts/{filename} in main.py — never a CDN, per issue #64. Files are
+     the SIL Open Font License release from
+     https://github.com/antijingoist/opendyslexic (OFL text included
+     alongside them in static/fonts/). */
+  @font-face {
+    font-family: "OpenDyslexic";
+    src: url("/fonts/OpenDyslexic-Regular.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "OpenDyslexic";
+    src: url("/fonts/OpenDyslexic-Bold.woff2") format("woff2");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+  }
+  :root[data-font="dyslexic"] body {
+    font-family: "OpenDyslexic", Verdana, Tahoma, "Trebuchet MS", sans-serif;
+    letter-spacing: 0.02em;
+    line-height: 1.6;
+  }
+
+  /* Text size: S/M/L/XL, scaling the root rem base. Most spacing in this
+     stylesheet is already in px rather than rem, so paddings and touch
+     targets stay put and only text grows/shrinks — #input further down is
+     the one exception that needs an explicit floor to avoid an iOS Safari
+     zoom-on-focus regression at the "S" size. */
+  :root { font-size: 16px; }
+  :root[data-text-size="s"]  { font-size: 14px; }
+  :root[data-text-size="l"]  { font-size: 18px; }
+  :root[data-text-size="xl"] { font-size: 22px; }
+
+  /* High contrast: dark background, bright text, and strong borders — placed
+     after the theme-toggle rules above so it always wins at equal
+     specificity regardless of whether light or dark is active underneath
+     (OS-driven or user-picked), composing with the toggle instead of
+     fighting it. */
+  :root[data-contrast="high"] {
+    --bg: #000000;
+    --surface: #000000;
+    --border: #ffffff;
+    --text: #ffffff;
+    --text-muted: #e5e5e5;
+    --user-bubble-bg: #ffff00;
+    --user-bubble-text: #000000;
+    --bot-bubble-bg: #1a1a1a;
+    --bot-bubble-text: #ffffff;
+    --error-bubble-bg: #3a0000;
+    --error-bubble-text: #ff8a80;
+    --link: #7fdbff;
+  }
+
+  /* Reduced motion: automatic (OS prefers-reduced-motion) and a manual
+     override from the settings panel, for users who want it off without
+     changing OS settings. Both drop the message slide-in and typing-dot
+     bounce and switch #messages to an instant (non-smooth) scroll. */
+  @media (prefers-reduced-motion: reduce) {
+    .msg { animation: none; }
+    .typing span { animation: none; opacity: 0.8; }
+    #messages { scroll-behavior: auto; }
+  }
+  :root[data-motion="reduce"] .msg { animation: none; }
+  :root[data-motion="reduce"] .typing span { animation: none; opacity: 0.8; }
+  :root[data-motion="reduce"] #messages { scroll-behavior: auto; }
 
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; height: 100%; }
@@ -168,7 +262,7 @@
   }
   .school-logo.visible { display: inline-block; }
 
-  #theme-toggle-btn, #help-btn {
+  #theme-toggle-btn, #help-btn, #a11y-settings-btn {
     width: 30px; height: 30px;
     padding: 0;
     font-size: 1rem;
@@ -180,7 +274,8 @@
     display: flex; align-items: center; justify-content: center;
   }
   #theme-toggle-btn svg { width: 16px; height: 16px; fill: currentColor; }
-  #theme-toggle-btn:active, #help-btn:active { opacity: 0.6; }
+  #theme-toggle-btn:active, #help-btn:active, #a11y-settings-btn:active { opacity: 0.6; }
+  #a11y-settings-btn { font-size: 0.7rem; font-weight: 700; }
 
   /* Shared popover shell for the iOS install hint and the help/support
      panel — both are small dismissible cards anchored below the header. */
@@ -217,6 +312,33 @@
     font-family: inherit;
     font-size: 0.85em;
   }
+
+  /* Accessibility settings panel option groups (issue #64) — pill-style
+     radio labels matching #school-picker's existing look. */
+  .a11y-group { border: none; padding: 0; margin: 0 0 12px; }
+  .a11y-group:last-of-type { margin-bottom: 0; }
+  .a11y-group legend {
+    padding: 0 0 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .a11y-options { display: flex; flex-wrap: wrap; gap: 8px; }
+  .a11y-options label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    color: var(--text);
+    font-size: 0.85rem;
+  }
+  .a11y-options input[type="radio"] { accent-color: var(--user-bubble-bg); }
 
   .help-actions { display: flex; flex-direction: column; gap: 8px; }
   .help-action-btn {
@@ -386,9 +508,11 @@
     flex: 1;
     min-width: 0;
     padding: 10px 14px;
-    font-size: 1rem;
-    /* Prevent iOS Safari's auto-zoom on focus; requires the font-size >= 16px
-       above (it is 1rem = 16px). */
+    /* Prevent iOS Safari's auto-zoom on focus, which triggers below 16px.
+       Text-size "S" (issue #64) shrinks the root rem base under 16px, so
+       floor this field explicitly instead of letting it shrink with
+       everything else; it still grows for the L/XL sizes. */
+    font-size: max(1rem, 16px);
     border: 1px solid var(--border);
     border-radius: 20px;
     background: var(--bg);
@@ -472,6 +596,9 @@
   <header>
     <div class="actions-left">
       <button id="help-btn" type="button" aria-label="Help &amp; support">?</button>
+      <button id="a11y-settings-btn" type="button" aria-haspopup="dialog"
+              aria-controls="a11y-panel" aria-expanded="false"
+              aria-label="Accessibility settings">Aa</button>
     </div>
     <div class="title"><span id="school-logo" class="school-logo" aria-hidden="true"></span><span id="title-text">School Chat</span></div>
     <div class="actions">
@@ -531,6 +658,45 @@
       <div id="report-error" class="form-error" hidden></div>
       <button type="submit" id="report-submit-btn" class="help-action-btn primary">Submit</button>
     </form>
+  </div>
+
+  <div id="a11y-panel" class="popover" role="dialog" aria-labelledby="a11y-panel-title">
+    <button class="close" type="button" aria-label="Dismiss">×</button>
+    <div id="a11y-panel-title" style="font-weight: 600; margin-bottom: 10px;">Accessibility settings</div>
+
+    <fieldset class="a11y-group">
+      <legend>Font</legend>
+      <div class="a11y-options">
+        <label><input type="radio" name="a11y-font" value="default" checked> Default</label>
+        <label><input type="radio" name="a11y-font" value="dyslexic"> Dyslexia-friendly</label>
+      </div>
+    </fieldset>
+
+    <fieldset class="a11y-group">
+      <legend>Text size</legend>
+      <div class="a11y-options">
+        <label><input type="radio" name="a11y-text-size" value="s"> S</label>
+        <label><input type="radio" name="a11y-text-size" value="m" checked> M</label>
+        <label><input type="radio" name="a11y-text-size" value="l"> L</label>
+        <label><input type="radio" name="a11y-text-size" value="xl"> XL</label>
+      </div>
+    </fieldset>
+
+    <fieldset class="a11y-group">
+      <legend>Contrast</legend>
+      <div class="a11y-options">
+        <label><input type="radio" name="a11y-contrast" value="default" checked> Default</label>
+        <label><input type="radio" name="a11y-contrast" value="high"> High contrast</label>
+      </div>
+    </fieldset>
+
+    <fieldset class="a11y-group">
+      <legend>Motion</legend>
+      <div class="a11y-options">
+        <label><input type="radio" name="a11y-motion" value="auto" checked> Auto (system)</label>
+        <label><input type="radio" name="a11y-motion" value="reduce"> Reduce motion</label>
+      </div>
+    </fieldset>
   </div>
 
   <div id="toast" role="status" aria-live="polite"></div>
@@ -726,6 +892,73 @@
       });
     })();
 
+    // Accessibility settings panel (issue #64): font, text size, contrast,
+    // and a manual "reduce motion" override, persisted to localStorage and
+    // re-applied on load by the early-apply script in <head> — that runs
+    // before the stylesheet is parsed, so returning visitors get the right
+    // look on the very first paint instead of a flash of defaults.
+    (function wireA11yPanel() {
+      const root = document.documentElement;
+      const btn = document.getElementById("a11y-settings-btn");
+      const panel = document.getElementById("a11y-panel");
+      const closeBtn = panel.querySelector(".close");
+
+      // radio group name -> [localStorage key, data-* attribute, default value]
+      const GROUPS = {
+        "a11y-font": ["wms-a11y-font", "data-font", "default"],
+        "a11y-text-size": ["wms-a11y-text-size", "data-text-size", "m"],
+        "a11y-contrast": ["wms-a11y-contrast", "data-contrast", "default"],
+        "a11y-motion": ["wms-a11y-motion", "data-motion", "auto"],
+      };
+
+      Object.entries(GROUPS).forEach(([name, [storageKey, attr, defaultValue]]) => {
+        const inputs = Array.from(panel.querySelectorAll(`input[name="${name}"]`));
+        const current = root.getAttribute(attr) || defaultValue;
+        inputs.forEach((input) => {
+          input.checked = input.value === current;
+          input.addEventListener("change", () => {
+            if (!input.checked) return;
+            try { localStorage.setItem(storageKey, input.value); } catch (e) {}
+            if (input.value === defaultValue) {
+              root.removeAttribute(attr);
+            } else {
+              root.setAttribute(attr, input.value);
+            }
+          });
+        });
+      });
+
+      function openPanel() {
+        panel.classList.add("visible");
+        btn.setAttribute("aria-expanded", "true");
+        const firstInput = panel.querySelector('input[type="radio"]');
+        (firstInput || closeBtn).focus();
+      }
+      function closePanel() {
+        panel.classList.remove("visible");
+        btn.setAttribute("aria-expanded", "false");
+      }
+
+      btn.addEventListener("click", () => {
+        if (panel.classList.contains("visible")) {
+          closePanel();
+          btn.focus();
+        } else {
+          openPanel();
+        }
+      });
+      closeBtn.addEventListener("click", () => {
+        closePanel();
+        btn.focus();
+      });
+      panel.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          closePanel();
+          btn.focus();
+        }
+      });
+    })();
+
     // Install-button wiring. Two separate flows because iOS Safari refuses to
     // implement the standard beforeinstallprompt API — so on iPhone we can't
     // trigger the install sheet programmatically and have to show a manual
@@ -787,8 +1020,12 @@
     document.addEventListener("click", (e) => {
       document.querySelectorAll(".popover.visible").forEach((popover) => {
         if (popover.contains(e.target)) return;
-        if (e.target.closest("#help-btn, #install-btn, #report-open-btn")) return;
+        if (e.target.closest("#help-btn, #install-btn, #report-open-btn, #a11y-settings-btn")) return;
         popover.classList.remove("visible");
+        // Keep any trigger button's aria-expanded in sync when its popover
+        // gets dismissed this way rather than via its own close button.
+        const trigger = document.querySelector(`[aria-controls="${popover.id}"]`);
+        if (trigger) trigger.setAttribute("aria-expanded", "false");
       });
     });
 
