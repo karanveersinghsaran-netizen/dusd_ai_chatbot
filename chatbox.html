@@ -539,6 +539,7 @@
     outline: none;
   }
   #input:focus { border-color: var(--user-bubble-bg); }
+  #input:disabled { opacity: 0.5; cursor: not-allowed; }
   #send {
     /* Circular icon button — 40x40 keeps thumb-friendly hit area while
        staying visually compact. */
@@ -1211,11 +1212,19 @@
     async function sendMessage(overrideText) {
       // overrideText lets callers (e.g. the "New conversation" button) send a
       // specific message without it ever having been typed into #input.
+      // Guard against a second call landing while one is already in flight —
+      // sendEl.disabled doubles as the "busy" flag. Without this, the input
+      // and Enter key stayed live during a pending reply, so a second message
+      // could fire before the first one's turn was persisted, racing the
+      // read-modify-write in RedisStore.append_message and silently dropping
+      // one of the two turns from the conversation history Claude sees later.
+      if (sendEl.disabled) return;
       const fromInput = overrideText === undefined;
       const text = (fromInput ? inputEl.value : overrideText).trim();
       if (!text) return;
       if (fromInput) inputEl.value = "";
       sendEl.disabled = true;
+      inputEl.disabled = true;
       addMessage("user", text);
       const pending = addMessage("pending", "");
 
@@ -1242,6 +1251,7 @@
         addMessage("error", "Sorry, I couldn't reach the server. Check your connection and try again.");
       } finally {
         sendEl.disabled = false;
+        inputEl.disabled = false;
         inputEl.focus();
       }
     }
