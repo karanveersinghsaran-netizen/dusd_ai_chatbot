@@ -93,6 +93,53 @@ def test_above_cap_is_denied(redis_store):
     assert result.retry_after_seconds > 0
 
 
+# ── remaining / approaching_limit ───────────────────────────────────────────
+
+def test_remaining_counts_down(redis_store):
+    school = get_school("wells")  # cap is 3 (small_cap fixture)
+    for expected_remaining in (2, 1, 0):
+        result = check_and_increment("u1", school, redis_store=redis_store)
+        assert result.remaining == expected_remaining
+
+
+def test_remaining_never_negative_once_over_cap(redis_store):
+    school = get_school("wells")
+    for _ in range(4):  # cap is 3, so this goes one over
+        result = check_and_increment("u1", school, redis_store=redis_store)
+    assert result.remaining == 0
+
+
+def test_approaching_limit_true_within_warning_threshold(redis_store):
+    school = get_school("wells")  # cap 3, WARNING_THRESHOLD 2
+    result = None
+    for _ in range(2):  # remaining == 1, within threshold
+        result = check_and_increment("u1", school, redis_store=redis_store)
+    assert result.approaching_limit is True
+
+
+def test_approaching_limit_false_with_plenty_of_headroom(redis_store):
+    school = replace(get_school("wells"), daily_message_cap=50)
+    result = check_and_increment("u1", school, redis_store=redis_store)
+    assert result.remaining == 49
+    assert result.approaching_limit is False
+
+
+def test_approaching_limit_false_once_denied():
+    # allowed=False short-circuits approaching_limit regardless of remaining
+    # (there's nothing to warn about — the block message already covers it).
+    from app.daily_cap import DailyCapResult
+    result = DailyCapResult(allowed=False, limit=3, count=4, retry_after_seconds=60)
+    assert result.remaining == 0
+    assert result.approaching_limit is False
+
+
+def test_approaching_limit_false_for_whitelisted_user(redis_store, monkeypatch):
+    monkeypatch.setattr(config, "DAILY_CAP_WHITELIST", {"staff-1"})
+    school = get_school("wells")
+    result = check_and_increment("staff-1", school, redis_store=redis_store)
+    assert result.approaching_limit is False
+
+
 def test_cap_is_tracked_per_user(redis_store):
     school = get_school("wells")
     for _ in range(3):

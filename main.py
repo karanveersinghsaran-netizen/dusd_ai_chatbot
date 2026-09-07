@@ -358,7 +358,11 @@ async def chat(
         )
 
     reply = agent.chat(chat_request.message, user_id=session_id)
-    return ChatResponse(reply=reply.text, attach_map=reply.attach_map)
+    text = reply.text
+    if cap_result.approaching_limit:
+        plural = "s" if cap_result.remaining != 1 else ""
+        text += f"\n\n_You have {cap_result.remaining} message{plural} left today._"
+    return ChatResponse(reply=text, attach_map=reply.attach_map)
 
 
 @app.post("/feedback/thanks", dependencies=[Depends(enforce_max_body_size)])

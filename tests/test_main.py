@@ -406,6 +406,33 @@ def test_chat_daily_cap_whitelist_bypasses_the_cap(client, monkeypatch):
             assert resp.status_code == 200
 
 
+def test_chat_reply_gets_warning_note_when_approaching_cap(client, monkeypatch):
+    # cap 4, WARNING_THRESHOLD 2 (app/daily_cap.py): remaining goes 3, 2, 1, 0
+    # across the 4 allowed messages -> no warning, warning, warning, no
+    # warning (the last allowed message doesn't warn — the *next* one just
+    # gets the hard block message instead, so there's nothing new to add).
+    monkeypatch.setattr(config, "DEFAULT_DAILY_MESSAGE_CAP", 4)
+    with patch("main.get_agent", return_value=_mock_agent()):
+        resp = client.post("/chat", json={"message": "hi"})
+        assert resp.json()["reply"] == "Hello!"  # remaining=3, above threshold
+
+        resp = client.post("/chat", json={"message": "hi"})
+        assert "You have 2 messages left today." in resp.json()["reply"]
+
+        resp = client.post("/chat", json={"message": "hi"})
+        assert "You have 1 message left today." in resp.json()["reply"]
+
+        resp = client.post("/chat", json={"message": "hi"})
+        assert resp.json()["reply"] == "Hello!"  # remaining=0, last allowed message
+
+
+def test_chat_reply_has_no_warning_note_with_plenty_of_headroom(client, monkeypatch):
+    monkeypatch.setattr(config, "DEFAULT_DAILY_MESSAGE_CAP", 50)
+    with patch("main.get_agent", return_value=_mock_agent()):
+        resp = client.post("/chat", json={"message": "hi"})
+    assert resp.json()["reply"] == "Hello!"
+
+
 def test_chat_daily_cap_uses_school_override(client, monkeypatch):
     """A school.json daily_message_cap override takes precedence over the
     district-wide default."""

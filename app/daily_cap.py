@@ -30,6 +30,13 @@ FRIENDLY_CAP_MESSAGE = (
     "the school office if you need help right now."
 )
 
+# How many messages of headroom left before we start warning the user they're
+# about to hit the cap. Small and fixed rather than a percentage of the
+# per-school limit — "2 left" reads the same whether the cap is 5 (testing)
+# or 50 (production), and stays a light touch rather than nagging on every
+# message once someone's partway through their day.
+WARNING_THRESHOLD = 2
+
 
 @dataclass(frozen=True)
 class DailyCapResult:
@@ -37,6 +44,14 @@ class DailyCapResult:
     limit: int
     count: int
     retry_after_seconds: int
+
+    @property
+    def remaining(self) -> int:
+        return max(self.limit - self.count, 0)
+
+    @property
+    def approaching_limit(self) -> bool:
+        return self.allowed and 0 < self.remaining <= WARNING_THRESHOLD
 
 
 def daily_cap_for_school(school: Optional[SchoolConfig]) -> int:
