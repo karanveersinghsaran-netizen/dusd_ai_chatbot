@@ -1,3 +1,4 @@
+import json
 import logging
 import re
 from pathlib import Path
@@ -12,6 +13,7 @@ from slowapi.middleware import SlowAPIMiddleware
 import uvicorn
 from app import config
 from app.agent import get_agent
+from app.schools import get_school, load_schools
 from app.security.chatbox_token import verify_chatbox_token
 from app.security.middleware import (
     enforce_max_body_size,
@@ -63,6 +65,34 @@ EXPIRED_LINK_HTML = Path(__file__).parent / "static" / "expired-link.html"
 EMBED_JS = Path(__file__).parent / "embed" / "wms-chatbot.js"
 STATIC_DIR = Path(__file__).parent / "static"
 
+# PWA icon filename patterns generated per-school by scripts/generate_icons.py
+# (#52) — kept in one place so /manifest.webmanifest and any future caller
+# agree on naming.
+SCHOOL_ICON_VARIANTS = [
+    ("icon-192-{}.png", "192x192", "any"),
+    ("icon-512-{}.png", "512x512", "any"),
+    ("icon-512-maskable-{}.png", "512x512", "maskable"),
+]
+
+
+def _public_school_theme() -> dict:
+    """Per-school branding safe to expose to the chatbox frontend (#52) — name
+    and colors only, none of the operational fields (phone, bell schedule,
+    etc.) that SchoolConfig also carries. Embedded into chatbox.html at
+    request time so the widget can render the pinned school's theme without
+    an extra round trip, and can react live if the dev-only school picker is
+    used to switch schools."""
+    return {
+        school.id: {
+            "name": school.name,
+            "theme_color": school.theme_color,
+            "primary_bubble_color": school.primary_bubble_color,
+            "background_tint": school.background_tint,
+            "logo_url": school.logo_url,
+        }
+        for school in load_schools().values()
+    }
+
 
 class ChatRequest(BaseModel):
     message: str
@@ -103,7 +133,10 @@ async def root():
 
 
 @app.get("/chatbox")
-async def chatbox(token: str | None = Query(default=None)):
+async def chatbox(
+    token: str | None = Query(default=None),
+    school: str | None = Query(default=None),
+):
     """Serves the standalone web chat widget from the same origin as /chat, so
     the session cookie is first-party. Opening chatbox.html via file:// breaks
     cookie storage under browsers' cross-origin Secure-cookie rules.
@@ -112,23 +145,49 @@ async def chatbox(token: str | None = Query(default=None)):
     Missing/invalid tokens render a friendly HTML "link expired" page (with a
     404 status) instead of a raw JSON error, because installed PWAs commonly
     land here after their embedded token expires — showing them "detail not
-    found" was the worst possible first impression."""
+    found" was the worst possible first impression.
+
+    `school` (#52) pins per-school branding: it's forwarded into the manifest
+    link so the installed PWA gets that school's icon, and — when a matching
+    apple-touch-icon-<id>.png exists — swapped into the static apple-touch-icon
+    link too, since iOS reads that tag at page-load time, before any JS runs."""
     if token is None or not verify_chatbox_token(token):
         return HTMLResponse(
             EXPIRED_LINK_HTML.read_text(),
             status_code=404,
             headers={"cache-control": "no-store"},
         )
-    # Server-side interpolation of the manifest URL so the token is present
-    # BEFORE any JS runs. iOS Safari fetches the manifest early — often before
-    # a client-side updater has a chance to rewrite the href — so relying on
-    # JS to inject the token race-conditions the install: the manifest gets
-    # cached with the wrong start_url, and the installed PWA opens /chatbox
-    # with no token and 404s. Interpolating at HTML delivery time avoids the
-    # race entirely.
+    school_config = get_school(school) if school else None
+
+    # Server-side interpolation of the manifest URL so the token (and pinned
+    # school) are present BEFORE any JS runs. iOS Safari fetches the manifest
+    # early — often before a client-side updater has a chance to rewrite the
+    # href — so relying on JS to inject them race-conditions the install: the
+    # manifest gets cached with the wrong start_url/icon, and the installed
+    # PWA opens /chatbox with no token and 404s. Interpolating at HTML
+    # delivery time avoids the race entirely.
+    manifest_href = f"/manifest.webmanifest?token={token}"
+    if school_config:
+        manifest_href += f"&school={school_config.id}"
     html = CHATBOX_HTML.read_text().replace(
         '<link rel="manifest" href="/manifest.webmanifest">',
-        f'<link rel="manifest" href="/manifest.webmanifest?token={token}">',
+        f'<link rel="manifest" href="{manifest_href}">',
+    )
+
+    if school_config:
+        touch_icon_filename = f"apple-touch-icon-{school_config.id}.png"
+        if (STATIC_DIR / "icons" / touch_icon_filename).is_file():
+            html = html.replace(
+                '<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">',
+                f'<link rel="apple-touch-icon" href="/icons/{touch_icon_filename}">',
+            )
+
+    # Embed public per-school theme data so the header/bubble colors can be
+    # applied without an extra network round trip (and so the dev-only school
+    # picker can switch themes live client-side).
+    html = html.replace(
+        '<script id="school-theme-data" type="application/json">{}</script>',
+        f'<script id="school-theme-data" type="application/json">{json.dumps(_public_school_theme())}</script>',
     )
     return HTMLResponse(html, headers={"cache-control": "no-store"})
 
@@ -141,7 +200,10 @@ async def embed_script():
 
 
 @app.get("/manifest.webmanifest")
-async def pwa_manifest(token: str | None = Query(default=None)):
+async def pwa_manifest(
+    token: str | None = Query(default=None),
+    school: str | None = Query(default=None),
+):
     """PWA manifest for iOS/Android "Add to Home Screen" installs.
 
     Dynamic so `start_url` can preserve the caller's chatbox token — otherwise
@@ -149,12 +211,45 @@ async def pwa_manifest(token: str | None = Query(default=None)):
     with no token and 404. When the token expires the icon still opens, but
     hits the 404; the user then requests a fresh link. Invalid/missing tokens
     fall back to a plain /chatbox start_url so the manifest still installs
-    cleanly (useful during local dev without the token gate)."""
-    import json
+    cleanly (useful during local dev without the token gate).
 
+    `school` (#52) swaps in that school's branded name/colors/icons — e.g.
+    /manifest.webmanifest?school=wells&token=... — so a school-scoped install
+    gets that school's icon on the home screen instead of the generic DUSD
+    one. Unknown school ids, or a school whose branded icon set hasn't been
+    generated yet (scripts/generate_icons.py), fall back to the generic
+    manifest untouched so installs never break."""
     manifest = json.loads((STATIC_DIR / "manifest.webmanifest").read_text())
+
+    start_url = "/chatbox"
     if token and verify_chatbox_token(token):
-        manifest["start_url"] = f"/chatbox?token={token}"
+        start_url = f"/chatbox?token={token}"
+        if school:
+            start_url += f"&school={school}"
+    manifest["start_url"] = start_url
+
+    school_config = get_school(school) if school else None
+    if school_config:
+        manifest["name"] = f"{school_config.name} Chat"
+        manifest["short_name"] = f"{school_config.name.split()[0]} Chat"
+        if school_config.theme_color:
+            manifest["theme_color"] = school_config.theme_color
+        if school_config.background_tint:
+            manifest["background_color"] = school_config.background_tint
+
+        branded_icons = []
+        for pattern, sizes, purpose in SCHOOL_ICON_VARIANTS:
+            filename = pattern.format(school_config.id)
+            if (STATIC_DIR / "icons" / filename).is_file():
+                branded_icons.append(
+                    {"src": f"/icons/{filename}", "sizes": sizes, "type": "image/png", "purpose": purpose}
+                )
+        # Only swap in the branded set if every variant exists on disk — a
+        # partial set would leave some install surfaces (e.g. Android's
+        # maskable adaptive icon) with a missing icon and a broken install.
+        if len(branded_icons) == len(SCHOOL_ICON_VARIANTS):
+            manifest["icons"] = branded_icons
+
     return JSONResponse(manifest, media_type="application/manifest+json")
 
 
