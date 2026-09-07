@@ -89,6 +89,7 @@ module "cloud_run" {
     ALLOWED_ORIGINS = var.allowed_origins
     DATABASE_URL    = module.cloud_sql.database_url
     REDIS_URL       = module.redis.redis_url
+    PUBLIC_BASE_URL = var.public_base_url
   }
 
   secret_env_vars = {

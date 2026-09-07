@@ -26,3 +26,9 @@ variable "allowed_origins" {
   type        = string
   default     = "https://wms.dublinusd.org"
 }
+
+variable "public_base_url" {
+  description = "Public origin this Cloud Run service is reachable at (its *.run.app URL, or a custom domain once one is mapped). Passed to the app via PUBLIC_BASE_URL — used to build absolute links (e.g. the campus map image) that get echoed into chat replies."
+  type        = string
+  default     = ""
+}
