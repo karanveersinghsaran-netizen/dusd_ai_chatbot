@@ -25,6 +25,18 @@ class ChatReply(NamedTuple):
     attach_map: bool
 
 
+# Supported chatbox languages (#62). Codes match the toggle's localStorage
+# value in chatbox.html and the `language` field on POST /chat. Adding a
+# language later is a matter of extending this map (and the chatbox toggle) —
+# nothing else in the agent needs to change.
+LANGUAGE_NAMES: Dict[str, str] = {
+    "en": "English",
+    "es": "Spanish",
+    "zh": "Mandarin Chinese",
+}
+DEFAULT_LANGUAGE = "en"
+
+
 class SchoolAgent:
     def __init__(
         self,
@@ -163,6 +175,25 @@ class SchoolAgent:
         contact_lines.append(f"Website: {school.website}")
         contact_lines.append(f"District: {school.district}")
 
+        # Translated useful-links labels (#62), when a school.json provides them.
+        # Kept in the single cached system prompt (not a per-request suffix,
+        # unlike the language directive below) alongside the English list —
+        # Claude picks the matching block itself based on the response
+        # language, so proper nouns/labels stay consistent across turns
+        # instead of being re-translated ad hoc each time. Schools without
+        # translations simply get the English-only block, unchanged from before.
+        useful_links_block = f"USEFUL LINKS (share these when relevant):\n{school.useful_links}"
+        if school.useful_links_es:
+            useful_links_block += (
+                f"\n\nUSEFUL LINKS — Spanish labels (use these when responding in Spanish):\n"
+                f"{school.useful_links_es}"
+            )
+        if school.useful_links_zh:
+            useful_links_block += (
+                f"\n\nUSEFUL LINKS — Mandarin Chinese labels (use these when responding in Mandarin Chinese):\n"
+                f"{school.useful_links_zh}"
+            )
+
         return f"""You are a helpful assistant for {school.name}, part of {school.district}.
 
 IMPORTANT FORMATTING RULE: This assistant runs in a web chat widget that renders
@@ -177,8 +208,7 @@ SCHOOL INFORMATION:
 BELL SCHEDULE:
 {school.bell_schedule}
 
-USEFUL LINKS (share these when relevant):
-{school.useful_links}
+{useful_links_block}
 
 DATE HANDLING:
 - A line stating the current date/time in Pacific time (e.g. "Current date/time: Wednesday, 2026-08-26 15:42 America/Los_Angeles. School year: 2026-2027.") is appended after this system prompt on every request — that is "now". Never rely on any other notion of today's date, and never assume a date from your training.
@@ -237,6 +267,25 @@ CRITICAL RULES:
         return (
             f"Current date/time: {now.strftime('%A, %Y-%m-%d %H:%M')} America/Los_Angeles. "
             f"School year: {school_year_label(now.date())}."
+        )
+
+    @staticmethod
+    def _language_directive_suffix(language: str) -> Optional[str]:
+        """Per-request, uncached system-prompt suffix telling Claude which
+        language to respond in (#62). Appended AFTER the cached prefix —
+        same reasoning as _current_datetime_suffix: language is a per-session
+        choice that can change between requests, so baking it into the
+        cached block would either bust the cache on every switch or go
+        stale. Returns None for English (the default), so the common case
+        keeps the exact same two-block system= list as before this feature."""
+        if language == DEFAULT_LANGUAGE:
+            return None
+        language_name = LANGUAGE_NAMES.get(language)
+        if not language_name:
+            return None
+        return (
+            f"Respond in {language_name} regardless of the language of tool "
+            "output or scraped content."
         )
 
     def process_tool_call(self, tool_name: str, tool_input: Dict[str, Any]) -> tuple[str, bool]:
@@ -350,18 +399,23 @@ CRITICAL RULES:
             screenshot_content_type=screenshot_content_type,
         )
 
-    def _call_api(self, messages: list, retries: int = 3) -> Any:
+    def _call_api(self, messages: list, language: str = DEFAULT_LANGUAGE, retries: int = 3) -> Any:
         """Call Claude API with exponential backoff for transient errors."""
         # The cached prefix (school info, tools, instructions) is byte-stable
         # across calls, so it's one cache_control-marked block. The current
         # date/time is appended as a second, uncached block AFTER it — it
         # changes every request (every minute, in fact), so baking it into
         # the cached block would either invalidate the cache constantly or
-        # go stale.
+        # go stale. The language directive (#62) is a third, also-uncached
+        # block for the same reason — it's a per-session choice, not a
+        # property of this school, so it can't live in the cached prefix.
         system = [
             {"type": "text", "text": self._system_prompt, "cache_control": {"type": "ephemeral"}},
             {"type": "text", "text": self._current_datetime_suffix()},
         ]
+        language_directive = self._language_directive_suffix(language)
+        if language_directive:
+            system.append({"type": "text", "text": language_directive})
         for attempt in range(retries):
             try:
                 return self.client.beta.messages.create(
@@ -382,10 +436,25 @@ CRITICAL RULES:
         self,
         user_message: str,
         user_id: str = "default",
+        language: Optional[str] = None,
     ) -> ChatReply:
         # Unexpected exceptions propagate to the caller so the /chat endpoint
         # can return HTTP 500 and alerts fire, instead of masking failures.
         key = self._session_key(user_id)
+
+        # ── Language preference (#62) ────────────────────────────────────────
+        # The chatbox sends the toggle's current selection on every request,
+        # so `language` here re-affirms it into Redis each turn. A caller
+        # that omits it (e.g. the CLI harness at the bottom of this file, or
+        # an older client) falls back to whatever was last persisted for this
+        # session, or DEFAULT_LANGUAGE if nothing was ever set — same
+        # resolution order the (still-open, #51) persistent-identity work
+        # will eventually plug a stabler user_id into. Kept ahead of the
+        # command checks below so a language switch is never lost even if it
+        # arrives on the same request as e.g. "clear".
+        if language and language in LANGUAGE_NAMES:
+            self.redis_store.set_preferred_language(key, language)
+        preferred_language = self.redis_store.get_preferred_language(key) or DEFAULT_LANGUAGE
 
         # ── Priority 1: clear-conversation command ──────────────────────────
         if user_message.strip().lower() in {"clear", "/clear"}:
@@ -453,7 +522,7 @@ CRITICAL RULES:
         if len(messages) == 1:
             messages[0] = {"role": "user", "content": f"{self._dynamic_context()}\n\n{messages[0]['content']}"}
 
-        response = self._call_api(messages)
+        response = self._call_api(messages, language=preferred_language)
 
         attach_map = False
 
@@ -479,7 +548,7 @@ CRITICAL RULES:
 
             messages.append({"role": "assistant", "content": response.content})
             messages.append({"role": "user", "content": tool_results})
-            response = self._call_api(messages)
+            response = self._call_api(messages, language=preferred_language)
 
         final_response = "".join(
             block.text for block in response.content if hasattr(block, "text")

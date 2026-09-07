@@ -276,7 +276,7 @@
   }
   .school-logo.visible { display: inline-block; }
 
-  #theme-toggle-btn, #help-btn, #a11y-settings-btn {
+  #theme-toggle-btn, #help-btn, #a11y-settings-btn, #lang-toggle-btn {
     width: 30px; height: 30px;
     padding: 0;
     font-size: 1rem;
@@ -288,13 +288,16 @@
     display: flex; align-items: center; justify-content: center;
   }
   #theme-toggle-btn svg { width: 16px; height: 16px; fill: currentColor; }
-  #theme-toggle-btn:active, #help-btn:active, #a11y-settings-btn:active { opacity: 0.6; }
+  #theme-toggle-btn:active, #help-btn:active, #a11y-settings-btn:active, #lang-toggle-btn:active { opacity: 0.6; }
   /* High contrast (#64) is a single fixed dark palette that always wins
      over light/dark, so the toggle has nothing left to do while it's
      active — disable it rather than leave a clickable button that visibly
      does nothing. */
   #theme-toggle-btn:disabled { opacity: 0.35; cursor: not-allowed; }
   #a11y-settings-btn { font-size: 0.7rem; font-weight: 700; }
+  /* Smaller than the other header buttons' 1rem default so "中文" fits the
+     30px circle without wrapping or overflowing (#62). */
+  #lang-toggle-btn { font-size: 0.62rem; font-weight: 700; }
 
   /* Shared popover shell for the iOS install hint and the help/support
      panel — both are small dismissible cards anchored below the header. */
@@ -619,6 +622,8 @@
       <button id="a11y-settings-btn" type="button" aria-haspopup="dialog"
               aria-controls="a11y-panel" aria-expanded="false"
               aria-label="Accessibility settings">Aa</button>
+      <button id="lang-toggle-btn" type="button"
+              aria-label="Change language. Current: English">EN</button>
     </div>
     <div class="title"><span id="school-logo" class="school-logo" aria-hidden="true"></span><span id="title-text">School Chat</span></div>
     <div class="actions">
@@ -1229,11 +1234,13 @@
       const pending = addMessage("pending", "");
 
       try {
+        const payload = { message: text, language: chatLanguage };
+        if (schoolId) payload.school_id = schoolId;
         const resp = await fetch("/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify(schoolId ? { message: text, school_id: schoolId } : { message: text }),
+          body: JSON.stringify(payload),
         });
         pending.remove();
         if (!resp.ok) {
@@ -1278,11 +1285,50 @@
       if (e.key === "Enter") sendMessage();
     });
 
-    // Language used for both recognition and synthesis. Kept as a single
-    // named constant (never inlined) so the multi-language feature (#62)
-    // can later swap this for a user-selected locale without touching the
-    // speech wiring itself.
-    const VOICE_LANG = "en-US";
+    // Chat + voice language toggle (#62): EN / ES / 中文 in the header,
+    // cycling on tap like the theme toggle, persisted to localStorage under
+    // its own key, and sent as `language` on every /chat request so the
+    // agent's system-prompt directive (app/agent.py) stays in sync even
+    // after a page reload. VOICE_LANG — previously a hardcoded constant —
+    // now derives from the same selection for speech recognition/synthesis
+    // below, without touching the speech wiring itself.
+    const CHAT_LANGUAGES = [
+      { code: "en", label: "EN", voiceLang: "en-US", name: "English" },
+      { code: "es", label: "ES", voiceLang: "es-US", name: "Spanish" },
+      { code: "zh", label: "中文", voiceLang: "zh-CN", name: "Mandarin Chinese" },
+    ];
+    const LANG_KEY = "wms-lang";
+
+    function loadStoredLanguage() {
+      try {
+        const stored = localStorage.getItem(LANG_KEY);
+        if (stored && CHAT_LANGUAGES.some((l) => l.code === stored)) return stored;
+      } catch (e) {}
+      return "en";
+    }
+
+    let chatLanguage = loadStoredLanguage();
+    let VOICE_LANG = CHAT_LANGUAGES.find((l) => l.code === chatLanguage).voiceLang;
+
+    (function wireLangToggle() {
+      const btn = document.getElementById("lang-toggle-btn");
+
+      function render() {
+        const entry = CHAT_LANGUAGES.find((l) => l.code === chatLanguage);
+        btn.textContent = entry.label;
+        btn.title = "Change language: " + entry.name;
+        btn.setAttribute("aria-label", "Change language. Current: " + entry.name);
+        VOICE_LANG = entry.voiceLang;
+      }
+      render();
+
+      btn.addEventListener("click", () => {
+        const index = CHAT_LANGUAGES.findIndex((l) => l.code === chatLanguage);
+        chatLanguage = CHAT_LANGUAGES[(index + 1) % CHAT_LANGUAGES.length].code;
+        try { localStorage.setItem(LANG_KEY, chatLanguage); } catch (e) {}
+        render();
+      });
+    })();
 
     // ---- Voice input (speech-to-text) --------------------------------------
     // Uses the browser's native Web Speech API — no external services. Mic
