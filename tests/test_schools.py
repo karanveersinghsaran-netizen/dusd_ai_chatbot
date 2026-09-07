@@ -63,6 +63,54 @@ def test_logo_url_defaults_to_none_when_no_real_asset_exists():
     assert get_school("dhs").logo_url is None
 
 
+# ── Translated useful links (#62) ───────────────────────────────────────────
+
+def test_wells_has_translated_useful_links():
+    wells = get_school("wells")
+    assert wells.useful_links_es is not None
+    assert wells.useful_links_zh is not None
+    assert "Portal para padres" in wells.useful_links_es
+    assert "家长门户网站" in wells.useful_links_zh
+
+
+def test_dhs_has_translated_useful_links():
+    dhs = get_school("dhs")
+    assert dhs.useful_links_es is not None
+    assert dhs.useful_links_zh is not None
+    assert "Centro Universitario" in dhs.useful_links_es
+    assert "大学与职业中心" in dhs.useful_links_zh
+
+
+def test_useful_links_translations_default_to_none_when_absent_from_json(tmp_path, monkeypatch):
+    """A school.json written before #62 (no useful_links_es/_zh keys) must
+    still load — translations are opt-in per school, not a breaking schema
+    change."""
+    import app.schools as schools_module
+
+    school_dir = tmp_path / "legacy"
+    school_dir.mkdir()
+    (school_dir / "school.json").write_text(
+        json.dumps(
+            {
+                "id": "legacy",
+                "name": "Legacy School",
+                "district": "Dublin Unified School District",
+                "district_id": "dusd",
+                "website": "https://legacy.dublinusd.org/",
+                "rss_url": "https://legacy.dublinusd.org/rss",
+            }
+        )
+    )
+    monkeypatch.setattr(schools_module, "SCHOOLS_DIR", tmp_path)
+    schools_module.load_schools.cache_clear()
+    try:
+        legacy = schools_module.get_school("legacy")
+        assert legacy.useful_links_es is None
+        assert legacy.useful_links_zh is None
+    finally:
+        schools_module.load_schools.cache_clear()
+
+
 def test_theme_fields_default_to_none_when_absent_from_json(tmp_path, monkeypatch):
     """A school.json written before #52 (no theme_color/etc. keys) must still
     load — onboarding theming is opt-in per school, not a breaking schema

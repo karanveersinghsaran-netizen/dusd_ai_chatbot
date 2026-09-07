@@ -276,7 +276,7 @@
   }
   .school-logo.visible { display: inline-block; }
 
-  #theme-toggle-btn, #help-btn, #a11y-settings-btn {
+  #theme-toggle-btn, #help-btn, #a11y-settings-btn, #lang-toggle-btn {
     width: 30px; height: 30px;
     padding: 0;
     font-size: 1rem;
@@ -288,13 +288,29 @@
     display: flex; align-items: center; justify-content: center;
   }
   #theme-toggle-btn svg { width: 16px; height: 16px; fill: currentColor; }
-  #theme-toggle-btn:active, #help-btn:active, #a11y-settings-btn:active { opacity: 0.6; }
+  #theme-toggle-btn:active, #help-btn:active, #a11y-settings-btn:active, #lang-toggle-btn:active { opacity: 0.6; }
+  /* (hover: hover) scopes this to devices with a real pointer — otherwise a
+     tap on touchscreens leaves the hover fill stuck until the next tap
+     elsewhere. Reuses --border for the fill so it's already theme-aware
+     (light/dark/high-contrast) with no extra variable needed. */
+  @media (hover: hover) {
+    #theme-toggle-btn:not(:disabled):hover,
+    #help-btn:hover,
+    #a11y-settings-btn:hover,
+    #lang-toggle-btn:hover {
+      background: var(--border);
+    }
+  }
   /* High contrast (#64) is a single fixed dark palette that always wins
      over light/dark, so the toggle has nothing left to do while it's
      active — disable it rather than leave a clickable button that visibly
      does nothing. */
   #theme-toggle-btn:disabled { opacity: 0.35; cursor: not-allowed; }
   #a11y-settings-btn { font-size: 0.7rem; font-weight: 700; }
+  /* Smaller than the other header buttons' 1rem default so the two-letter
+     (EN/ES) and single-character (简/繁) badges all fit the 30px circle
+     without wrapping or overflowing (#62). */
+  #lang-toggle-btn { font-size: 0.62rem; font-weight: 700; }
 
   /* Shared popover shell for the iOS install hint and the help/support
      panel — both are small dismissible cards anchored below the header. */
@@ -619,6 +635,9 @@
       <button id="a11y-settings-btn" type="button" aria-haspopup="dialog"
               aria-controls="a11y-panel" aria-expanded="false"
               aria-label="Accessibility settings">Aa</button>
+      <button id="lang-toggle-btn" type="button" aria-haspopup="dialog"
+              aria-controls="lang-panel" aria-expanded="false"
+              aria-label="Change language">EN</button>
     </div>
     <div class="title"><span id="school-logo" class="school-logo" aria-hidden="true"></span><span id="title-text">School Chat</span></div>
     <div class="actions">
@@ -716,6 +735,20 @@
       <div class="a11y-options">
         <label><input type="radio" name="a11y-motion" value="auto" checked> Auto (system)</label>
         <label><input type="radio" name="a11y-motion" value="reduce"> Reduce motion</label>
+      </div>
+    </fieldset>
+  </div>
+
+  <div id="lang-panel" class="popover" role="dialog" aria-labelledby="lang-panel-title">
+    <button class="close" type="button" aria-label="Dismiss">×</button>
+    <div id="lang-panel-title" style="font-weight: 600; margin-bottom: 10px;">Language</div>
+    <fieldset class="a11y-group">
+      <legend>Chat language</legend>
+      <div class="a11y-options">
+        <label><input type="radio" name="chat-lang" value="en" checked> English</label>
+        <label><input type="radio" name="chat-lang" value="es"> Español</label>
+        <label><input type="radio" name="chat-lang" value="zh"> 简体中文</label>
+        <label><input type="radio" name="chat-lang" value="zh-Hant"> 繁體中文</label>
       </div>
     </fieldset>
   </div>
@@ -1070,7 +1103,7 @@
     document.addEventListener("click", (e) => {
       document.querySelectorAll(".popover.visible").forEach((popover) => {
         if (popover.contains(e.target)) return;
-        if (e.target.closest("#help-btn, #install-btn, #report-open-btn, #a11y-settings-btn")) return;
+        if (e.target.closest("#help-btn, #install-btn, #report-open-btn, #a11y-settings-btn, #lang-toggle-btn")) return;
         popover.classList.remove("visible");
         // Keep any trigger button's aria-expanded in sync when its popover
         // gets dismissed this way rather than via its own close button.
@@ -1116,7 +1149,6 @@
     const schoolThemes = JSON.parse(document.getElementById("school-theme-data").textContent || "{}");
     const titleTextEl = document.getElementById("title-text");
     const schoolLogoEl = document.getElementById("school-logo");
-    const defaultTitleText = titleTextEl.textContent;
     const themeColorMetas = Array.from(document.querySelectorAll('meta[name="theme-color"]'));
     const defaultThemeColors = themeColorMetas.map((meta) => meta.getAttribute("content"));
 
@@ -1141,7 +1173,6 @@
       const theme = id && schoolThemes[id];
       const root = document.documentElement;
       if (!theme) {
-        titleTextEl.textContent = defaultTitleText;
         schoolLogoEl.classList.remove("visible");
         root.style.removeProperty("--user-bubble-bg");
         root.style.removeProperty("--bg");
@@ -1149,7 +1180,6 @@
         return;
       }
       const shortName = shortSchoolName(theme.name);
-      titleTextEl.textContent = shortName + " Chat";
       schoolLogoEl.textContent = schoolInitials(shortName);
       schoolLogoEl.style.background = theme.primary_bubble_color || theme.theme_color || "";
       schoolLogoEl.classList.add("visible");
@@ -1181,7 +1211,15 @@
     }
 
     applySchoolTheme(schoolId);
-    schoolPickerEl.addEventListener("change", () => applySchoolTheme(schoolId));
+    schoolPickerEl.addEventListener("change", () => {
+      applySchoolTheme(schoolId);
+      // refreshTitle (defined below, in the language section) is a hoisted
+      // function declaration, so the name is available here even though
+      // it's defined later in the file — safe because this callback only
+      // runs on a user's school-picker change, long after the whole script
+      // (including the language section) has finished its initial pass.
+      refreshTitle();
+    });
     document.getElementById("theme-toggle-btn").addEventListener("click", () => applySchoolTheme(schoolId));
     window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
       if (!localStorage.getItem("wms-theme")) applySchoolTheme(schoolId);
@@ -1239,11 +1277,13 @@
       const pending = addMessage("pending", "");
 
       try {
+        const payload = { message: text, language: chatLanguage };
+        if (schoolId) payload.school_id = schoolId;
         const resp = await fetch("/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify(schoolId ? { message: text, school_id: schoolId } : { message: text }),
+          body: JSON.stringify(payload),
         });
         pending.remove();
         if (!resp.ok) {
@@ -1283,16 +1323,164 @@
       }
     }
 
-    sendEl.addEventListener("click", sendMessage);
+    // Not `sendEl.addEventListener("click", sendMessage)` directly — the
+    // browser passes the click Event as sendMessage's first argument, which
+    // sendMessage treats as overrideText (added for the "New conversation"
+    // button's sendMessage("clear") call) and tries to .trim(), throwing.
+    sendEl.addEventListener("click", () => sendMessage());
     inputEl.addEventListener("keydown", (e) => {
       if (e.key === "Enter") sendMessage();
     });
 
-    // Language used for both recognition and synthesis. Kept as a single
-    // named constant (never inlined) so the multi-language feature (#62)
-    // can later swap this for a user-selected locale without touching the
-    // speech wiring itself.
-    const VOICE_LANG = "en-US";
+    // Chat + voice language picker (#62): a dropdown-style popover (matching
+    // the accessibility settings panel's pattern) with a radio per language,
+    // persisted to localStorage under its own key, and sent as `language` on
+    // every /chat request so the agent's system-prompt directive
+    // (app/agent.py) stays in sync even after a page reload. VOICE_LANG
+    // derives from the same selection for speech recognition/synthesis
+    // below, without touching the speech wiring itself.
+    const CHAT_LANGUAGES = [
+      { code: "en", badge: "EN", label: "English", voiceLang: "en-US" },
+      { code: "es", badge: "ES", label: "Español", voiceLang: "es-US" },
+      { code: "zh", badge: "简", label: "简体中文", voiceLang: "zh-CN" },
+      { code: "zh-Hant", badge: "繁", label: "繁體中文", voiceLang: "zh-TW" },
+    ];
+    const LANG_KEY = "wms-lang";
+
+    // Core UI chrome translations (#62 follow-up) — the title, input
+    // placeholder, and primary header buttons switch with the selected
+    // language, not just the assistant's replies. Deliberately scoped to
+    // just these highest-visibility strings rather than every panel/form in
+    // the app (accessibility settings, report form, toasts) — translating
+    // those well is a bigger, separate pass.
+    const UI_STRINGS = {
+      en: {
+        titleSuffix: "Chat", defaultTitle: "School Chat",
+        placeholder: "Ask a question...", send: "Send",
+        help: "Help & support", clear: "Clear conversation", clearLabel: "Clear",
+        install: "Install app", installLabel: "Install",
+      },
+      es: {
+        titleSuffix: "Chat", defaultTitle: "Chat Escolar",
+        placeholder: "Haz una pregunta...", send: "Enviar",
+        help: "Ayuda y soporte", clear: "Borrar conversación", clearLabel: "Borrar",
+        install: "Instalar aplicación", installLabel: "Instalar",
+      },
+      zh: {
+        titleSuffix: "聊天", defaultTitle: "学校聊天",
+        placeholder: "请输入问题…", send: "发送",
+        help: "帮助与支持", clear: "清除对话", clearLabel: "清除",
+        install: "安装应用", installLabel: "安装",
+      },
+      "zh-Hant": {
+        titleSuffix: "聊天", defaultTitle: "學校聊天",
+        placeholder: "請輸入問題…", send: "傳送",
+        help: "說明與支援", clear: "清除對話", clearLabel: "清除",
+        install: "安裝應用程式", installLabel: "安裝",
+      },
+    };
+
+    function loadStoredLanguage() {
+      try {
+        const stored = localStorage.getItem(LANG_KEY);
+        if (stored && CHAT_LANGUAGES.some((l) => l.code === stored)) return stored;
+      } catch (e) {}
+      return "en";
+    }
+
+    let chatLanguage = loadStoredLanguage();
+    let VOICE_LANG = CHAT_LANGUAGES.find((l) => l.code === chatLanguage).voiceLang;
+
+    function currentUIStrings() {
+      return UI_STRINGS[chatLanguage] || UI_STRINGS.en;
+    }
+
+    // The title depends on both the selected language AND the pinned school
+    // (schoolId/schoolThemes, from the school-theming section above) — kept
+    // as its own function, called from both that section and here, instead
+    // of duplicating school-name logic in two places.
+    function refreshTitle() {
+      const theme = schoolId && schoolThemes[schoolId];
+      const strings = currentUIStrings();
+      titleTextEl.textContent = theme
+        ? shortSchoolName(theme.name) + " " + strings.titleSuffix
+        : strings.defaultTitle;
+    }
+
+    function applyUILanguage() {
+      const strings = currentUIStrings();
+      refreshTitle();
+      inputEl.placeholder = strings.placeholder;
+      sendEl.setAttribute("aria-label", strings.send);
+      document.getElementById("help-btn").setAttribute("aria-label", strings.help);
+      const clearBtn = document.getElementById("clear-btn");
+      clearBtn.setAttribute("aria-label", strings.clear);
+      clearBtn.textContent = strings.clearLabel;
+      const installBtn = document.getElementById("install-btn");
+      installBtn.setAttribute("aria-label", strings.install);
+      installBtn.textContent = strings.installLabel;
+    }
+
+    (function wireLangPanel() {
+      const btn = document.getElementById("lang-toggle-btn");
+      const panel = document.getElementById("lang-panel");
+      const closeBtn = panel.querySelector(".close");
+      const radios = Array.from(panel.querySelectorAll('input[name="chat-lang"]'));
+
+      function renderBadge() {
+        const entry = CHAT_LANGUAGES.find((l) => l.code === chatLanguage);
+        btn.textContent = entry.badge;
+        btn.title = "Language: " + entry.label;
+      }
+
+      radios.forEach((radio) => {
+        radio.checked = radio.value === chatLanguage;
+        radio.addEventListener("change", () => {
+          if (!radio.checked) return;
+          chatLanguage = radio.value;
+          try { localStorage.setItem(LANG_KEY, chatLanguage); } catch (e) {}
+          VOICE_LANG = CHAT_LANGUAGES.find((l) => l.code === chatLanguage).voiceLang;
+          renderBadge();
+          applyUILanguage();
+        });
+      });
+      renderBadge();
+
+      function openPanel() {
+        panel.classList.add("visible");
+        btn.setAttribute("aria-expanded", "true");
+        const checked = panel.querySelector('input[type="radio"]:checked');
+        (checked || closeBtn).focus();
+      }
+      function closePanel() {
+        panel.classList.remove("visible");
+        btn.setAttribute("aria-expanded", "false");
+      }
+
+      btn.addEventListener("click", () => {
+        if (panel.classList.contains("visible")) {
+          closePanel();
+          btn.focus();
+        } else {
+          openPanel();
+        }
+      });
+      closeBtn.addEventListener("click", () => {
+        closePanel();
+        btn.focus();
+      });
+      panel.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          closePanel();
+          btn.focus();
+        }
+      });
+    })();
+
+    // Apply whatever language was loaded from localStorage (or the "en"
+    // default) to the UI chrome on first load — mirrors what the removed
+    // inline title-setting in applySchoolTheme used to do, now language-aware.
+    applyUILanguage();
 
     // ---- Voice input (speech-to-text) --------------------------------------
     // Uses the browser's native Web Speech API — no external services. Mic
