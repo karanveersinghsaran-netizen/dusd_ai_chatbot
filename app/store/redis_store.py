@@ -28,6 +28,10 @@ def _feedback_pending_key(session_id: str) -> str:
     return f"wms:feedback_pending:{session_id}"
 
 
+def _msgcount_key(user_id: str, day: str) -> str:
+    return f"wms:msgcount:{user_id}:{day}"
+
+
 class RedisStore:
     def __init__(self, client: Optional[redis.Redis] = None):
         self.client = client or redis.Redis.from_url(config.REDIS_URL, decode_responses=True)
@@ -75,6 +79,25 @@ class RedisStore:
 
     def clear_feedback_pending(self, session_id: str) -> None:
         self.client.delete(_feedback_pending_key(session_id))
+
+    # ── daily message cap (#71) ─────────────────────────────────────────────
+    def increment_daily_message_count(self, user_id: str, day: str, ttl_seconds: int) -> int:
+        """Atomically increments the message counter for user_id on the given
+        Pacific calendar day (YYYY-MM-DD) and returns the new count. TTL is
+        set only on the increment that creates the key (count == 1) so later
+        calls the same day don't keep pushing the expiry forward — it always
+        lands at end-of-day-Pacific relative to when the counter was first
+        touched, per the ttl_seconds the caller computed via
+        app.timezone_utils.seconds_until_pacific_midnight."""
+        key = _msgcount_key(user_id, day)
+        count = self.client.incr(key)
+        if count == 1:
+            self.client.expire(key, ttl_seconds)
+        return count
+
+    def get_daily_message_count(self, user_id: str, day: str) -> int:
+        raw = self.client.get(_msgcount_key(user_id, day))
+        return int(raw) if raw else 0
 
     # ── convenience ──────────────────────────────────────────────────────────
     def clear_session(self, session_id: str) -> None:
