@@ -1228,9 +1228,26 @@
         });
         pending.remove();
         if (!resp.ok) {
-          const detail = resp.status === 429
-            ? "You're sending messages too quickly. Please wait a moment and try again."
-            : "Sorry, something went wrong (HTTP " + resp.status + "). Please try again.";
+          // 429s come from two different guards: slowapi's per-minute burst
+          // limiter (app/security/middleware.py) and the per-user daily
+          // message cap (#71, app/daily_cap.py). Only the daily cap's
+          // response body carries a "detail" field (a FastAPI HTTPException
+          // body) with its friendly, specific message — the burst limiter's
+          // body is slowapi's own generic {"error": ...} shape — so prefer
+          // that field when present and fall back to the burst-limit
+          // message otherwise.
+          let detail = "Sorry, something went wrong (HTTP " + resp.status + "). Please try again.";
+          if (resp.status === 429) {
+            detail = "You're sending messages too quickly. Please wait a moment and try again.";
+            try {
+              const body = await resp.json();
+              if (body && body.detail) {
+                detail = body.detail;
+              }
+            } catch (err) {
+              // Body wasn't JSON — keep the burst-limit default above.
+            }
+          }
           addMessage("error", detail);
           return;
         }
