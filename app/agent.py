@@ -3,7 +3,6 @@ import hashlib
 import json
 import re
 import time
-from datetime import date
 from typing import Any, Dict, NamedTuple, Optional
 
 from app import config
@@ -18,6 +17,7 @@ from app.services.calendar import (
 )
 from app.store.redis_store import RedisStore, store as default_redis_store
 from app.store.postgres_store import PostgresStore, store as default_postgres_store
+from app.timezone_utils import pacific_now, pacific_today, school_year_label
 
 
 class ChatReply(NamedTuple):
@@ -180,6 +180,12 @@ BELL SCHEDULE:
 USEFUL LINKS (share these when relevant):
 {school.useful_links}
 
+DATE HANDLING:
+- A line stating the current date/time in Pacific time (e.g. "Current date/time: Wednesday, 2026-08-26 15:42 America/Los_Angeles. School year: 2026-2027.") is appended after this system prompt on every request — that is "now". Never rely on any other notion of today's date, and never assume a date from your training.
+- Always output dates in absolute form (e.g., "Thursday, September 4, 2026"), never a bare relative phrase alone. Combining absolute and relative is fine and encouraged, e.g. "this Friday, September 4, 2026" or "tomorrow, September 5, 2026".
+- When the user asks a relative-date question ("tomorrow", "next Monday", "last Friday", "this weekend"), compute the absolute date yourself from the current date/time above and state it explicitly in your answer so the user can verify it.
+- Tool results give dates in ISO format with the day of week, e.g. "2026-11-04 (Wednesday)" — convert these to the friendly absolute form above when responding; do not repeat the raw ISO string to the user.
+
 SOURCE CITATION:
 - At the end of every substantive response, add a compact source line on its own line.
 - Format: "📍 Source: <URL>" — use the URL from the url="..." attribute of the <scraped_page> tag or "SOURCE:" marker in the tool result.
@@ -209,15 +215,29 @@ CRITICAL RULES:
 
     def _dynamic_context(self) -> str:
         """Build the per-request context line injected into the first user message."""
-        today = date.today()
+        today = pacific_today()
         parts = [f"Today is {today.strftime('%A, %B %d, %Y')}."]
         school_status = get_school_day_status(today, self.school.district_id)
         if school_status:
             parts.append(f"School status: {school_status}")
-        event_status = get_today_status(self.school.rss_url)
+        event_status = get_today_status(self.school.rss_url, today)
         if event_status:
             parts.append(event_status)
         return "[Context: " + " ".join(parts) + "]"
+
+    @staticmethod
+    def _current_datetime_suffix() -> str:
+        """Per-request, uncached system-prompt suffix stating the current
+        Pacific date/time. Claude has no inherent notion of "now" and must be
+        told on every request; this is computed fresh on every call to
+        _call_api (unlike _system_prompt, which is built once at construction
+        time) and appended AFTER the cached prefix so prompt caching still
+        hits on the stable part of the system prompt."""
+        now = pacific_now()
+        return (
+            f"Current date/time: {now.strftime('%A, %Y-%m-%d %H:%M')} America/Los_Angeles. "
+            f"School year: {school_year_label(now.date())}."
+        )
 
     def process_tool_call(self, tool_name: str, tool_input: Dict[str, Any]) -> tuple[str, bool]:
         """Return (tool_result_text, should_attach_map)."""
@@ -239,7 +259,7 @@ CRITICAL RULES:
             events_url = f"{self.school.website}apps/events/"
             return (
                 f"SOURCE: {events_url}\n\n"
-                + get_upcoming_no_school_days(date.today(), self.school.district_id),
+                + get_upcoming_no_school_days(pacific_today(), self.school.district_id),
                 False,
             )
         if tool_name == "get_campus_directions":
@@ -325,7 +345,16 @@ CRITICAL RULES:
 
     def _call_api(self, messages: list, retries: int = 3) -> Any:
         """Call Claude API with exponential backoff for transient errors."""
-        system = [{"type": "text", "text": self._system_prompt, "cache_control": {"type": "ephemeral"}}]
+        # The cached prefix (school info, tools, instructions) is byte-stable
+        # across calls, so it's one cache_control-marked block. The current
+        # date/time is appended as a second, uncached block AFTER it — it
+        # changes every request (every minute, in fact), so baking it into
+        # the cached block would either invalidate the cache constantly or
+        # go stale.
+        system = [
+            {"type": "text", "text": self._system_prompt, "cache_control": {"type": "ephemeral"}},
+            {"type": "text", "text": self._current_datetime_suffix()},
+        ]
         for attempt in range(retries):
             try:
                 return self.client.beta.messages.create(
