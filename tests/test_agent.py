@@ -155,7 +155,7 @@ def test_call_api_system_is_list_with_cache_control(agent):
     _, kwargs = agent.client.beta.messages.create.call_args
     system = kwargs["system"]
     assert isinstance(system, list)
-    assert len(system) == 2
+    assert len(system) == 3
     assert system[0]["type"] == "text"
     assert system[0]["cache_control"] == {"type": "ephemeral"}
     assert system[0]["text"] == agent._system_prompt
@@ -507,6 +507,180 @@ def test_clear_conversation_clears_redis_session(agent):
 
 
 # ── Redis keys are scoped per school ────────────────────────────────────────────
+
+# ── Language preference / directive (#62) ──────────────────────────────────
+
+def test_language_directive_suffix_mirrors_user_language_with_english_fallback(agent):
+    """English (the toggle default) is no longer a special no-directive
+    case — the directive is always present, since it primarily mirrors
+    whatever language the user's own message is in; the toggle only
+    supplies the fallback for ambiguous messages."""
+    suffix = agent._language_directive_suffix("en")
+    assert "same language as the user's current message" in suffix
+    assert "default to English" in suffix
+
+
+def test_language_directive_suffix_falls_back_to_english_for_unknown_language(agent):
+    """An unrecognized code (e.g. a stale client) falls back to English
+    rather than raising or omitting the directive."""
+    suffix = agent._language_directive_suffix("fr")
+    assert "default to English" in suffix
+
+
+def test_language_directive_suffix_for_spanish(agent):
+    suffix = agent._language_directive_suffix("es")
+    assert suffix == (
+        "Always respond in the same language as the user's current message, "
+        "regardless of the language of tool output or scraped content. If "
+        "the message doesn't clearly indicate a language, default to Spanish."
+    )
+
+
+def test_language_directive_suffix_for_mandarin(agent):
+    suffix = agent._language_directive_suffix("zh")
+    assert "Mandarin Chinese" in suffix
+    assert "regardless of the language of tool output or scraped content" in suffix
+
+
+def test_language_directive_suffix_for_traditional_mandarin(agent):
+    suffix = agent._language_directive_suffix("zh-Hant")
+    assert "Traditional Mandarin Chinese" in suffix
+    assert "regardless of the language of tool output or scraped content" in suffix
+
+
+def test_call_api_always_includes_a_third_uncached_language_block(agent):
+    """The language directive is always present now (it mirrors the user's
+    message, not just the toggle), so even a call with no language
+    specified gets a third, uncached block."""
+    mock_response = MagicMock()
+    mock_response.stop_reason = "end_turn"
+    agent.client.beta.messages.create.return_value = mock_response
+
+    agent._call_api([{"role": "user", "content": "hi"}])
+
+    system = agent.client.beta.messages.create.call_args[1]["system"]
+    assert len(system) == 3
+    assert "cache_control" not in system[2]
+    assert "default to English" in system[2]["text"]
+
+
+def test_call_api_appends_uncached_language_suffix_for_spanish(agent):
+    mock_response = MagicMock()
+    mock_response.stop_reason = "end_turn"
+    agent.client.beta.messages.create.return_value = mock_response
+
+    agent._call_api([{"role": "user", "content": "hi"}], language="es")
+
+    system = agent.client.beta.messages.create.call_args[1]["system"]
+    assert len(system) == 3
+    language_block = system[2]
+    assert "cache_control" not in language_block
+    assert language_block["type"] == "text"
+    assert "default to Spanish" in language_block["text"]
+
+
+def test_call_api_appends_uncached_language_suffix_for_mandarin(agent):
+    mock_response = MagicMock()
+    mock_response.stop_reason = "end_turn"
+    agent.client.beta.messages.create.return_value = mock_response
+
+    agent._call_api([{"role": "user", "content": "hi"}], language="zh")
+
+    system = agent.client.beta.messages.create.call_args[1]["system"]
+    assert len(system) == 3
+    assert "default to Simplified Mandarin Chinese" in system[2]["text"]
+
+
+def test_chat_defaults_to_english_when_no_language_ever_set(agent):
+    agent.client.beta.messages.create.return_value = _text_response("Answer")
+
+    with patch("app.agent.get_school_day_status", return_value=""), \
+         patch("app.agent.get_today_status", return_value=""), \
+         patch("app.agent.get_upcoming_events", return_value=""), \
+         patch("app.agent.get_upcoming_no_school_days", return_value=""):
+        agent.chat("Hello", user_id="lang_u1")
+
+    system = agent.client.beta.messages.create.call_args[1]["system"]
+    assert len(system) == 3
+    assert "default to English" in system[2]["text"]
+
+
+def test_chat_with_language_arg_persists_and_applies_directive(agent):
+    agent.client.beta.messages.create.return_value = _text_response("Hola")
+
+    with patch("app.agent.get_school_day_status", return_value=""), \
+         patch("app.agent.get_today_status", return_value=""), \
+         patch("app.agent.get_upcoming_events", return_value=""), \
+         patch("app.agent.get_upcoming_no_school_days", return_value=""):
+        agent.chat("Hola", user_id="lang_u2", language="es")
+
+    system = agent.client.beta.messages.create.call_args[1]["system"]
+    assert "default to Spanish" in system[2]["text"]
+    assert agent.redis_store.get_preferred_language(agent._session_key("lang_u2")) == "es"
+
+
+def test_chat_reuses_persisted_language_on_later_turns_without_explicit_arg(agent):
+    """The core multi-turn requirement: once a language is chosen, later
+    /chat calls that don't repeat it (e.g. an older client) must still get
+    the directive from what was persisted for this session."""
+    agent.client.beta.messages.create.return_value = _text_response("Ni hao")
+
+    with patch("app.agent.get_school_day_status", return_value=""), \
+         patch("app.agent.get_today_status", return_value=""), \
+         patch("app.agent.get_upcoming_events", return_value=""), \
+         patch("app.agent.get_upcoming_no_school_days", return_value=""):
+        agent.chat("First", user_id="lang_u3", language="zh")
+        agent.chat("Second", user_id="lang_u3")  # no language kwarg this time
+
+    last_system = agent.client.beta.messages.create.call_args_list[-1][1]["system"]
+    assert "default to Simplified Mandarin Chinese" in last_system[2]["text"]
+
+
+def test_chat_language_survives_clear_conversation(agent):
+    """clear_conversation resets history/feedback state, not the user's
+    language preference — same reasoning as the session_id itself surviving
+    a clear."""
+    agent.client.beta.messages.create.return_value = _text_response("Hola")
+
+    with patch("app.agent.get_school_day_status", return_value=""), \
+         patch("app.agent.get_today_status", return_value=""), \
+         patch("app.agent.get_upcoming_events", return_value=""), \
+         patch("app.agent.get_upcoming_no_school_days", return_value=""):
+        agent.chat("Hola", user_id="lang_u4", language="es")
+
+    agent.clear_conversation("lang_u4")
+
+    assert agent.redis_store.get_preferred_language(agent._session_key("lang_u4")) == "es"
+
+
+def test_chat_ignores_unknown_language_code(agent):
+    """An unrecognized language value (e.g. a stale client) must not persist
+    garbage or blow up the request — falls back to whatever's stored, or
+    English."""
+    agent.client.beta.messages.create.return_value = _text_response("Answer")
+
+    with patch("app.agent.get_school_day_status", return_value=""), \
+         patch("app.agent.get_today_status", return_value=""), \
+         patch("app.agent.get_upcoming_events", return_value=""), \
+         patch("app.agent.get_upcoming_no_school_days", return_value=""):
+        agent.chat("Hello", user_id="lang_u5", language="fr")
+
+    system = agent.client.beta.messages.create.call_args[1]["system"]
+    assert len(system) == 3
+    assert "default to English" in system[2]["text"]
+    assert agent.redis_store.get_preferred_language(agent._session_key("lang_u5")) is None
+
+
+def test_system_prompt_includes_translated_useful_links_for_wells(agent):
+    """Translated useful-links labels (#62) live in the cached prefix itself,
+    alongside the English list — see _build_system_prompt's docstring on why
+    that's safe for caching."""
+    prompt = agent._system_prompt
+    assert "Spanish labels" in prompt
+    assert "Mandarin Chinese labels" in prompt
+    assert "Portal para padres" in prompt
+    assert "家长门户网站" in prompt
+
 
 def test_conversations_are_isolated_across_schools(agent, dhs_agent):
     """Two schools' agents share the same underlying Redis client (as they do

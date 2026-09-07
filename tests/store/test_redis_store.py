@@ -85,6 +85,22 @@ def test_flags_are_per_session(redis_store):
     assert redis_store.is_feedback_pending("u2") is False
 
 
+# ── preferred language (#62) ────────────────────────────────────────────────
+
+def test_preferred_language_get_default_none(redis_store):
+    assert redis_store.get_preferred_language("u1") is None
+
+
+def test_preferred_language_set_and_get(redis_store):
+    redis_store.set_preferred_language("u1", "es")
+    assert redis_store.get_preferred_language("u1") == "es"
+
+
+def test_preferred_language_is_per_session(redis_store):
+    redis_store.set_preferred_language("u1", "zh")
+    assert redis_store.get_preferred_language("u2") is None
+
+
 # ── clear_session ────────────────────────────────────────────────────────────
 
 def test_clear_session_removes_everything(redis_store):
@@ -139,3 +155,14 @@ def test_get_daily_message_count_reflects_increments(redis_store):
     redis_store.increment_daily_message_count("u1", "2026-01-01", 3600)
     redis_store.increment_daily_message_count("u1", "2026-01-01", 3600)
     assert redis_store.get_daily_message_count("u1", "2026-01-01") == 2
+
+
+def test_clear_session_does_not_remove_preferred_language(redis_store):
+    """Language is a persistent user preference, not conversation content —
+    a 'clear' should not silently switch a Spanish-speaking parent's chatbot
+    back to English."""
+    redis_store.set_preferred_language("u1", "es")
+
+    redis_store.clear_session("u1")
+
+    assert redis_store.get_preferred_language("u1") == "es"

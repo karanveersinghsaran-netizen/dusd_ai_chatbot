@@ -43,6 +43,11 @@ class SchoolConfig:
     # None means "use the district-wide default" (config.DEFAULT_DAILY_MESSAGE_CAP);
     # set here only for a school that needs a different number.
     daily_message_cap: Optional[int] = None
+    # Translated useful-links labels (#62), for the ES/ZH chatbox toggle.
+    # Optional — a school.json without these still loads fine and the agent
+    # just shares the English list regardless of response language.
+    useful_links_es: Optional[str] = None
+    useful_links_zh: Optional[str] = None
 
 
 def _load_school(school_dir: Path) -> SchoolConfig:
@@ -74,6 +79,8 @@ def _load_school(school_dir: Path) -> SchoolConfig:
         background_tint=raw.get("background_tint"),
         logo_url=raw.get("logo_url"),
         daily_message_cap=raw.get("daily_message_cap"),
+        useful_links_es=raw.get("useful_links_es"),
+        useful_links_zh=raw.get("useful_links_zh"),
     )
 
 

@@ -9,6 +9,7 @@ CONV_TTL_SECONDS = 24 * 60 * 60           # 24h, refreshed on every append
 LAST_RESPONSE_TTL_SECONDS = 24 * 60 * 60  # tied to conversation lifetime
 FEEDBACK_ASKED_TTL_SECONDS = 24 * 60 * 60 # "ask once" window
 PENDING_TTL_SECONDS = 30 * 60             # window for user to answer 1/2
+LANGUAGE_TTL_SECONDS = 24 * 60 * 60       # tied to session cookie lifetime (#62)
 MAX_HISTORY = 20
 
 
@@ -30,6 +31,10 @@ def _feedback_pending_key(session_id: str) -> str:
 
 def _msgcount_key(user_id: str, day: str) -> str:
     return f"wms:msgcount:{user_id}:{day}"
+
+
+def _language_key(session_id: str) -> str:
+    return f"wms:lang:{session_id}"
 
 
 class RedisStore:
@@ -99,9 +104,20 @@ class RedisStore:
         raw = self.client.get(_msgcount_key(user_id, day))
         return int(raw) if raw else 0
 
+    # ── preferred language (#62) ────────────────────────────────────────────
+    def get_preferred_language(self, session_id: str) -> Optional[str]:
+        return self.client.get(_language_key(session_id))
+
+    def set_preferred_language(self, session_id: str, language: str) -> None:
+        self.client.setex(_language_key(session_id), LANGUAGE_TTL_SECONDS, language)
+
     # ── convenience ──────────────────────────────────────────────────────────
     def clear_session(self, session_id: str) -> None:
-        """Delete conversation, last_response, and all pending/asked flags for a session."""
+        """Delete conversation, last_response, and all pending/asked flags for a
+        session. Deliberately leaves the preferred-language key alone — like
+        the session_id itself, a language choice is a user preference that
+        should survive a "clear" (which resets conversation *content*, not
+        identity/settings), not something a fresh chat should reset."""
         self.client.delete(
             _conv_key(session_id),
             _last_response_key(session_id),
