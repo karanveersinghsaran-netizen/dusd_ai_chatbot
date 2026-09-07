@@ -291,6 +291,22 @@ def _resolve_session_id(wms_session: str | None, response: Response) -> str:
     return session_id
 
 
+@app.get("/fonts/{filename}")
+async def a11y_font(filename: str):
+    """Serves the OpenDyslexic webfont bundled for the chatbox's accessibility
+    settings panel (issue #64). Bundled locally rather than pulled from a CDN
+    so the dyslexia-friendly font toggle keeps working even if a third-party
+    font host is blocked or offline. Not token-gated, same reasoning as
+    /icons/{filename}: non-sensitive static assets, open access is fine."""
+    # Guard against path traversal — reject anything not a plain .woff2 filename.
+    if "/" in filename or ".." in filename or not filename.endswith(".woff2"):
+        raise HTTPException(status_code=404)
+    font_path = STATIC_DIR / "fonts" / filename
+    if not font_path.is_file():
+        raise HTTPException(status_code=404)
+    return FileResponse(font_path, media_type="font/woff2")
+
+
 @app.post("/chat", response_model=ChatResponse, dependencies=[Depends(enforce_max_body_size)])
 @limiter.limit("10/minute")
 @limiter.limit("30/minute", key_func=session_or_ip_key)
