@@ -96,6 +96,119 @@ def test_chat_with_unknown_school_id_returns_400(client):
     assert resp.status_code == 400
 
 
+# ── /feedback/thanks ─────────────────────────────────────────────────────────
+
+def test_thanks_without_cookie_mints_session_and_records(client):
+    mock_agent = _mock_agent()
+    with patch("main.get_agent", return_value=mock_agent):
+        resp = client.post("/feedback/thanks", json={})
+
+    assert resp.status_code == 200
+    assert "wms_session=" in resp.headers.get("set-cookie", "")
+    mock_agent.record_thanks.assert_called_once()
+
+
+def test_thanks_with_tampered_cookie_returns_401(client):
+    client.cookies.set("wms_session", "garbage.tampered")
+    with patch("main.get_agent", return_value=_mock_agent()):
+        resp = client.post("/feedback/thanks", json={})
+
+    assert resp.status_code == 401
+
+
+def test_thanks_with_school_id_resolves_that_school(client):
+    mock_agent = _mock_agent()
+    with patch("main.get_agent", return_value=mock_agent) as mock_get_agent:
+        client.post("/feedback/thanks", json={"school_id": "dhs"})
+
+    mock_get_agent.assert_called_once_with("dhs")
+
+
+def test_thanks_with_unknown_school_id_returns_400(client):
+    with patch("main.get_agent", return_value=None):
+        resp = client.post("/feedback/thanks", json={"school_id": "nonexistent"})
+
+    assert resp.status_code == 400
+
+
+# ── /feedback/report ─────────────────────────────────────────────────────────
+
+def _report_form(**overrides):
+    form = {"name": "Jamie", "email": "jamie@example.com", "message": "the phone number was wrong"}
+    form.update(overrides)
+    return form
+
+
+def test_report_without_cookie_mints_session_and_records(client):
+    mock_agent = _mock_agent()
+    with patch("main.get_agent", return_value=mock_agent):
+        resp = client.post("/feedback/report", data=_report_form())
+
+    assert resp.status_code == 200
+    assert "wms_session=" in resp.headers.get("set-cookie", "")
+    mock_agent.record_report.assert_called_once()
+    _, kwargs = mock_agent.record_report.call_args
+    assert kwargs["name"] == "Jamie"
+    assert kwargs["email"] == "jamie@example.com"
+    assert kwargs["message"] == "the phone number was wrong"
+    assert kwargs["screenshot"] is None
+
+
+def test_report_with_tampered_cookie_returns_401(client):
+    client.cookies.set("wms_session", "garbage.tampered")
+    with patch("main.get_agent", return_value=_mock_agent()):
+        resp = client.post("/feedback/report", data=_report_form())
+
+    assert resp.status_code == 401
+
+
+def test_report_missing_name_returns_422(client):
+    with patch("main.get_agent", return_value=_mock_agent()):
+        resp = client.post("/feedback/report", data=_report_form(name=""))
+
+    assert resp.status_code == 422
+
+
+def test_report_invalid_email_returns_422(client):
+    with patch("main.get_agent", return_value=_mock_agent()):
+        resp = client.post("/feedback/report", data=_report_form(email="not-an-email"))
+
+    assert resp.status_code == 422
+
+
+def test_report_with_unknown_school_id_returns_400(client):
+    with patch("main.get_agent", return_value=None):
+        resp = client.post("/feedback/report", data=_report_form(school_id="nonexistent"))
+
+    assert resp.status_code == 400
+
+
+def test_report_with_valid_screenshot_passes_bytes_through(client):
+    mock_agent = _mock_agent()
+    with patch("main.get_agent", return_value=mock_agent):
+        resp = client.post(
+            "/feedback/report",
+            data=_report_form(),
+            files={"screenshot": ("shot.png", b"\x89PNG\r\n\x1a\nfakepngbytes", "image/png")},
+        )
+
+    assert resp.status_code == 200
+    _, kwargs = mock_agent.record_report.call_args
+    assert kwargs["screenshot"] == b"\x89PNG\r\n\x1a\nfakepngbytes"
+    assert kwargs["screenshot_content_type"] == "image/png"
+
+
+def test_report_rejects_non_image_screenshot(client):
+    with patch("main.get_agent", return_value=_mock_agent()):
+        resp = client.post(
+            "/feedback/report",
+            data=_report_form(),
+            files={"screenshot": ("shot.txt", b"not an image", "text/plain")},
+        )
+
+    assert resp.status_code == 415
+
+
 # ── Server errors propagate as HTTP 5xx (not masked as 200) ─────────────────
 
 def test_chat_returns_500_when_agent_raises_without_leaking_exception_text():
@@ -401,3 +514,25 @@ def test_chatbox_html_links_to_manifest_and_apple_touch_icon(client):
     assert '<link rel="manifest"' in resp.text
     assert 'apple-touch-icon' in resp.text
     assert 'apple-mobile-web-app-capable' in resp.text
+
+
+def test_chatbox_html_has_theme_toggle_and_help_button(client):
+    """Guards against the light/dark toggle and help/support button silently
+    disappearing from the served HTML."""
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+    resp = client.get(f"/chatbox?token={token}")
+
+    assert resp.status_code == 200
+    assert 'id="theme-toggle-btn"' in resp.text
+    assert 'id="help-btn"' in resp.text
+    assert 'id="report-open-btn"' in resp.text
+    assert 'id="thanks-btn"' in resp.text
+
+
+def test_chatbox_html_has_ai_disclaimer(client):
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+    resp = client.get(f"/chatbox?token={token}")
+
+    assert resp.status_code == 200
+    assert 'id="disclaimer"' in resp.text
+    assert "AI can make mistakes" in resp.text

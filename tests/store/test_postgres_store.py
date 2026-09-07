@@ -32,6 +32,10 @@ def test_record_feedback_inserts_expected_row(mock_connect):
         raw="the phone number seemed wrong",
         comment="please fix",
         last_response="Here's the number...",
+        name="Jamie",
+        email="jamie@example.com",
+        screenshot=b"pngbytes",
+        screenshot_content_type="image/png",
     )
 
     mock_conn.execute.assert_called_once()
@@ -45,6 +49,10 @@ def test_record_feedback_inserts_expected_row(mock_connect):
         "the phone number seemed wrong",
         "please fix",
         "Here's the number...",
+        "Jamie",
+        "jamie@example.com",
+        b"pngbytes",
+        "image/png",
     )
     mock_conn.commit.assert_called_once()
 
@@ -66,6 +74,10 @@ def test_record_feedback_empty_optional_fields_become_none(mock_connect):
     _, params = mock_conn.execute.call_args[0]
     assert params[5] is None  # comment
     assert params[6] is None  # last_response
+    assert params[7] is None  # name
+    assert params[8] is None  # email
+    assert params[9] is None  # screenshot
+    assert params[10] is None  # screenshot_content_type
 
 
 @patch("app.store.postgres_store.psycopg.connect")

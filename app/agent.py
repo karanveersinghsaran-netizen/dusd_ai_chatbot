@@ -270,10 +270,6 @@ CRITICAL RULES:
             return "negative"
         return None
 
-    def _is_report_trigger(self, message: str) -> bool:
-        """Return True if the message is a user-initiated report/feedback command."""
-        return message.strip().lower() in {"report", "/report", "feedback", "/feedback"}
-
     def _record_feedback(self, user_id: str, feedback_type: str, sentiment: str,
                          raw: str, comment: str = "", last_response: str = "") -> None:
         """Persist a feedback entry to Postgres."""
@@ -293,6 +289,39 @@ CRITICAL RULES:
 
     def clear_conversation(self, user_id: str = "default"):
         self.redis_store.clear_session(self._session_key(user_id))
+
+    def record_thanks(self, user_id: str) -> None:
+        """One-tap 'send thanks' from the help popover — lightweight positive
+        feedback, no comment or last-response context needed."""
+        self._record_feedback(user_id, feedback_type="thanks", sentiment="positive", raw="thanks")
+
+    def record_report(
+        self,
+        user_id: str,
+        name: str,
+        email: str,
+        message: str,
+        screenshot: Optional[bytes] = None,
+        screenshot_content_type: str = "",
+    ) -> None:
+        """Persist a problem report submitted through the help-popover form.
+        Unlike _record_feedback's passive/reaction paths, exceptions here are
+        NOT swallowed — the caller (POST /feedback/report) should surface a
+        5xx rather than tell the submitter their report was saved when it wasn't."""
+        session_hash = hashlib.sha256(self._session_key(user_id).encode()).hexdigest()[:12]
+        self.postgres_store.record_feedback(
+            school_id=self.school.id,
+            session_hash=session_hash,
+            feedback_type="report",
+            sentiment="negative",
+            raw=message.strip(),
+            comment=message.strip(),
+            last_response=self.redis_store.get_last_response(self._session_key(user_id)) or "",
+            name=name.strip(),
+            email=email.strip(),
+            screenshot=screenshot,
+            screenshot_content_type=screenshot_content_type,
+        )
 
     def _call_api(self, messages: list, retries: int = 3) -> Any:
         """Call Claude API with exponential backoff for transient errors."""
@@ -322,33 +351,22 @@ CRITICAL RULES:
         # can return HTTP 500 and alerts fire, instead of masking failures.
         key = self._session_key(user_id)
 
-        # ── Priority 1: collect active report comment ──────────────────────
-        if self.redis_store.is_report_pending(key):
-            self.redis_store.clear_report_pending(key)
-            comment = "" if user_message.strip().lower() == "skip" else user_message
-            self._record_feedback(
-                user_id, feedback_type="report", sentiment="negative",
-                raw=user_message, comment=comment,
-                last_response=self.redis_store.get_last_response(key) or "",
-            )
-            return ChatReply("Thanks for the report! 🙏 We'll use it to improve. How else can I help?", False)
-
-        # ── Priority 2: help command ───────────────────────────────────────
+        # ── Priority 1: help command ───────────────────────────────────────
         if user_message.strip().lower() in {"help", "/help"}:
             return ChatReply(
                 "Here's what I can help with:\n\n"
                 f"Ask me anything about {self.school.name} — staff, events, schedules, clubs, attendance, and more.\n\n"
                 "Commands:\n"
-                "- report — flag my last response if something seems wrong\n"
                 "- clear — start a fresh conversation\n"
                 + ("- donate — support the school\n" if self.school.donation_url else "")
                 + "- help — show this message\n\n"
+                "Something not working? Tap the help button (?) above to report a problem.\n\n"
                 "You can also reach the school directly:\n"
                 f"{self.school.phone} | {self.school.website}",
                 False,
             )
 
-        # ── Priority 3: donate command ─────────────────────────────────────
+        # ── Priority 2: donate command ─────────────────────────────────────
         if self.school.donation_url and re.search(
             r'\b(donate|donation|donations|support the school)\b', user_message.strip().lower()
         ):
@@ -360,19 +378,7 @@ CRITICAL RULES:
                 False,
             )
 
-        # ── Priority 4: user-initiated report trigger ──────────────────────
-        if self._is_report_trigger(user_message):
-            if not self.redis_store.get_last_response(key):
-                return ChatReply("There's no recent response to report. Ask me a question first!", False)
-            self.redis_store.mark_report_pending(key)
-            self.redis_store.clear_feedback_pending(key)  # cancel any pending passive ask
-            return ChatReply(
-                "Thanks for flagging that! What was the issue with my last response?\n"
-                "(Reply with a comment, or *skip* to just flag it)",
-                False,
-            )
-
-        # ── Priority 5: collect passive feedback ───────────────────────────
+        # ── Priority 3: collect passive feedback ───────────────────────────
         if self.redis_store.is_feedback_pending(key):
             self.redis_store.clear_feedback_pending(key)
             sentiment = self._is_feedback(user_message)
@@ -382,11 +388,11 @@ CRITICAL RULES:
                     raw=user_message,
                 )
                 ack = "Thanks for the feedback! 🙏" if sentiment == "positive" \
-                    else "Sorry to hear that! 🙏 You can also type *report* anytime to flag a specific response."
+                    else "Sorry to hear that! 🙏 You can tap the help button (?) above to report a problem."
                 return ChatReply(ack + " How else can I help you?", False)
             # Not a feedback reply — fall through and treat as a new question
 
-        # ── Priority 6: content filter ─────────────────────────────────────
+        # ── Priority 4: content filter ─────────────────────────────────────
         for word in ['fuck', 'shit', 'bitch', 'bastard']:
             if re.search(r'\b' + re.escape(word) + r'\b', user_message.lower()):
                 return ChatReply(
@@ -450,8 +456,7 @@ CRITICAL RULES:
             self.redis_store.mark_feedback_pending(key)
             final_response += (
                 "\n\n---\n"
-                "💬 *Was this helpful?* Reply *1* 👍 or *2* 👎\n"
-                "💡 Tip: Type *report* anytime to flag a response that seems wrong"
+                "💬 *Was this helpful?* Reply *1* 👍 or *2* 👎"
             )
 
         return ChatReply(final_response, attach_map)
