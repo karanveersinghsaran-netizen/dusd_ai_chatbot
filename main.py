@@ -99,6 +99,11 @@ def _public_school_theme() -> dict:
 class ChatRequest(BaseModel):
     message: str
     school_id: str | None = None
+    # Chatbox language toggle (#62) — EN/ES/中文. Optional so older embeds/
+    # clients that don't send it keep working: SchoolAgent.chat() falls back
+    # to whatever was last persisted for the session, or English if nothing
+    # was ever set.
+    language: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -357,7 +362,7 @@ async def chat(
             headers={"Retry-After": str(cap_result.retry_after_seconds)},
         )
 
-    reply = agent.chat(chat_request.message, user_id=session_id)
+    reply = agent.chat(chat_request.message, user_id=session_id, language=chat_request.language)
     text = reply.text
     if cap_result.approaching_limit:
         plural = "s" if cap_result.remaining != 1 else ""

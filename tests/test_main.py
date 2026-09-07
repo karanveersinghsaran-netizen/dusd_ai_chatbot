@@ -83,6 +83,28 @@ def test_chat_ignores_client_supplied_user_id(client):
     assert mock_agent.chat.call_args.kwargs["user_id"] != "attacker-controlled"
 
 
+# ── language toggle (#62) ────────────────────────────────────────────────────
+
+def test_chat_forwards_language_to_agent(client):
+    mock_agent = _mock_agent()
+    with patch("main.get_agent", return_value=mock_agent):
+        client.post("/chat", json={"message": "Hola", "language": "es"})
+
+    assert mock_agent.chat.call_args.kwargs["language"] == "es"
+
+
+def test_chat_without_language_forwards_none(client):
+    """No language in the request body — e.g. an older client — must not
+    crash the endpoint; SchoolAgent.chat() owns the fallback-to-persisted
+    (or English) behavior from here."""
+    mock_agent = _mock_agent()
+    with patch("main.get_agent", return_value=mock_agent):
+        resp = client.post("/chat", json={"message": "hi"})
+
+    assert resp.status_code == 200
+    assert mock_agent.chat.call_args.kwargs["language"] is None
+
+
 # ── school_id routing ────────────────────────────────────────────────────────
 
 def test_chat_without_school_id_resolves_default_school(client):
@@ -935,6 +957,16 @@ def test_chatbox_html_has_accessibility_settings_panel(client):
     assert 'name="a11y-text-size"' in resp.text
     assert 'name="a11y-contrast"' in resp.text
     assert 'name="a11y-motion"' in resp.text
+
+
+def test_chatbox_html_has_language_toggle(client):
+    """Guards against the EN/ES/中文 language toggle (#62) silently
+    disappearing from the served HTML."""
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+    resp = client.get(f"/chatbox?token={token}")
+
+    assert resp.status_code == 200
+    assert 'id="lang-toggle-btn"' in resp.text
 
 
 def test_chatbox_html_has_ai_disclaimer(client):
