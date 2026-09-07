@@ -28,13 +28,18 @@ class PostgresStore:
         raw: str,
         comment: str = "",
         last_response: str = "",
+        name: str = "",
+        email: str = "",
+        screenshot: Optional[bytes] = None,
+        screenshot_content_type: str = "",
     ) -> None:
         with psycopg.connect(self.dsn) as conn:
             conn.execute(
                 """
                 INSERT INTO feedback
-                    (school_id, session_hash, type, sentiment, raw, comment, last_response)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    (school_id, session_hash, type, sentiment, raw, comment, last_response,
+                     name, email, screenshot, screenshot_content_type)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     school_id,
@@ -44,6 +49,10 @@ class PostgresStore:
                     raw,
                     comment or None,
                     last_response or None,
+                    name or None,
+                    email or None,
+                    screenshot,
+                    screenshot_content_type or None,
                 ),
             )
             conn.commit()

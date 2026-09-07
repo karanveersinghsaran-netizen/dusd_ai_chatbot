@@ -240,7 +240,7 @@ def test_dynamic_context_not_prepended_on_subsequent_turns(agent):
 
 def test_agent_has_no_instance_state_dicts(agent):
     for attr in ("conversations", "feedback_asked", "feedback_pending",
-                 "report_pending", "last_responses", "attach_map"):
+                 "last_responses", "attach_map"):
         assert not hasattr(agent, attr)
 
 
@@ -327,34 +327,42 @@ def test_passive_feedback_reply_records_and_acknowledges(agent):
     assert kwargs["school_id"] == "wells"
 
 
-def test_report_trigger_requires_prior_response(agent):
-    reply = agent.chat("report", user_id="u9")
-    assert "no recent response" in reply.text.lower()
+def test_record_thanks_records_positive_feedback(agent):
+    agent.record_thanks(user_id="u9")
+
+    agent.postgres_store.record_feedback.assert_called_once()
+    _, kwargs = agent.postgres_store.record_feedback.call_args
+    assert kwargs["feedback_type"] == "thanks"
+    assert kwargs["sentiment"] == "positive"
+    assert kwargs["school_id"] == "wells"
 
 
-def test_report_flow_records_feedback(agent):
+def test_record_report_persists_name_email_and_message(agent):
     agent.redis_store.set_last_response(agent._session_key("u10"), "previous answer")
-    trigger_reply = agent.chat("report", user_id="u10")
-    assert agent.redis_store.is_report_pending(agent._session_key("u10")) is True
 
-    comment_reply = agent.chat("the phone number was wrong", user_id="u10")
+    agent.record_report(
+        user_id="u10", name="Jamie", email="jamie@example.com",
+        message="the phone number was wrong",
+    )
 
-    assert "Thanks for the report" in comment_reply.text
-    assert agent.redis_store.is_report_pending(agent._session_key("u10")) is False
     agent.postgres_store.record_feedback.assert_called_once()
     _, kwargs = agent.postgres_store.record_feedback.call_args
     assert kwargs["feedback_type"] == "report"
+    assert kwargs["sentiment"] == "negative"
+    assert kwargs["name"] == "Jamie"
+    assert kwargs["email"] == "jamie@example.com"
+    assert kwargs["raw"] == "the phone number was wrong"
     assert kwargs["last_response"] == "previous answer"
 
 
-def test_record_like_persists_positive_reaction(agent):
-    agent.record_like(user_id="u12", response_text="the office is in building A")
+def test_record_report_propagates_postgres_failures(agent):
+    """Unlike passive/thanks feedback, report submission failures must NOT be
+    swallowed — the /feedback/report endpoint needs to see the exception so it
+    can return a 5xx instead of falsely confirming the report was saved."""
+    agent.postgres_store.record_feedback.side_effect = Exception("db down")
 
-    agent.postgres_store.record_feedback.assert_called_once()
-    _, kwargs = agent.postgres_store.record_feedback.call_args
-    assert kwargs["feedback_type"] == "reaction"
-    assert kwargs["sentiment"] == "positive"
-    assert kwargs["raw"] == "the office is in building A"
+    with pytest.raises(Exception, match="db down"):
+        agent.record_report(user_id="u11", name="Jamie", email="jamie@example.com", message="broken")
 
 
 def test_system_prompt_instructs_scraped_content_is_untrusted(agent):

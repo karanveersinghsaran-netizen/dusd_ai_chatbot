@@ -1,7 +1,8 @@
 import logging
+import re
 from pathlib import Path
 
-from fastapi import Cookie, Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi import Cookie, Depends, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
@@ -12,7 +13,12 @@ import uvicorn
 from app import config
 from app.agent import get_agent
 from app.security.chatbox_token import verify_chatbox_token
-from app.security.middleware import enforce_max_body_size, limiter, session_or_ip_key
+from app.security.middleware import (
+    enforce_max_body_size,
+    enforce_report_body_size,
+    limiter,
+    session_or_ip_key,
+)
 from app.security.sessions import issue_session_id, verify_session_id
 from app.store.postgres_store import store as postgres_store
 
@@ -68,9 +74,13 @@ class ChatResponse(BaseModel):
     attach_map: bool
 
 
-class LikeRequest(BaseModel):
-    message: str
+class ThanksRequest(BaseModel):
     school_id: str | None = None
+
+
+MAX_SCREENSHOT_BYTES = 2 * 1024 * 1024
+ALLOWED_SCREENSHOT_CONTENT_TYPES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 @app.on_event("startup")
@@ -164,17 +174,11 @@ async def pwa_icon(filename: str):
     return FileResponse(icon_path, media_type="image/png")
 
 
-@app.post("/chat", response_model=ChatResponse, dependencies=[Depends(enforce_max_body_size)])
-@limiter.limit("10/minute")
-@limiter.limit("30/minute", key_func=session_or_ip_key)
-async def chat(
-    request: Request,
-    chat_request: ChatRequest,
-    response: Response,
-    wms_session: str | None = Cookie(default=None),
-):
-    """Endpoint for the web chat widget. Session identity comes only from a
-    server-signed cookie — the client cannot claim an arbitrary user_id."""
+def _resolve_session_id(wms_session: str | None, response: Response) -> str:
+    """Reuse a valid session cookie, or mint and set a fresh one. Raises 401 if
+    a cookie was presented but fails signature verification. Session identity
+    always comes from this server-signed cookie — the client cannot claim an
+    arbitrary user_id."""
     if wms_session is None:
         session_id, cookie_value = issue_session_id()
         response.set_cookie(
@@ -185,10 +189,24 @@ async def chat(
             samesite="lax",
             max_age=SESSION_COOKIE_MAX_AGE,
         )
-    else:
-        session_id = verify_session_id(wms_session)
-        if session_id is None:
-            raise HTTPException(status_code=401, detail="Invalid session cookie")
+        return session_id
+    session_id = verify_session_id(wms_session)
+    if session_id is None:
+        raise HTTPException(status_code=401, detail="Invalid session cookie")
+    return session_id
+
+
+@app.post("/chat", response_model=ChatResponse, dependencies=[Depends(enforce_max_body_size)])
+@limiter.limit("10/minute")
+@limiter.limit("30/minute", key_func=session_or_ip_key)
+async def chat(
+    request: Request,
+    chat_request: ChatRequest,
+    response: Response,
+    wms_session: str | None = Cookie(default=None),
+):
+    """Endpoint for the web chat widget."""
+    session_id = _resolve_session_id(wms_session, response)
 
     school_id = chat_request.school_id or config.DEFAULT_SCHOOL_ID
     agent = get_agent(school_id)
@@ -199,27 +217,77 @@ async def chat(
     return ChatResponse(reply=reply.text, attach_map=reply.attach_map)
 
 
-@app.post("/feedback/like", dependencies=[Depends(enforce_max_body_size)])
+@app.post("/feedback/thanks", dependencies=[Depends(enforce_max_body_size)])
 @limiter.limit("10/minute")
 @limiter.limit("30/minute", key_func=session_or_ip_key)
-async def like(
+async def thanks(
     request: Request,
-    like_request: LikeRequest,
+    thanks_request: ThanksRequest,
+    response: Response,
     wms_session: str | None = Cookie(default=None),
 ):
-    """Thumbs-up on a specific bot reply. Requires an existing valid session
-    (unlike /chat, this never issues a fresh one) — liking only makes sense
-    after at least one real chat turn has already happened."""
-    session_id = verify_session_id(wms_session) if wms_session else None
-    if session_id is None:
-        raise HTTPException(status_code=401, detail="Invalid session cookie")
+    """One-tap 'send thanks' from the help popover — lightweight positive
+    feedback with no form to fill out."""
+    session_id = _resolve_session_id(wms_session, response)
 
-    school_id = like_request.school_id or config.DEFAULT_SCHOOL_ID
+    school_id = thanks_request.school_id or config.DEFAULT_SCHOOL_ID
     agent = get_agent(school_id)
     if agent is None:
         raise HTTPException(status_code=400, detail=f"Unknown school: {school_id}")
 
-    agent.record_like(user_id=session_id, response_text=like_request.message)
+    agent.record_thanks(user_id=session_id)
+    return {"status": "ok"}
+
+
+@app.post("/feedback/report", dependencies=[Depends(enforce_report_body_size)])
+@limiter.limit("5/minute")
+@limiter.limit("15/minute", key_func=session_or_ip_key)
+async def report(
+    request: Request,
+    response: Response,
+    name: str = Form(...),
+    email: str = Form(...),
+    message: str = Form(...),
+    school_id: str | None = Form(default=None),
+    screenshot: UploadFile | None = File(default=None),
+    wms_session: str | None = Cookie(default=None),
+):
+    """Problem-report form surfaced from the help popover: name, email, a
+    description of the issue, and an optional screenshot. Replaces the old
+    in-chat /report command with structured submissions reviewers can act on."""
+    name = name.strip()
+    email = email.strip()
+    message = message.strip()
+    if not name or not email or not message:
+        raise HTTPException(status_code=422, detail="Name, email, and problem description are required")
+    if not EMAIL_RE.match(email):
+        raise HTTPException(status_code=422, detail="Enter a valid email address")
+
+    session_id = _resolve_session_id(wms_session, response)
+
+    resolved_school_id = school_id or config.DEFAULT_SCHOOL_ID
+    agent = get_agent(resolved_school_id)
+    if agent is None:
+        raise HTTPException(status_code=400, detail=f"Unknown school: {resolved_school_id}")
+
+    screenshot_bytes = None
+    screenshot_content_type = ""
+    if screenshot is not None and screenshot.filename:
+        if screenshot.content_type not in ALLOWED_SCREENSHOT_CONTENT_TYPES:
+            raise HTTPException(status_code=415, detail="Screenshot must be a PNG, JPEG, WEBP, or GIF image")
+        screenshot_bytes = await screenshot.read()
+        if len(screenshot_bytes) > MAX_SCREENSHOT_BYTES:
+            raise HTTPException(status_code=413, detail="Screenshot must be under 2MB")
+        screenshot_content_type = screenshot.content_type
+
+    agent.record_report(
+        user_id=session_id,
+        name=name,
+        email=email,
+        message=message,
+        screenshot=screenshot_bytes,
+        screenshot_content_type=screenshot_content_type,
+    )
     return {"status": "ok"}
 
 

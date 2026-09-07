@@ -96,51 +96,117 @@ def test_chat_with_unknown_school_id_returns_400(client):
     assert resp.status_code == 400
 
 
-# ── /feedback/like ───────────────────────────────────────────────────────────
+# ── /feedback/thanks ─────────────────────────────────────────────────────────
 
-def test_like_without_cookie_returns_401(client):
-    with patch("main.get_agent", return_value=_mock_agent()):
-        resp = client.post("/feedback/like", json={"message": "the reply text"})
-
-    assert resp.status_code == 401
-
-
-def test_like_with_tampered_cookie_returns_401(client):
-    client.cookies.set("wms_session", "garbage.tampered")
-    with patch("main.get_agent", return_value=_mock_agent()):
-        resp = client.post("/feedback/like", json={"message": "the reply text"})
-
-    assert resp.status_code == 401
-
-
-def test_like_with_valid_cookie_records_reaction(client):
+def test_thanks_without_cookie_mints_session_and_records(client):
     mock_agent = _mock_agent()
     with patch("main.get_agent", return_value=mock_agent):
-        client.post("/chat", json={"message": "hi"})  # mints the session cookie
-        resp = client.post("/feedback/like", json={"message": "the reply text"})
+        resp = client.post("/feedback/thanks", json={})
 
     assert resp.status_code == 200
-    session_id = mock_agent.chat.call_args.kwargs["user_id"]
-    mock_agent.record_like.assert_called_once_with(user_id=session_id, response_text="the reply text")
+    assert "wms_session=" in resp.headers.get("set-cookie", "")
+    mock_agent.record_thanks.assert_called_once()
 
 
-def test_like_with_school_id_resolves_that_school(client):
+def test_thanks_with_tampered_cookie_returns_401(client):
+    client.cookies.set("wms_session", "garbage.tampered")
+    with patch("main.get_agent", return_value=_mock_agent()):
+        resp = client.post("/feedback/thanks", json={})
+
+    assert resp.status_code == 401
+
+
+def test_thanks_with_school_id_resolves_that_school(client):
     mock_agent = _mock_agent()
     with patch("main.get_agent", return_value=mock_agent) as mock_get_agent:
-        client.post("/chat", json={"message": "hi", "school_id": "dhs"})
-        mock_get_agent.reset_mock()
-        client.post("/feedback/like", json={"message": "text", "school_id": "dhs"})
+        client.post("/feedback/thanks", json={"school_id": "dhs"})
 
     mock_get_agent.assert_called_once_with("dhs")
 
 
-def test_like_with_unknown_school_id_returns_400(client):
-    mock_agent = _mock_agent()
-    with patch("main.get_agent", side_effect=[mock_agent, None]):
-        client.post("/chat", json={"message": "hi"})
-        resp = client.post("/feedback/like", json={"message": "text", "school_id": "nonexistent"})
+def test_thanks_with_unknown_school_id_returns_400(client):
+    with patch("main.get_agent", return_value=None):
+        resp = client.post("/feedback/thanks", json={"school_id": "nonexistent"})
 
     assert resp.status_code == 400
+
+
+# ── /feedback/report ─────────────────────────────────────────────────────────
+
+def _report_form(**overrides):
+    form = {"name": "Jamie", "email": "jamie@example.com", "message": "the phone number was wrong"}
+    form.update(overrides)
+    return form
+
+
+def test_report_without_cookie_mints_session_and_records(client):
+    mock_agent = _mock_agent()
+    with patch("main.get_agent", return_value=mock_agent):
+        resp = client.post("/feedback/report", data=_report_form())
+
+    assert resp.status_code == 200
+    assert "wms_session=" in resp.headers.get("set-cookie", "")
+    mock_agent.record_report.assert_called_once()
+    _, kwargs = mock_agent.record_report.call_args
+    assert kwargs["name"] == "Jamie"
+    assert kwargs["email"] == "jamie@example.com"
+    assert kwargs["message"] == "the phone number was wrong"
+    assert kwargs["screenshot"] is None
+
+
+def test_report_with_tampered_cookie_returns_401(client):
+    client.cookies.set("wms_session", "garbage.tampered")
+    with patch("main.get_agent", return_value=_mock_agent()):
+        resp = client.post("/feedback/report", data=_report_form())
+
+    assert resp.status_code == 401
+
+
+def test_report_missing_name_returns_422(client):
+    with patch("main.get_agent", return_value=_mock_agent()):
+        resp = client.post("/feedback/report", data=_report_form(name=""))
+
+    assert resp.status_code == 422
+
+
+def test_report_invalid_email_returns_422(client):
+    with patch("main.get_agent", return_value=_mock_agent()):
+        resp = client.post("/feedback/report", data=_report_form(email="not-an-email"))
+
+    assert resp.status_code == 422
+
+
+def test_report_with_unknown_school_id_returns_400(client):
+    with patch("main.get_agent", return_value=None):
+        resp = client.post("/feedback/report", data=_report_form(school_id="nonexistent"))
+
+    assert resp.status_code == 400
+
+
+def test_report_with_valid_screenshot_passes_bytes_through(client):
+    mock_agent = _mock_agent()
+    with patch("main.get_agent", return_value=mock_agent):
+        resp = client.post(
+            "/feedback/report",
+            data=_report_form(),
+            files={"screenshot": ("shot.png", b"\x89PNG\r\n\x1a\nfakepngbytes", "image/png")},
+        )
+
+    assert resp.status_code == 200
+    _, kwargs = mock_agent.record_report.call_args
+    assert kwargs["screenshot"] == b"\x89PNG\r\n\x1a\nfakepngbytes"
+    assert kwargs["screenshot_content_type"] == "image/png"
+
+
+def test_report_rejects_non_image_screenshot(client):
+    with patch("main.get_agent", return_value=_mock_agent()):
+        resp = client.post(
+            "/feedback/report",
+            data=_report_form(),
+            files={"screenshot": ("shot.txt", b"not an image", "text/plain")},
+        )
+
+    assert resp.status_code == 415
 
 
 # ── Server errors propagate as HTTP 5xx (not masked as 200) ─────────────────
@@ -459,7 +525,8 @@ def test_chatbox_html_has_theme_toggle_and_help_button(client):
     assert resp.status_code == 200
     assert 'id="theme-toggle-btn"' in resp.text
     assert 'id="help-btn"' in resp.text
-    assert "/report" in resp.text
+    assert 'id="report-open-btn"' in resp.text
+    assert 'id="thanks-btn"' in resp.text
 
 
 def test_chatbox_html_has_ai_disclaimer(client):

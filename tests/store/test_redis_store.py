@@ -62,12 +62,11 @@ def test_last_response_clear(redis_store):
     assert redis_store.get_last_response("u1") is None
 
 
-# ── flags: feedback_asked / feedback_pending / report_pending ──────────────
+# ── flags: feedback_asked / feedback_pending ────────────────────────────────
 
 @pytest.mark.parametrize("is_fn,mark_fn,clear_fn", [
     ("is_feedback_asked", "mark_feedback_asked", "clear_feedback_asked"),
     ("is_feedback_pending", "mark_feedback_pending", "clear_feedback_pending"),
-    ("is_report_pending", "mark_report_pending", "clear_report_pending"),
 ])
 def test_flag_lifecycle(redis_store, is_fn, mark_fn, clear_fn):
     is_set = getattr(redis_store, is_fn)
@@ -93,7 +92,6 @@ def test_clear_session_removes_everything(redis_store):
     redis_store.set_last_response("u1", "answer")
     redis_store.mark_feedback_asked("u1")
     redis_store.mark_feedback_pending("u1")
-    redis_store.mark_report_pending("u1")
 
     redis_store.clear_session("u1")
 
@@ -101,4 +99,3 @@ def test_clear_session_removes_everything(redis_store):
     assert redis_store.get_last_response("u1") is None
     assert redis_store.is_feedback_asked("u1") is False
     assert redis_store.is_feedback_pending("u1") is False
-    assert redis_store.is_report_pending("u1") is False

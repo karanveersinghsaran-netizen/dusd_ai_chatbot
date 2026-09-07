@@ -182,6 +182,63 @@
     font-size: 0.85em;
   }
 
+  .help-actions { display: flex; flex-direction: column; gap: 8px; }
+  .help-action-btn {
+    padding: 9px 12px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    font-weight: 600;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    text-align: left;
+  }
+  .help-action-btn:active { opacity: 0.6; }
+  .help-action-btn.primary {
+    color: #ffffff;
+    background: var(--user-bubble-bg);
+    border-color: var(--user-bubble-bg);
+    text-align: center;
+  }
+  .help-action-btn.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  #report-form { display: flex; flex-direction: column; gap: 10px; }
+  .form-field { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--text-muted); }
+  .form-field input, .form-field textarea {
+    padding: 8px 10px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    outline: none;
+  }
+  .form-field input:focus, .form-field textarea:focus { border-color: var(--user-bubble-bg); }
+  .form-field textarea { resize: vertical; min-height: 60px; }
+  .form-error { font-size: 0.85rem; color: var(--error-bubble-text); }
+
+  #toast {
+    position: fixed;
+    left: 50%;
+    bottom: calc(env(safe-area-inset-bottom) + 76px);
+    transform: translateX(-50%) translateY(8px);
+    padding: 8px 16px;
+    max-width: calc(100% - 40px);
+    background: var(--text);
+    color: var(--bg);
+    border-radius: 999px;
+    font-size: 0.85rem;
+    text-align: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 200ms ease, transform 200ms ease;
+    z-index: 20;
+  }
+  #toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
   #school-picker {
     display: none;
     gap: 8px;
@@ -256,25 +313,6 @@
   .bubble p:first-child { margin-top: 0; }
   .bubble p:last-child { margin-bottom: 0; }
   .bubble a { color: var(--link); }
-
-  /* Column wrapper so the like button sits below the bubble, left-aligned,
-     rather than beside it (bot messages only — user/pending/error bubbles
-     don't get one). */
-  .msg-content { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
-  .like-btn {
-    width: 24px; height: 24px;
-    margin-left: 4px;
-    padding: 3px;
-    color: var(--text-muted);
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    opacity: 0.6;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .like-btn svg { width: 16px; height: 16px; fill: currentColor; }
-  .like-btn:active { opacity: 1; }
-  .like-btn.liked { opacity: 1; cursor: default; color: var(--user-bubble-bg); }
 
   #disclaimer {
     text-align: center;
@@ -363,11 +401,42 @@
   <div id="help-popover" class="popover" role="dialog" aria-labelledby="help-title">
     <button class="close" type="button" aria-label="Dismiss">×</button>
     <div id="help-title" style="font-weight: 600; margin-bottom: 6px;">Need help?</div>
-    <div>
-      Something not working, or feedback on the assistant's last reply? Type
-      <kbd>/report</kbd> in the chat to flag it — we review these regularly.
+    <div style="margin-bottom: 12px;">
+      Something not working, or feedback on the assistant? Let us know below.
+    </div>
+    <div class="help-actions">
+      <button id="report-open-btn" type="button" class="help-action-btn">🐞 Report a problem</button>
+      <button id="thanks-btn" type="button" class="help-action-btn">🙏 Send thanks</button>
     </div>
   </div>
+
+  <div id="report-popover" class="popover" role="dialog" aria-labelledby="report-title">
+    <button class="close" type="button" aria-label="Dismiss">×</button>
+    <div id="report-title" style="font-weight: 600; margin-bottom: 6px;">Report a problem</div>
+    <form id="report-form">
+      <label class="form-field">
+        <span>Name</span>
+        <input type="text" id="report-name" name="name" required autocomplete="name">
+      </label>
+      <label class="form-field">
+        <span>Email</span>
+        <input type="email" id="report-email" name="email" required autocomplete="email">
+      </label>
+      <label class="form-field">
+        <span>What went wrong?</span>
+        <textarea id="report-message" name="message" required rows="3"></textarea>
+      </label>
+      <label class="form-field">
+        <span>Screenshot (optional)</span>
+        <input type="file" id="report-screenshot" name="screenshot"
+               accept="image/png,image/jpeg,image/webp,image/gif">
+      </label>
+      <div id="report-error" class="form-error" hidden></div>
+      <button type="submit" id="report-submit-btn" class="help-action-btn primary">Submit</button>
+    </form>
+  </div>
+
+  <div id="toast" role="status" aria-live="polite"></div>
 
   <!-- Only visible when the embed didn't pin a school via ?school=. Real
        embeds (embed/wms-chatbot.js) always set the query param, so the picker
@@ -404,7 +473,7 @@
       const prefersDark = window.matchMedia("(prefers-color-scheme: dark)");
 
       // Sun icon (Material "light_mode") and moon icon (Material "dark_mode"),
-      // both 24x24 viewBoxes so they drop in at the same size as LIKE_ICON_SVG.
+      // both 24x24 viewBoxes to match the other header icon buttons.
       const SUN_ICON_SVG =
         '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41.39.39 1.03.39 1.41 0l1.06-1.06z"/></svg>';
       const MOON_ICON_SVG =
@@ -440,11 +509,18 @@
       });
     })();
 
-    // Help popover: points users at the existing in-chat /report command
-    // (app/agent.py's _is_report_trigger) instead of a raw mailto: link —
-    // that flow already writes structured feedback (school_id, sentiment,
-    // comment) to Postgres for async review, rather than an unmoderated
-    // inbox that any user could flood directly.
+    // Help popover: two quick actions instead of a raw mailto: link — both
+    // write structured feedback (school_id, sentiment, comment) to Postgres
+    // for async review, rather than an unmoderated inbox anyone could flood.
+    let toastTimer = null;
+    function showToast(message) {
+      const toastEl = document.getElementById("toast");
+      toastEl.textContent = message;
+      toastEl.classList.add("visible");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toastEl.classList.remove("visible"), 2500);
+    }
+
     (function wireHelpButton() {
       const btn = document.getElementById("help-btn");
       const popover = document.getElementById("help-popover");
@@ -452,6 +528,79 @@
 
       btn.addEventListener("click", () => popover.classList.add("visible"));
       closeBtn.addEventListener("click", () => popover.classList.remove("visible"));
+    })();
+
+    (function wireThanksButton() {
+      const btn = document.getElementById("thanks-btn");
+      const helpPopover = document.getElementById("help-popover");
+
+      btn.addEventListener("click", async () => {
+        helpPopover.classList.remove("visible");
+        showToast("🙏 Thanks sent!");
+        try {
+          await fetch("/feedback/thanks", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify(schoolId ? { school_id: schoolId } : {}),
+          });
+        } catch (err) {
+          // Best-effort — the toast already told the user it went through,
+          // and there's nothing actionable to show for a failed background ping.
+        }
+      });
+    })();
+
+    (function wireReportForm() {
+      const openBtn = document.getElementById("report-open-btn");
+      const helpPopover = document.getElementById("help-popover");
+      const popover = document.getElementById("report-popover");
+      const closeBtn = popover.querySelector(".close");
+      const form = document.getElementById("report-form");
+      const errorEl = document.getElementById("report-error");
+      const submitBtn = document.getElementById("report-submit-btn");
+
+      openBtn.addEventListener("click", () => {
+        helpPopover.classList.remove("visible");
+        errorEl.hidden = true;
+        popover.classList.add("visible");
+      });
+      closeBtn.addEventListener("click", () => popover.classList.remove("visible"));
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        errorEl.hidden = true;
+        submitBtn.disabled = true;
+
+        const formData = new FormData(form);
+        if (schoolId) formData.set("school_id", schoolId);
+
+        try {
+          const resp = await fetch("/feedback/report", {
+            method: "POST",
+            credentials: "include",
+            body: formData,
+          });
+          if (!resp.ok) {
+            const detail = resp.status === 429
+              ? "You're sending reports too quickly. Please wait a moment and try again."
+              : resp.status === 413
+              ? "That screenshot is too large. Try a smaller image (max 2MB)."
+              : "Something went wrong submitting your report. Please try again.";
+            errorEl.textContent = detail;
+            errorEl.hidden = false;
+            return;
+          }
+          popover.classList.remove("visible");
+          form.reset();
+          showToast("✅ Report submitted — thank you!");
+        } catch (err) {
+          errorEl.textContent = "Couldn't reach the server. Check your connection and try again.";
+          errorEl.hidden = false;
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
     })();
 
     // Install-button wiring. Two separate flows because iOS Safari refuses to
@@ -508,13 +657,14 @@
       });
     })();
 
-    // Dismiss any open popover (help, iOS install hint) on an outside click.
-    // Excludes their trigger buttons too, so the click that just opened a
-    // popover doesn't immediately close it again as it bubbles to document.
+    // Dismiss any open popover (help, report form, iOS install hint) on an
+    // outside click. Excludes their trigger buttons too, so the click that
+    // just opened a popover doesn't immediately close it again as it bubbles
+    // to document.
     document.addEventListener("click", (e) => {
       document.querySelectorAll(".popover.visible").forEach((popover) => {
         if (popover.contains(e.target)) return;
-        if (e.target.closest("#help-btn, #install-btn")) return;
+        if (e.target.closest("#help-btn, #install-btn, #report-open-btn")) return;
         popover.classList.remove("visible");
       });
     });
@@ -537,27 +687,6 @@
     schoolPickerEl.addEventListener("change", (e) => {
       schoolId = e.target.value;
     });
-
-    const LIKE_ICON_SVG =
-      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h4V9H1v12zM23 10c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"/></svg>';
-
-    async function likeResponse(text, btn) {
-      // Only the color changes (via the .liked class in CSS) — same icon,
-      // no swap needed.
-      btn.classList.add("liked");
-      btn.disabled = true;
-      try {
-        await fetch("/feedback/like", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify(schoolId ? { message: text, school_id: schoolId } : { message: text }),
-        });
-      } catch (err) {
-        // Best-effort — a failed like shouldn't interrupt the chat, and
-        // there's nothing actionable to show the user for it.
-      }
-    }
 
     function addMessage(role, text) {
       const wrapper = document.createElement("div");
@@ -584,25 +713,7 @@
         bubble.textContent = text;
       }
 
-      if (role === "bot") {
-        // Column wrapper so the like button sits below the bubble rather
-        // than beside it; only bot replies are likeable.
-        const content = document.createElement("div");
-        content.className = "msg-content";
-        content.appendChild(bubble);
-
-        const likeBtn = document.createElement("button");
-        likeBtn.className = "like-btn";
-        likeBtn.type = "button";
-        likeBtn.innerHTML = LIKE_ICON_SVG;
-        likeBtn.setAttribute("aria-label", "Like this response");
-        likeBtn.addEventListener("click", () => likeResponse(text, likeBtn));
-        content.appendChild(likeBtn);
-
-        wrapper.appendChild(content);
-      } else {
-        wrapper.appendChild(bubble);
-      }
+      wrapper.appendChild(bubble);
 
       messagesEl.appendChild(wrapper);
       messagesEl.scrollTop = messagesEl.scrollHeight;
