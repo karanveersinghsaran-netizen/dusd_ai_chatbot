@@ -2,114 +2,116 @@
   "map_url": "https://raw.githubusercontent.com/karanveersinghsaran-netizen/wms_ai_chatbot/master/data/schools/dhs/campus_map.jpg",
 
   "buildings": {
-    "A": {
-      "name": "Admin Building A",
-      "position": "center of campus",
-      "notes": "Main administration building, next to the Library/Hub and Building B."
-    },
-    "B": {
-      "name": "Building B",
-      "position": "center of campus, next to Admin Building A and the Library/Hub"
-    },
     "C": {
-      "name": "Building C",
-      "position": "north side of campus, next to the PAC"
+      "name": "VAPA / Performing Arts building (Building C)",
+      "position": "west-center of campus, attached to the Performing Arts Center",
+      "notes": "Houses music, drama, and media arts (VAPA wing); next to the tennis courts and portables, and directly attached to the Performing Arts Center."
     },
     "E": {
-      "name": "Gym (Building E)",
-      "position": "center-north side of campus, between Building C and Building F"
+      "name": "Auxiliary Gym (Building E)",
+      "position": "center of campus, between Building C and the central plaza",
+      "notes": "Separate from GAEL Stadium's field house; sits next to the Amphitheater."
     },
     "F": {
-      "name": "Building F",
-      "position": "east-center side of campus, between the Gym and the Sports Complex"
+      "name": "Science & Engineering (Building F)",
+      "position": "north-center of campus, next to the Sports Complex and Parking Lot 5",
+      "notes": "Includes the ARC (Academic Resource Center) wing."
+    },
+    "H": {
+      "name": "Building H",
+      "position": "center of campus, next to the Student Union"
     },
     "J": {
       "name": "Building J",
-      "position": "south-center of campus, next to the Student Union and Building K"
+      "position": "north-east of campus along Brighton Drive, next to Parking Lot 5 and Building K"
     },
     "K": {
       "name": "Building K",
-      "position": "south side of campus along Brighton Drive, next to Building L and Building J"
+      "position": "north-east of campus along Brighton Drive, between Building J and the Library"
     },
     "L": {
       "name": "Building L",
-      "position": "south side of campus along Brighton Drive, between Building M and Building K"
+      "position": "south-east of campus along Brighton Drive, next to Buildings M and N"
     },
     "M": {
       "name": "Building M",
-      "position": "southwest side of campus, between Building N and Building L"
+      "position": "south-east of campus, between Buildings L and N"
     },
     "N": {
       "name": "Building N",
-      "position": "southwest side of campus, near Village Parkway, next to Building M"
+      "position": "south-east corner of campus, near the Village Parkway / Brighton Drive intersection, next to Building M"
     }
   },
 
   "key_locations": {
+    "Admin": {
+      "building": "Admin",
+      "position": "center of campus, central plaza",
+      "description": "Main administration office, in the central plaza next to the Library."
+    },
     "Library": {
-      "building": "Library/Hub",
-      "position": "center of campus",
-      "description": "Library/Hub, in the center of campus next to Admin Building A and Building B."
-    },
-    "Office": {
-      "building": "Admin Building A",
-      "position": "center of campus",
-      "description": "Main Admin office, center of campus next to the Library/Hub."
-    },
-    "PAC": {
-      "building": "PAC",
-      "position": "north side of campus",
-      "description": "Performing Arts Center, north side of campus next to Building C."
-    },
-    "Gym": {
-      "building": "Gym (Building E)",
-      "position": "center-north side of campus",
-      "description": "Gym, center-north of campus between Building C and Building F."
+      "building": "Library",
+      "position": "center of campus, central plaza",
+      "description": "Library, in the central plaza next to Admin."
     },
     "Student Union": {
       "building": "Student Union",
-      "position": "south-center of campus",
-      "description": "Student Union, south-center of campus near Building J and Building F."
+      "position": "center of campus, next to Building H and Building E",
+      "description": "Student Union / dining area, center of campus next to Building H."
+    },
+    "Performing Arts Center": {
+      "building": "PAC",
+      "position": "west-center of campus, attached to Building C",
+      "description": "Performing Arts Center (PAC), west-center of campus, directly attached to Building C (VAPA)."
+    },
+    "Amphitheater": {
+      "building": "Standalone",
+      "position": "center of campus, in the plaza between Building E and the Student Union",
+      "description": "Outdoor amphitheater in the central plaza."
     },
     "Sports Complex": {
       "building": "Sports Complex",
-      "position": "east side of campus, next to the Track & Field",
-      "description": "Sports Complex, east side of campus next to the Track & Field and Parking Lot J."
+      "position": "north-center of campus, next to Building F and Parking Lot 5/6",
+      "description": "Sports Complex, north-center of campus next to Building F and Parking Lots 5 and 6."
     },
-    "Track & Field": {
+    "GAEL Stadium": {
       "building": "Standalone",
-      "position": "east side of campus",
-      "description": "Track and field, east side of campus next to the Sports Complex."
+      "position": "north side of campus, along the Iron Horse Trail",
+      "description": "Football stadium and track, north side of campus closest to the Iron Horse Trail."
+    },
+    "Baseball & Softball Diamonds": {
+      "building": "Standalone",
+      "position": "north-west side of campus, next to GAEL Stadium",
+      "description": "Baseball and softball diamonds, north-west side of campus along the Iron Horse Trail."
     },
     "Tennis Courts": {
       "building": "Standalone",
+      "position": "west-center of campus, next to Building C and the portables",
+      "description": "Tennis courts, west-center of campus next to Building C."
+    },
+    "ARC": {
+      "building": "Academic Resource Center (part of Building F)",
       "position": "north-center of campus",
-      "description": "Tennis courts, north-center of campus near the Sports Field and portables."
-    },
-    "Sports Field": {
-      "building": "Standalone",
-      "position": "center of campus, north side",
-      "description": "Main sports field in the center-north of campus."
-    },
-    "Spec. Ed. Building": {
-      "building": "Spec. Ed. Bldg. 1",
-      "position": "north side of campus",
-      "description": "Special Education building, north side of campus near the portables and PAC."
+      "description": "Academic Resource Center, a wing of Building F."
     }
   },
 
   "parking": {
-    "Parking Lot 1": "West side of campus, along Village Parkway",
-    "Parking Lot 2": "West side of campus, along Village Parkway, next to Parking Lot 1",
-    "Parking Lot J": "Southeast side of campus, near the Sports Complex and Building K"
+    "Lot 1": "South side of campus, along Village Parkway",
+    "Lot 2": "South side of campus, along Village Parkway, next to Lot 1",
+    "Lot 3": "South side of campus, along Village Parkway, next to Lot 2",
+    "Lot 4": "South side of campus, along Village Parkway, next to Lot 3 and closest to Brighton Drive",
+    "Lot 5": "North-east side of campus, along Brighton Drive, next to the Sports Complex and Building J",
+    "Lot 6": "North-east corner of campus, along Brighton Drive, next to Building F and the Sports Complex"
   },
 
   "navigation_notes": [
-    "Village Parkway runs along the west side of campus; Brighton Drive runs along the south side.",
-    "The PAC and Building C are on the north side of campus, next to the Gym (Building E) and Building F.",
-    "Admin Building A, the Library/Hub, and Building B are clustered in the center of campus.",
-    "The Student Union, Building J, Building K, Building L, Building M, and Building N are on the south side of campus, closest to Brighton Drive.",
-    "The Sports Complex and Track & Field are on the east side of campus.",
-    "A pedestrian bridge connects the north end of campus to the Iron Horse Trail."
+    "Village Parkway runs along the south side of campus; Brighton Drive runs along the east side; the Iron Horse Trail runs along the north-west edge.",
+    "GAEL Stadium (football field/track) and the baseball/softball diamonds are in the north-west corner of campus, closest to the Iron Horse Trail.",
+    "The Sports Complex, Building F (Science & Engineering / ARC), and Parking Lots 5-6 are north-center of campus, along Brighton Drive.",
+    "Building E (Auxiliary Gym), Building C (VAPA) with the attached Performing Arts Center, the tennis courts, and the portables are west-center of campus.",
+    "Admin, the Library, the Amphitheater, the Student Union, and Building H cluster around the central plaza.",
+    "Buildings J and K are north-east along Brighton Drive; Buildings L, M, and N are south-east along Brighton Drive, closest to the Village Parkway corner.",
+    "Parking Lots 1-4 run along the south edge (Village Parkway); Lots 5-6 are along the north-east edge (Brighton Drive)."
   ]
 }

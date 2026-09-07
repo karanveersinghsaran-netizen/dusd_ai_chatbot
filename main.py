@@ -269,6 +269,26 @@ async def pwa_icon(filename: str):
     return FileResponse(icon_path, media_type="image/png")
 
 
+@app.get("/schools/{school_id}/campus-map")
+async def campus_map_image(school_id: str):
+    """Serves a school's campus map image from our own origin. The repo is
+    private, so a raw.githubusercontent.com link 404s for any unauthenticated
+    visitor — this is what campus_map.json's map_url should point to instead.
+    Not gated: same reasoning as /icons — non-sensitive, publicly-relevant info."""
+    school = get_school(school_id)
+    if school is None or school.campus_map_file is None:
+        raise HTTPException(status_code=404)
+    image_candidates = sorted(
+        p for p in school.campus_map_file.parent.glob("campus_map.*")
+        if p.suffix.lower() in {".jpg", ".jpeg", ".png"}
+    )
+    if not image_candidates:
+        raise HTTPException(status_code=404)
+    image_path = image_candidates[0]
+    media_type = "image/png" if image_path.suffix.lower() == ".png" else "image/jpeg"
+    return FileResponse(image_path, media_type=media_type, headers={"cache-control": "public, max-age=86400"})
+
+
 def _resolve_session_id(wms_session: str | None, response: Response) -> str:
     """Reuse a valid session cookie, or mint and set a fresh one. Raises 401 if
     a cookie was presented but fails signature verification. Session identity
