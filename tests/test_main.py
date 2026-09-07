@@ -1,4 +1,5 @@
 """Unit tests for the FastAPI app in main.py: web /chat session-cookie flow."""
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -405,6 +406,102 @@ def test_chatbox_route_injects_token_into_manifest_link(client):
     assert f'<link rel="manifest" href="/manifest.webmanifest?token={token}">' in resp.text
 
 
+# ── /chatbox route: per-school theming (#52) ────────────────────────────────
+
+def test_chatbox_route_embeds_public_school_theme_data(client):
+    """The chatbox reads school-theme-data to render per-school colors/logo
+    without an extra network round trip — it must be populated with every
+    school's public theme fields regardless of which (if any) is pinned."""
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+    resp = client.get(f"/chatbox?token={token}")
+
+    assert resp.status_code == 200
+    marker = '<script id="school-theme-data" type="application/json">'
+    assert marker in resp.text
+    start = resp.text.index(marker) + len(marker)
+    end = resp.text.index("</script>", start)
+    theme_data = json.loads(resp.text[start:end])
+
+    assert theme_data["wells"]["name"] == "Wells Middle School"
+    assert theme_data["wells"]["primary_bubble_color"] == "#00695c"
+    assert theme_data["dhs"]["name"] == "Dublin High School"
+    assert theme_data["dhs"]["primary_bubble_color"] == "#0a2472"
+    # Operational fields (phone, bell schedule, ...) must NOT leak into the
+    # public payload sent to the browser.
+    assert "phone" not in theme_data["wells"]
+    assert "bell_schedule" not in theme_data["wells"]
+
+
+def test_chatbox_route_appends_school_to_manifest_link_when_pinned(client):
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+    resp = client.get(f"/chatbox?token={token}&school=wells")
+
+    assert resp.status_code == 200
+    assert f'<link rel="manifest" href="/manifest.webmanifest?token={token}&school=wells">' in resp.text
+
+
+def test_chatbox_route_ignores_unknown_school_in_manifest_link(client):
+    """An unrecognized ?school= must not get forwarded into the manifest
+    link — otherwise the manifest route would just no-op on it anyway, but
+    leaving off the param keeps the link consistent with pinned-vs-not."""
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+    resp = client.get(f"/chatbox?token={token}&school=nonexistent")
+
+    assert resp.status_code == 200
+    assert f'<link rel="manifest" href="/manifest.webmanifest?token={token}">' in resp.text
+
+
+def test_chatbox_route_swaps_apple_touch_icon_for_pinned_school(client):
+    """iOS reads apple-touch-icon at page-load time, so the branded variant
+    must be interpolated server-side (same rationale as the manifest link) —
+    a client-side rewrite would race the browser's own icon fetch."""
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+    resp = client.get(f"/chatbox?token={token}&school=wells")
+
+    assert resp.status_code == 200
+    assert '<link rel="apple-touch-icon" href="/icons/apple-touch-icon-wells.png">' in resp.text
+    assert '<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">' not in resp.text
+
+
+def test_chatbox_route_keeps_generic_apple_touch_icon_when_unpinned(client):
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+    resp = client.get(f"/chatbox?token={token}")
+
+    assert resp.status_code == 200
+    assert '<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">' in resp.text
+
+
+def test_chatbox_route_keeps_generic_apple_touch_icon_for_school_missing_branded_icon(client, tmp_path, monkeypatch):
+    """A school onboarded without running scripts/generate_icons.py yet must
+    still get a working (generic) apple-touch-icon rather than a 404 link."""
+    import app.schools as schools_module
+
+    school_dir = tmp_path / "noicon"
+    school_dir.mkdir()
+    school_dir.joinpath("school.json").write_text(
+        json.dumps(
+            {
+                "id": "noicon",
+                "name": "No Icon School",
+                "district": "Dublin Unified School District",
+                "district_id": "dusd",
+                "website": "https://noicon.dublinusd.org/",
+                "rss_url": "https://noicon.dublinusd.org/rss",
+            }
+        )
+    )
+    monkeypatch.setattr(schools_module, "SCHOOLS_DIR", tmp_path)
+    schools_module.load_schools.cache_clear()
+    try:
+        token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+        resp = client.get(f"/chatbox?token={token}&school=noicon")
+
+        assert resp.status_code == 200
+        assert '<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">' in resp.text
+    finally:
+        schools_module.load_schools.cache_clear()
+
+
 # ── /embed/wms-chatbot.js route (interim static hosting, pending #10) ──────────
 
 def test_embed_script_route_serves_js(client):
@@ -462,6 +559,114 @@ def test_manifest_route_ignores_invalid_token(client):
     assert resp.json()["start_url"] == "/chatbox"
 
 
+# ── /manifest.webmanifest: per-school branding (#52) ────────────────────────
+
+def test_manifest_route_returns_branded_icons_and_name_for_known_school(client):
+    resp = client.get("/manifest.webmanifest?school=wells")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["name"] == "Wells Middle School Chat"
+    assert body["short_name"] == "Wells Chat"
+    assert body["theme_color"] == "#00695c"
+    assert body["background_color"] == "#eef7f6"
+    icon_srcs = {i["src"] for i in body["icons"]}
+    assert icon_srcs == {
+        "/icons/icon-192-wells.png",
+        "/icons/icon-512-wells.png",
+        "/icons/icon-512-maskable-wells.png",
+    }
+
+
+def test_manifest_route_returns_branded_icons_for_other_known_school(client):
+    resp = client.get("/manifest.webmanifest?school=dhs")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["name"] == "Dublin High School Chat"
+    assert body["theme_color"] == "#0a2472"
+    icon_srcs = {i["src"] for i in body["icons"]}
+    assert icon_srcs == {
+        "/icons/icon-192-dhs.png",
+        "/icons/icon-512-dhs.png",
+        "/icons/icon-512-maskable-dhs.png",
+    }
+
+
+def test_manifest_route_falls_back_to_generic_for_unknown_school(client):
+    resp = client.get("/manifest.webmanifest?school=nonexistent")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["name"] == "DUSD School Chat"
+    icon_srcs = {i["src"] for i in body["icons"]}
+    assert icon_srcs == {
+        "/icons/icon-192.png",
+        "/icons/icon-512.png",
+        "/icons/icon-512-maskable.png",
+    }
+
+
+def test_manifest_route_falls_back_to_generic_icons_when_branded_set_incomplete(client, tmp_path, monkeypatch):
+    """A school with theme colors but no generated icon files yet (onboarded
+    before someone ran scripts/generate_icons.py) must not ship a manifest
+    that references missing PNGs — installs would silently break."""
+    import app.schools as schools_module
+
+    school_dir = tmp_path / "newschool"
+    school_dir.mkdir()
+    school_dir.joinpath("school.json").write_text(
+        json.dumps(
+            {
+                "id": "newschool",
+                "name": "New School",
+                "district": "Dublin Unified School District",
+                "district_id": "dusd",
+                "website": "https://newschool.dublinusd.org/",
+                "rss_url": "https://newschool.dublinusd.org/rss",
+                "theme_color": "#123456",
+                "primary_bubble_color": "#123456",
+                "background_tint": "#eeeeee",
+            }
+        )
+    )
+    monkeypatch.setattr(schools_module, "SCHOOLS_DIR", tmp_path)
+    schools_module.load_schools.cache_clear()
+    try:
+        resp = client.get("/manifest.webmanifest?school=newschool")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        # Name/theme_color still apply (those don't depend on icon files)...
+        assert body["name"] == "New School Chat"
+        assert body["theme_color"] == "#123456"
+        # ...but icons fall back to the generic set since none of the
+        # icon-*-newschool.png files exist on disk.
+        icon_srcs = {i["src"] for i in body["icons"]}
+        assert icon_srcs == {
+            "/icons/icon-192.png",
+            "/icons/icon-512.png",
+            "/icons/icon-512-maskable.png",
+        }
+    finally:
+        schools_module.load_schools.cache_clear()
+
+
+def test_manifest_route_appends_school_to_start_url_only_with_valid_token(client):
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+    resp = client.get(f"/manifest.webmanifest?school=wells&token={token}")
+
+    assert resp.status_code == 200
+    assert resp.json()["start_url"] == f"/chatbox?token={token}&school=wells"
+
+
+def test_manifest_route_omits_school_from_start_url_without_valid_token(client):
+    resp = client.get("/manifest.webmanifest?school=wells")
+
+    assert resp.status_code == 200
+    assert resp.json()["start_url"] == "/chatbox"
+
+
 def test_icon_route_serves_png(client):
     resp = client.get("/icons/icon-192.png")
 
@@ -484,6 +689,17 @@ def test_icon_route_rejects_missing_file(client):
     resp = client.get("/icons/nonexistent.png")
 
     assert resp.status_code == 404
+
+
+def test_icon_route_serves_branded_school_icons(client):
+    """The per-school icon variants (#52) generated by
+    scripts/generate_icons.py are served through the same generic route as
+    the default icons — no route change needed to add a school."""
+    for filename in ("icon-192-wells.png", "icon-192-dhs.png", "apple-touch-icon-wells.png"):
+        resp = client.get(f"/icons/{filename}")
+        assert resp.status_code == 200
+        assert resp.headers["content-type"] == "image/png"
+        assert resp.content.startswith(b"\x89PNG\r\n\x1a\n")
 
 
 def test_icon_route_rejects_path_traversal(client):
@@ -522,6 +738,46 @@ def test_campus_map_route_rejects_unknown_school(client):
     assert resp.status_code == 404
 
 
+# ── Accessibility: /fonts/* (issue #64) ─────────────────────────────────────
+
+def test_font_route_serves_woff2(client):
+    resp = client.get("/fonts/OpenDyslexic-Regular.woff2")
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "font/woff2"
+    # WOFF2 magic bytes ("wOF2") — guards against the route silently serving
+    # the wrong file.
+    assert resp.content.startswith(b"wOF2")
+
+
+def test_font_route_serves_bold_variant(client):
+    resp = client.get("/fonts/OpenDyslexic-Bold.woff2")
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "font/woff2"
+
+
+def test_font_route_rejects_missing_file(client):
+    resp = client.get("/fonts/nonexistent.woff2")
+
+    assert resp.status_code == 404
+
+
+def test_font_route_rejects_path_traversal(client):
+    """Same defense-in-depth guard as /icons/{filename}: FastAPI's path
+    parameter normally forbids slashes, but the handler still refuses to
+    serve anything that isn't a plain filename."""
+    resp = client.get("/fonts/..%2Fsecrets.woff2")
+    assert resp.status_code == 404
+
+
+def test_font_route_rejects_non_woff2(client):
+    """Only .woff2 served — prevents the route from accidentally handing out
+    arbitrary files if something else lands in static/fonts/."""
+    resp = client.get("/fonts/OpenDyslexic-OFL.txt")
+    assert resp.status_code == 404
+
+
 def test_chatbox_html_links_to_manifest_and_apple_touch_icon(client):
     """The HTML must actually reference the PWA manifest + apple-touch-icon —
     without these tags, no browser will offer an "Install" prompt regardless
@@ -546,6 +802,22 @@ def test_chatbox_html_has_theme_toggle_and_help_button(client):
     assert 'id="help-btn"' in resp.text
     assert 'id="report-open-btn"' in resp.text
     assert 'id="thanks-btn"' in resp.text
+
+
+def test_chatbox_html_has_accessibility_settings_panel(client):
+    """Guards against the accessibility settings button/panel (issue #64)
+    silently disappearing from the served HTML — the four required controls
+    (font, text size, contrast, motion) must all be present."""
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+    resp = client.get(f"/chatbox?token={token}")
+
+    assert resp.status_code == 200
+    assert 'id="a11y-settings-btn"' in resp.text
+    assert 'id="a11y-panel"' in resp.text
+    assert 'name="a11y-font"' in resp.text
+    assert 'name="a11y-text-size"' in resp.text
+    assert 'name="a11y-contrast"' in resp.text
+    assert 'name="a11y-motion"' in resp.text
 
 
 def test_chatbox_html_has_ai_disclaimer(client):

@@ -17,8 +17,34 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 
 <title>School Chat</title>
+<!-- Public per-school theme data (#52), interpolated by /chatbox at request
+     time — see main.py's _public_school_theme(). Kept as an inline data
+     island rather than a separate fetch so the widget never flashes the
+     generic theme while a request is in flight. Empty object is the
+     no-server-interpolation fallback (e.g. opening this file directly). -->
+<script id="school-theme-data" type="application/json">{}</script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<script>
+  // Apply saved accessibility settings (issue #64) before the stylesheet
+  // below is parsed, so a returning visitor's font/size/contrast/motion
+  // choice is correct from the very first paint instead of flashing the
+  // defaults first. try/catch guards localStorage access, which throws in
+  // some browsers' private-browsing mode — that must never block rendering.
+  (function () {
+    try {
+      var root = document.documentElement;
+      var apply = function (key, attr, defaultValue) {
+        var value = localStorage.getItem(key);
+        if (value && value !== defaultValue) root.setAttribute(attr, value);
+      };
+      apply("wms-a11y-font", "data-font", "default");
+      apply("wms-a11y-text-size", "data-text-size", "m");
+      apply("wms-a11y-contrast", "data-contrast", "default");
+      apply("wms-a11y-motion", "data-motion", "auto");
+    } catch (e) {}
+  })();
+</script>
 <style>
   :root {
     --bg: #f5f5f7;
@@ -85,15 +111,97 @@
     --link: #6ea8ff;
   }
 
+  /* ── Accessibility settings (issue #64) ──────────────────────────────────
+     Font / text size / contrast / motion, toggled from the "Aa" header
+     button and persisted to localStorage (see the early-apply script above
+     and wireA11yPanel() below). Kept in its own block after the theme rules
+     rather than folded into them. */
+
+  /* OpenDyslexic, bundled locally under static/fonts/ and served from
+     GET /fonts/{filename} in main.py — never a CDN, per issue #64. Files are
+     the SIL Open Font License release from
+     https://github.com/antijingoist/opendyslexic (OFL text included
+     alongside them in static/fonts/). */
+  @font-face {
+    font-family: "OpenDyslexic";
+    src: url("/fonts/OpenDyslexic-Regular.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "OpenDyslexic";
+    src: url("/fonts/OpenDyslexic-Bold.woff2") format("woff2");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+  }
+  :root[data-font="dyslexic"] body {
+    font-family: "OpenDyslexic", Verdana, Tahoma, "Trebuchet MS", sans-serif;
+    letter-spacing: 0.02em;
+    line-height: 1.6;
+  }
+
+  /* Text size: S/M/L/XL, scaling the root rem base. Most spacing in this
+     stylesheet is already in px rather than rem, so paddings and touch
+     targets stay put and only text grows/shrinks — #input further down is
+     the one exception that needs an explicit floor to avoid an iOS Safari
+     zoom-on-focus regression at the "S" size. */
+  :root { font-size: 16px; }
+  :root[data-text-size="s"]  { font-size: 14px; }
+  :root[data-text-size="l"]  { font-size: 18px; }
+  :root[data-text-size="xl"] { font-size: 22px; }
+
+  /* High contrast: dark background, bright text, and strong borders — placed
+     after the theme-toggle rules above so it always wins at equal
+     specificity regardless of whether light or dark is active underneath
+     (OS-driven or user-picked), composing with the toggle instead of
+     fighting it. */
+  :root[data-contrast="high"] {
+    --bg: #000000;
+    --surface: #000000;
+    --border: #ffffff;
+    --text: #ffffff;
+    --text-muted: #e5e5e5;
+    --user-bubble-bg: #ffff00;
+    --user-bubble-text: #000000;
+    --bot-bubble-bg: #1a1a1a;
+    --bot-bubble-text: #ffffff;
+    --error-bubble-bg: #3a0000;
+    --error-bubble-text: #ff8a80;
+    --link: #7fdbff;
+  }
+
+  /* Reduced motion: automatic (OS prefers-reduced-motion) and a manual
+     override from the settings panel, for users who want it off without
+     changing OS settings. Both drop the message slide-in and typing-dot
+     bounce and switch #messages to an instant (non-smooth) scroll. */
+  @media (prefers-reduced-motion: reduce) {
+    .msg { animation: none; }
+    .typing span { animation: none; opacity: 0.8; }
+    #messages { scroll-behavior: auto; }
+  }
+  :root[data-motion="reduce"] .msg { animation: none; }
+  :root[data-motion="reduce"] .typing span { animation: none; opacity: 0.8; }
+  :root[data-motion="reduce"] #messages { scroll-behavior: auto; }
+
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; height: 100%; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
     background: var(--bg);
     color: var(--text);
-    /* 100dvh (dynamic viewport) so the layout shrinks correctly when iOS
-       Safari's keyboard opens — 100vh would leave the input hidden. */
-    height: 100dvh;
+    /* --app-height (set by trackAppHeight() below, from the real, live
+       visualViewport height) is the source of truth — it's correct whether
+       the browser chrome is expanded or collapsed. The static units are
+       only a pre-JS fallback for the instant before that script runs, and
+       for the rare no-JS case: 100vh for very old browsers, 100svh (small
+       viewport — never taller than what's visible) as the safer modern
+       default so there's no flash of below-the-fold content before
+       trackAppHeight() corrects it. */
+    height: 100vh;
+    height: 100svh;
+    height: var(--app-height, 100svh);
     display: flex;
     flex-direction: column;
     -webkit-tap-highlight-color: transparent;
@@ -119,20 +227,42 @@
   }
   header .actions { justify-content: flex-end; }
   #install-btn {
+    /* Neutral (--text/--border), not --user-bubble-bg: that variable is also
+       the per-school accent (#52), and dark, low-luminance school colors
+       (e.g. navy, teal) read as low-contrast text/border on a dark-mode
+       background. Matches the existing #theme-toggle-btn/#help-btn style so
+       it stays legible regardless of theme or which school is pinned. */
     display: none;
     padding: 6px 10px;
     font-size: 0.8rem;
     font-weight: 600;
-    color: var(--user-bubble-bg);
+    color: var(--text);
     background: transparent;
-    border: 1px solid var(--user-bubble-bg);
+    border: 1px solid var(--border);
     border-radius: 999px;
     cursor: pointer;
   }
   #install-btn.visible { display: inline-block; }
   #install-btn:active { opacity: 0.6; }
 
-  #theme-toggle-btn, #help-btn {
+  /* Per-school logo placeholder (#52): a colored initials circle next to the
+     title once a school is pinned. Hidden — no real logo assets exist yet —
+     until JS adds .visible with the school's brand color + initials. */
+  .school-logo {
+    display: none;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    line-height: 20px;
+    vertical-align: middle;
+    margin-right: 6px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #ffffff;
+    text-align: center;
+  }
+  .school-logo.visible { display: inline-block; }
+
+  #theme-toggle-btn, #help-btn, #a11y-settings-btn {
     width: 30px; height: 30px;
     padding: 0;
     font-size: 1rem;
@@ -144,7 +274,13 @@
     display: flex; align-items: center; justify-content: center;
   }
   #theme-toggle-btn svg { width: 16px; height: 16px; fill: currentColor; }
-  #theme-toggle-btn:active, #help-btn:active { opacity: 0.6; }
+  #theme-toggle-btn:active, #help-btn:active, #a11y-settings-btn:active { opacity: 0.6; }
+  /* High contrast (#64) is a single fixed dark palette that always wins
+     over light/dark, so the toggle has nothing left to do while it's
+     active — disable it rather than leave a clickable button that visibly
+     does nothing. */
+  #theme-toggle-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  #a11y-settings-btn { font-size: 0.7rem; font-weight: 700; }
 
   /* Shared popover shell for the iOS install hint and the help/support
      panel — both are small dismissible cards anchored below the header. */
@@ -181,6 +317,33 @@
     font-family: inherit;
     font-size: 0.85em;
   }
+
+  /* Accessibility settings panel option groups (issue #64) — pill-style
+     radio labels matching #school-picker's existing look. */
+  .a11y-group { border: none; padding: 0; margin: 0 0 12px; }
+  .a11y-group:last-of-type { margin-bottom: 0; }
+  .a11y-group legend {
+    padding: 0 0 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .a11y-options { display: flex; flex-wrap: wrap; gap: 8px; }
+  .a11y-options label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    color: var(--text);
+    font-size: 0.85rem;
+  }
+  .a11y-options input[type="radio"] { accent-color: var(--user-bubble-bg); }
 
   .help-actions { display: flex; flex-direction: column; gap: 8px; }
   .help-action-btn {
@@ -350,9 +513,11 @@
     flex: 1;
     min-width: 0;
     padding: 10px 14px;
-    font-size: 1rem;
-    /* Prevent iOS Safari's auto-zoom on focus; requires the font-size >= 16px
-       above (it is 1rem = 16px). */
+    /* Prevent iOS Safari's auto-zoom on focus, which triggers below 16px.
+       Text-size "S" (issue #64) shrinks the root rem base under 16px, so
+       floor this field explicitly instead of letting it shrink with
+       everything else; it still grows for the L/XL sizes. */
+    font-size: max(1rem, 16px);
     border: 1px solid var(--border);
     border-radius: 20px;
     background: var(--bg);
@@ -375,19 +540,83 @@
   }
   #send:disabled { opacity: 0.4; cursor: not-allowed; }
   #send svg { width: 20px; height: 20px; fill: currentColor; }
+
+  /* Voice input (mic) button, styled to match #send. */
+  #mic-btn {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  #mic-btn svg { width: 20px; height: 20px; fill: currentColor; }
+  #mic-btn.listening {
+    background: #ff3b30;
+    border-color: #ff3b30;
+    color: #ffffff;
+    animation: mic-pulse 1.2s infinite ease-in-out;
+  }
+  @keyframes mic-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4); }
+    50%      { box-shadow: 0 0 0 8px rgba(255, 59, 48, 0); }
+  }
+  #mic-btn:disabled { opacity: 0.35; cursor: not-allowed; animation: none; }
+
+  /* Voice output (speaker) toggle, lives in the header actions area. */
+  #speak-toggle {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    vertical-align: middle;
+  }
+  #speak-toggle svg { width: 18px; height: 18px; fill: currentColor; }
+  #speak-toggle[aria-pressed="true"] { color: var(--user-bubble-bg); }
+  #speak-toggle.speaking { animation: speak-pulse 1s infinite ease-in-out; }
+  @keyframes speak-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.5; }
+  }
+  #speak-toggle:disabled { opacity: 0.3; cursor: not-allowed; animation: none; }
+
+  /* Visually-hidden live region announcing speech status to screen readers. */
+  #voice-status {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
 </style>
 </head>
 <body>
   <header>
     <div class="actions-left">
       <button id="help-btn" type="button" aria-label="Help &amp; support">?</button>
+      <button id="a11y-settings-btn" type="button" aria-haspopup="dialog"
+              aria-controls="a11y-panel" aria-expanded="false"
+              aria-label="Accessibility settings">Aa</button>
     </div>
-    <div class="title">School Chat</div>
+    <div class="title"><span id="school-logo" class="school-logo" aria-hidden="true"></span><span id="title-text">School Chat</span></div>
     <div class="actions">
       <button id="theme-toggle-btn" type="button" aria-label="Toggle dark mode"></button>
+      <button id="speak-toggle" type="button" aria-pressed="false"
+              aria-label="Turn on spoken replies" title="Turn on spoken replies">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10v4h4l5 5V5L7 10H3zm13.5 2c0-1.77-1.02-3.29-2.5-4.03v8.06c1.48-.74 2.5-2.26 2.5-4.03zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+      </button>
       <button id="install-btn" type="button" aria-label="Install app">Install</button>
     </div>
   </header>
+
+  <div id="voice-status" aria-live="polite" role="status"></div>
 
   <div id="ios-install-hint" class="popover" role="dialog" aria-labelledby="ios-install-title">
     <button class="close" type="button" aria-label="Dismiss">×</button>
@@ -436,6 +665,45 @@
     </form>
   </div>
 
+  <div id="a11y-panel" class="popover" role="dialog" aria-labelledby="a11y-panel-title">
+    <button class="close" type="button" aria-label="Dismiss">×</button>
+    <div id="a11y-panel-title" style="font-weight: 600; margin-bottom: 10px;">Accessibility settings</div>
+
+    <fieldset class="a11y-group">
+      <legend>Font</legend>
+      <div class="a11y-options">
+        <label><input type="radio" name="a11y-font" value="default" checked> Default</label>
+        <label><input type="radio" name="a11y-font" value="dyslexic"> Dyslexia-friendly</label>
+      </div>
+    </fieldset>
+
+    <fieldset class="a11y-group">
+      <legend>Text size</legend>
+      <div class="a11y-options">
+        <label><input type="radio" name="a11y-text-size" value="s"> S</label>
+        <label><input type="radio" name="a11y-text-size" value="m" checked> M</label>
+        <label><input type="radio" name="a11y-text-size" value="l"> L</label>
+        <label><input type="radio" name="a11y-text-size" value="xl"> XL</label>
+      </div>
+    </fieldset>
+
+    <fieldset class="a11y-group">
+      <legend>Contrast</legend>
+      <div class="a11y-options">
+        <label><input type="radio" name="a11y-contrast" value="default" checked> Default</label>
+        <label><input type="radio" name="a11y-contrast" value="high"> High contrast</label>
+      </div>
+    </fieldset>
+
+    <fieldset class="a11y-group">
+      <legend>Motion</legend>
+      <div class="a11y-options">
+        <label><input type="radio" name="a11y-motion" value="auto" checked> Auto (system)</label>
+        <label><input type="radio" name="a11y-motion" value="reduce"> Reduce motion</label>
+      </div>
+    </fieldset>
+  </div>
+
   <div id="toast" role="status" aria-live="polite"></div>
 
   <!-- Only visible when the embed didn't pin a school via ?school=. Real
@@ -449,6 +717,10 @@
   <div id="messages"></div>
 
   <div id="input-row">
+    <button id="mic-btn" type="button" aria-pressed="false"
+            aria-label="Start voice input" title="Start voice input">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
+    </button>
     <input id="input" type="text" placeholder="Ask a question..." autocomplete="off"
            autocapitalize="sentences" enterkeyhint="send">
     <button id="send" aria-label="Send">
@@ -459,6 +731,28 @@
   <div id="disclaimer">AI can make mistakes. Check important information.</div>
 
   <script>
+    // Live viewport height: neither static CSS unit gets this right on its
+    // own. 100dvh can report the *large* viewport (chrome collapsed) before
+    // the user has scrolled, leaving the input below the fold on first
+    // paint. 100svh is pinned to the *smallest* the chrome ever gets, so
+    // once the chrome actually collapses (e.g. after a scroll) there's dead
+    // space at the bottom that isn't part of the app. Tracking the real,
+    // current visible height in JS and re-measuring on every resize is the
+    // only way to stay correct in both directions.
+    (function trackAppHeight() {
+      const root = document.documentElement;
+      function setAppHeight() {
+        const h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+        root.style.setProperty("--app-height", h + "px");
+      }
+      setAppHeight();
+      window.addEventListener("resize", setAppHeight);
+      window.addEventListener("orientationchange", setAppHeight);
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", setAppHeight);
+      }
+    })();
+
     // Theme toggle: defaults to following the OS's prefers-color-scheme
     // (no data-theme attribute at all). Once the user taps the button, we
     // pin an explicit choice in localStorage so it survives reloads and no
@@ -603,6 +897,91 @@
       });
     })();
 
+    // Accessibility settings panel (issue #64): font, text size, contrast,
+    // and a manual "reduce motion" override, persisted to localStorage and
+    // re-applied on load by the early-apply script in <head> — that runs
+    // before the stylesheet is parsed, so returning visitors get the right
+    // look on the very first paint instead of a flash of defaults.
+    (function wireA11yPanel() {
+      const root = document.documentElement;
+      const btn = document.getElementById("a11y-settings-btn");
+      const panel = document.getElementById("a11y-panel");
+      const closeBtn = panel.querySelector(".close");
+
+      // radio group name -> [localStorage key, data-* attribute, default value]
+      const GROUPS = {
+        "a11y-font": ["wms-a11y-font", "data-font", "default"],
+        "a11y-text-size": ["wms-a11y-text-size", "data-text-size", "m"],
+        "a11y-contrast": ["wms-a11y-contrast", "data-contrast", "default"],
+        "a11y-motion": ["wms-a11y-motion", "data-motion", "auto"],
+      };
+
+      // High contrast is a single fixed dark palette that always wins over
+      // light/dark (same CSS vars, later in source order) — the toggle has
+      // nothing left to do while it's active, so disable it rather than
+      // leave a clickable button that visibly does nothing.
+      const themeToggleBtn = document.getElementById("theme-toggle-btn");
+      function syncThemeToggleDisabled() {
+        themeToggleBtn.disabled = root.getAttribute("data-contrast") === "high";
+      }
+      syncThemeToggleDisabled();
+
+      Object.entries(GROUPS).forEach(([name, [storageKey, attr, defaultValue]]) => {
+        const inputs = Array.from(panel.querySelectorAll(`input[name="${name}"]`));
+        const current = root.getAttribute(attr) || defaultValue;
+        inputs.forEach((input) => {
+          input.checked = input.value === current;
+          input.addEventListener("change", () => {
+            if (!input.checked) return;
+            try { localStorage.setItem(storageKey, input.value); } catch (e) {}
+            if (input.value === defaultValue) {
+              root.removeAttribute(attr);
+            } else {
+              root.setAttribute(attr, input.value);
+            }
+            // Re-run school theming (#52) so its --user-bubble-bg/--bg
+            // inline overrides are added or dropped immediately to match
+            // the new contrast state, instead of only refreshing on the
+            // next school-picker change or page reload.
+            if (name === "a11y-contrast") {
+              syncThemeToggleDisabled();
+              if (typeof applySchoolTheme === "function") applySchoolTheme(schoolId);
+            }
+          });
+        });
+      });
+
+      function openPanel() {
+        panel.classList.add("visible");
+        btn.setAttribute("aria-expanded", "true");
+        const firstInput = panel.querySelector('input[type="radio"]');
+        (firstInput || closeBtn).focus();
+      }
+      function closePanel() {
+        panel.classList.remove("visible");
+        btn.setAttribute("aria-expanded", "false");
+      }
+
+      btn.addEventListener("click", () => {
+        if (panel.classList.contains("visible")) {
+          closePanel();
+          btn.focus();
+        } else {
+          openPanel();
+        }
+      });
+      closeBtn.addEventListener("click", () => {
+        closePanel();
+        btn.focus();
+      });
+      panel.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          closePanel();
+          btn.focus();
+        }
+      });
+    })();
+
     // Install-button wiring. Two separate flows because iOS Safari refuses to
     // implement the standard beforeinstallprompt API — so on iPhone we can't
     // trigger the install sheet programmatically and have to show a manual
@@ -664,8 +1043,12 @@
     document.addEventListener("click", (e) => {
       document.querySelectorAll(".popover.visible").forEach((popover) => {
         if (popover.contains(e.target)) return;
-        if (e.target.closest("#help-btn, #install-btn, #report-open-btn")) return;
+        if (e.target.closest("#help-btn, #install-btn, #report-open-btn, #a11y-settings-btn")) return;
         popover.classList.remove("visible");
+        // Keep any trigger button's aria-expanded in sync when its popover
+        // gets dismissed this way rather than via its own close button.
+        const trigger = document.querySelector(`[aria-controls="${popover.id}"]`);
+        if (trigger) trigger.setAttribute("aria-expanded", "false");
       });
     });
 
@@ -686,6 +1069,85 @@
     }
     schoolPickerEl.addEventListener("change", (e) => {
       schoolId = e.target.value;
+    });
+
+    // Per-school theming (#52): reads the theme data island embedded by
+    // /chatbox (main.py's _public_school_theme()) and reflects the pinned
+    // school's brand color + short name in the header. No school pinned
+    // (picker visible) or a school with no theme fields yet both fall back
+    // to the neutral blue default already defined in :root above.
+    const schoolThemes = JSON.parse(document.getElementById("school-theme-data").textContent || "{}");
+    const titleTextEl = document.getElementById("title-text");
+    const schoolLogoEl = document.getElementById("school-logo");
+    const defaultTitleText = titleTextEl.textContent;
+    const themeColorMetas = Array.from(document.querySelectorAll('meta[name="theme-color"]'));
+    const defaultThemeColors = themeColorMetas.map((meta) => meta.getAttribute("content"));
+
+    // "Wells Middle School" -> "Wells Middle"; matches the issue's examples
+    // ("Wells Middle Chat", "Dublin High Chat") without a separate
+    // short-name field in school.json.
+    function shortSchoolName(fullName) {
+      return fullName.split(/\s+/).filter((word) => word.toLowerCase() !== "school").join(" ");
+    }
+
+    function schoolInitials(shortName) {
+      return shortName.split(/\s+/).slice(0, 2).map((word) => word[0]).join("").toUpperCase();
+    }
+
+    function isDarkModeActive() {
+      const stored = localStorage.getItem("wms-theme");
+      if (stored) return stored === "dark";
+      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+    }
+
+    function applySchoolTheme(id) {
+      const theme = id && schoolThemes[id];
+      const root = document.documentElement;
+      if (!theme) {
+        titleTextEl.textContent = defaultTitleText;
+        schoolLogoEl.classList.remove("visible");
+        root.style.removeProperty("--user-bubble-bg");
+        root.style.removeProperty("--bg");
+        themeColorMetas.forEach((meta, i) => meta.setAttribute("content", defaultThemeColors[i]));
+        return;
+      }
+      const shortName = shortSchoolName(theme.name);
+      titleTextEl.textContent = shortName + " Chat";
+      schoolLogoEl.textContent = schoolInitials(shortName);
+      schoolLogoEl.style.background = theme.primary_bubble_color || theme.theme_color || "";
+      schoolLogoEl.classList.add("visible");
+      // High contrast (#64) picks --user-bubble-bg/--bg via a CSS selector on
+      // :root[data-contrast="high"], but an inline style set here always
+      // wins over any stylesheet rule regardless of specificity — so a
+      // pinned school's color would silently stay on top of high contrast's
+      // choice (e.g. black text from high contrast, but the school's own
+      // dark blue/navy bubble background instead of high contrast's
+      // yellow). Skip the inline override while high contrast is active so
+      // its CSS rule is the only thing in control.
+      const highContrast = root.getAttribute("data-contrast") === "high";
+      if (theme.primary_bubble_color && !highContrast) {
+        root.style.setProperty("--user-bubble-bg", theme.primary_bubble_color);
+      } else {
+        root.style.removeProperty("--user-bubble-bg");
+      }
+      if (theme.theme_color) {
+        themeColorMetas.forEach((meta) => meta.setAttribute("content", theme.theme_color));
+      }
+      // Background tint only applied in light mode — a saturated school
+      // color as a full-screen background reads as garish once the surface
+      // is already dark (see the "whole-app re-theme" open question in #52).
+      if (theme.background_tint && !isDarkModeActive() && !highContrast) {
+        root.style.setProperty("--bg", theme.background_tint);
+      } else {
+        root.style.removeProperty("--bg");
+      }
+    }
+
+    applySchoolTheme(schoolId);
+    schoolPickerEl.addEventListener("change", () => applySchoolTheme(schoolId));
+    document.getElementById("theme-toggle-btn").addEventListener("click", () => applySchoolTheme(schoolId));
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+      if (!localStorage.getItem("wms-theme")) applySchoolTheme(schoolId);
     });
 
     function addMessage(role, text) {
@@ -745,6 +1207,7 @@
         }
         const data = await resp.json();
         addMessage("bot", data.reply);
+        speakReply(data.reply);
       } catch (err) {
         pending.remove();
         addMessage("error", "Sorry, I couldn't reach the server. Check your connection and try again.");
@@ -758,6 +1221,139 @@
     inputEl.addEventListener("keydown", (e) => {
       if (e.key === "Enter") sendMessage();
     });
+
+    // Language used for both recognition and synthesis. Kept as a single
+    // named constant (never inlined) so the multi-language feature (#62)
+    // can later swap this for a user-selected locale without touching the
+    // speech wiring itself.
+    const VOICE_LANG = "en-US";
+
+    // ---- Voice input (speech-to-text) --------------------------------------
+    // Uses the browser's native Web Speech API — no external services. Mic
+    // access is only ever requested from an explicit tap on #mic-btn; it is
+    // never started automatically on page load (privacy requirement).
+    const micBtn = document.getElementById("mic-btn");
+    const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const speechRecognitionSupported = !!SpeechRecognitionCtor;
+
+    let recognition = null;
+    let recognizing = false;
+
+    function setMicState(listening) {
+      recognizing = listening;
+      micBtn.classList.toggle("listening", listening);
+      micBtn.setAttribute("aria-pressed", listening ? "true" : "false");
+      const label = listening ? "Stop voice input" : "Start voice input";
+      micBtn.setAttribute("aria-label", label);
+      micBtn.title = label;
+    }
+
+    if (!speechRecognitionSupported) {
+      // Graceful fallback: disable the button and explain why via a native
+      // tooltip + accessible label instead of crashing or silently no-oping.
+      micBtn.disabled = true;
+      micBtn.setAttribute("aria-label", "Voice input isn't supported in this browser");
+      micBtn.title = "Voice input isn't supported in this browser";
+    } else {
+      micBtn.addEventListener("click", () => {
+        if (recognizing) {
+          recognition && recognition.stop();
+          return;
+        }
+
+        recognition = new SpeechRecognitionCtor();
+        recognition.lang = VOICE_LANG;
+        recognition.continuous = false; // browser auto-stops after silence
+        recognition.interimResults = true;
+        recognition.maxAlternatives = 1;
+
+        recognition.addEventListener("start", () => setMicState(true));
+        recognition.addEventListener("end", () => {
+          setMicState(false);
+          inputEl.focus();
+        });
+        recognition.addEventListener("error", (e) => {
+          setMicState(false);
+          if (e.error !== "no-speech" && e.error !== "aborted") {
+            addMessage("error", "Couldn't access the microphone. Please check your permissions and try again.");
+          }
+        });
+        recognition.addEventListener("result", (e) => {
+          // Populate the input field so the user can review/edit before
+          // sending — transcribed text is never auto-sent.
+          let transcript = "";
+          for (let i = 0; i < e.results.length; i++) {
+            transcript += e.results[i][0].transcript;
+          }
+          inputEl.value = transcript;
+        });
+
+        try {
+          recognition.start();
+        } catch (err) {
+          setMicState(false);
+        }
+      });
+    }
+
+    // ---- Voice output (text-to-speech) -------------------------------------
+    const speakToggle = document.getElementById("speak-toggle");
+    const voiceStatusEl = document.getElementById("voice-status");
+    const speechSynthesisSupported =
+      "speechSynthesis" in window && typeof SpeechSynthesisUtterance !== "undefined";
+    let speakRepliesEnabled = false;
+
+    if (!speechSynthesisSupported) {
+      speakToggle.disabled = true;
+      speakToggle.setAttribute("aria-label", "Spoken replies aren't supported in this browser");
+      speakToggle.title = "Spoken replies aren't supported in this browser";
+    } else {
+      speakToggle.addEventListener("click", () => {
+        speakRepliesEnabled = !speakRepliesEnabled;
+        speakToggle.setAttribute("aria-pressed", speakRepliesEnabled ? "true" : "false");
+        const label = speakRepliesEnabled ? "Turn off spoken replies" : "Turn on spoken replies";
+        speakToggle.setAttribute("aria-label", label);
+        speakToggle.title = label;
+        if (!speakRepliesEnabled) {
+          window.speechSynthesis.cancel();
+          speakToggle.classList.remove("speaking");
+          voiceStatusEl.textContent = "";
+        }
+      });
+    }
+
+    // Strip the Markdown syntax bot replies are rendered with so the speech
+    // synthesizer doesn't read out literal "**", "#", "[", "]" characters.
+    function textForSpeech(markdown) {
+      return markdown
+        .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+        .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+        .replace(/[*_`#>~]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function speakReply(text) {
+      if (!speechSynthesisSupported || !speakRepliesEnabled) return;
+      const utterance = new SpeechSynthesisUtterance(textForSpeech(text));
+      utterance.lang = VOICE_LANG;
+      utterance.onstart = () => {
+        speakToggle.classList.add("speaking");
+        voiceStatusEl.textContent = "Speaking reply";
+      };
+      utterance.onend = () => {
+        speakToggle.classList.remove("speaking");
+        voiceStatusEl.textContent = "";
+      };
+      utterance.onerror = () => {
+        speakToggle.classList.remove("speaking");
+        voiceStatusEl.textContent = "";
+      };
+      // Cancel anything still being read so overlapping replies don't talk
+      // over each other.
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+    }
   </script>
 </body>
 </html>

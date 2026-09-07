@@ -12,6 +12,11 @@
   "donation_url": "https://www.paypal.com/donate/?hosted_button_id=A7XCLC68BRATW",
   "campus_map_file": "campus_map.json",
 
+  "theme_color": "#00695c",
+  "primary_bubble_color": "#00695c",
+  "background_tint": "#eef7f6",
+  "logo_url": null,
+
   "bell_schedule": "Monday / Tuesday / Thursday / Friday:\n  Period 0:  7:40 AM – 8:30 AM\n  Period 1:  8:35 AM – 9:25 AM\n  Period 2:  9:29 AM – 10:19 AM\n  Break:     10:19 AM – 10:26 AM\n  AVID/Advisory: 10:30 AM – 10:55 AM\n  Period 3:  10:59 AM – 11:49 AM\n  Lunch A:   11:49 AM – 12:23 PM\n  Period 4 (Lunch A): 12:27 PM – 1:17 PM\n  Period 4 (Lunch B): 11:53 AM – 12:43 PM\n  Lunch B:   12:43 PM – 1:17 PM\n  Period 5:  1:21 PM – 2:11 PM\n  Period 6:  2:15 PM – 3:05 PM\n\nWednesday:\n  Period 0:  7:45 AM – 8:30 AM\n  Period 1:  8:35 AM – 9:23 AM\n  Period 2:  9:27 AM – 10:10 AM\n  Break:     10:10 AM – 10:17 AM\n  Period 3:  10:21 AM – 11:04 AM\n  Lunch A:   11:04 AM – 11:39 AM\n  Period 4 (Lunch A): 11:43 AM – 12:26 PM\n  Period 4 (Lunch B): 11:08 AM – 11:51 AM\n  Lunch B:   11:51 AM – 12:26 PM\n  Period 5:  12:30 PM – 1:13 PM\n  Period 6:  1:17 PM – 2:00 PM\n\nMinimum Days:\n  Period 0:  8:05 AM – 8:30 AM\n  Period 1:  8:35 AM – 9:07 AM\n  Period 2:  9:11 AM – 9:41 AM\n  Period 3:  9:45 AM – 10:15 AM\n  Period 4:  10:22 AM – 10:52 AM\n  Period 5:  10:56 AM – 11:26 AM\n  Period 6:  11:30 AM – 12:00 PM (Lunch Grab & Go)",
 
   "useful_links": "- Donate to Wells Middle School: https://www.paypal.com/donate/?hosted_button_id=A7XCLC68BRATW\n- Bell Schedule PDF: https://drive.google.com/file/d/107PmZjvXZacDQgX_O6mpDd-09qWPgiIi/view\n- Athletics: https://sites.google.com/dublinusd.org/wmsathletics/home\n- AVID Program: https://sites.google.com/dublinusd.org/wells-middle-school-avid\n- Parent Portal (grades/attendance): https://icampus.dublinusd.org/campus/portal/dublin.jsp\n- Counseling Appointment Request: https://forms.gle/dXkFqP5bRxUGtFvi9\n- Wells Webstore: https://wellswebstore.myschoolcentral.com\n- Elective Handbook: https://drive.google.com/file/d/1uVqHtEqBH17XAKrkz9lu3OStBcIMVQ9G/view\n- Bullying Report Form: https://forms.gle/7xYV7TgBdpbYA8z87",

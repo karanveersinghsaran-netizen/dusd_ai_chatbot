@@ -155,10 +155,59 @@ def test_call_api_system_is_list_with_cache_control(agent):
     _, kwargs = agent.client.beta.messages.create.call_args
     system = kwargs["system"]
     assert isinstance(system, list)
-    assert len(system) == 1
+    assert len(system) == 2
     assert system[0]["type"] == "text"
     assert system[0]["cache_control"] == {"type": "ephemeral"}
     assert system[0]["text"] == agent._system_prompt
+
+
+def test_call_api_appends_uncached_datetime_suffix_after_cached_prefix(agent):
+    """The current date/time must be appended AFTER the cached prefix, as its
+    own block with no cache_control, so per-request date info never busts the
+    prompt cache and the cached block stays byte-stable."""
+    mock_response = MagicMock()
+    mock_response.stop_reason = "end_turn"
+    agent.client.beta.messages.create.return_value = mock_response
+
+    with patch("app.agent.pacific_now") as mock_now:
+        import datetime
+        from zoneinfo import ZoneInfo
+        mock_now.return_value = datetime.datetime(2026, 11, 4, 15, 42, tzinfo=ZoneInfo("America/Los_Angeles"))
+        agent._call_api([{"role": "user", "content": "hi"}])
+
+    _, kwargs = agent.client.beta.messages.create.call_args
+    system = kwargs["system"]
+    suffix = system[1]
+    assert "cache_control" not in suffix
+    assert suffix["type"] == "text"
+    assert "Current date/time:" in suffix["text"]
+    assert "2026-11-04" in suffix["text"]
+    assert "America/Los_Angeles" in suffix["text"]
+    assert "School year: 2026-2027" in suffix["text"]
+
+
+def test_datetime_suffix_recomputed_on_every_call(agent):
+    """Unlike the cached system prompt (built once at construction), the date
+    suffix must be freshly computed on every _call_api invocation so a long
+    conversation doesn't drift onto a stale date."""
+    mock_response = MagicMock()
+    mock_response.stop_reason = "end_turn"
+    agent.client.beta.messages.create.return_value = mock_response
+
+    import datetime
+    from zoneinfo import ZoneInfo
+    with patch("app.agent.pacific_now") as mock_now:
+        mock_now.return_value = datetime.datetime(2026, 11, 4, 9, 0, tzinfo=ZoneInfo("America/Los_Angeles"))
+        agent._call_api([{"role": "user", "content": "hi"}])
+        first_suffix = agent.client.beta.messages.create.call_args[1]["system"][1]["text"]
+
+        mock_now.return_value = datetime.datetime(2026, 11, 5, 9, 0, tzinfo=ZoneInfo("America/Los_Angeles"))
+        agent._call_api([{"role": "user", "content": "hi again"}])
+        second_suffix = agent.client.beta.messages.create.call_args[1]["system"][1]["text"]
+
+    assert first_suffix != second_suffix
+    assert "2026-11-04" in first_suffix
+    assert "2026-11-05" in second_suffix
 
 
 def test_call_api_includes_prompt_caching_beta(agent):
