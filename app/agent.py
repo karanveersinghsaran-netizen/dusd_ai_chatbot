@@ -32,7 +32,8 @@ class ChatReply(NamedTuple):
 LANGUAGE_NAMES: Dict[str, str] = {
     "en": "English",
     "es": "Spanish",
-    "zh": "Mandarin Chinese",
+    "zh": "Simplified Mandarin Chinese",
+    "zh-Hant": "Traditional Mandarin Chinese",
 }
 DEFAULT_LANGUAGE = "en"
 
@@ -270,22 +271,24 @@ CRITICAL RULES:
         )
 
     @staticmethod
-    def _language_directive_suffix(language: str) -> Optional[str]:
-        """Per-request, uncached system-prompt suffix telling Claude which
-        language to respond in (#62). Appended AFTER the cached prefix —
-        same reasoning as _current_datetime_suffix: language is a per-session
-        choice that can change between requests, so baking it into the
-        cached block would either bust the cache on every switch or go
-        stale. Returns None for English (the default), so the common case
-        keeps the exact same two-block system= list as before this feature."""
-        if language == DEFAULT_LANGUAGE:
-            return None
-        language_name = LANGUAGE_NAMES.get(language)
-        if not language_name:
-            return None
+    def _language_directive_suffix(language: str) -> str:
+        """Per-request, uncached system-prompt suffix (#62). Appended AFTER
+        the cached prefix — same reasoning as _current_datetime_suffix: this
+        can change between requests, so baking it into the cached block
+        would either bust the cache on every switch or go stale.
+
+        Always mirrors whichever language the user's own message is written
+        in, regardless of the language toggle — a parent who leaves the
+        toggle on English but types in Spanish should get a Spanish reply,
+        not be forced into English by a stale toggle setting. The toggle
+        only supplies the fallback for messages that don't clearly indicate
+        a language on their own (e.g. "ok", "3rd period", an emoji)."""
+        fallback_name = LANGUAGE_NAMES.get(language, LANGUAGE_NAMES[DEFAULT_LANGUAGE])
         return (
-            f"Respond in {language_name} regardless of the language of tool "
-            "output or scraped content."
+            "Always respond in the same language as the user's current "
+            "message, regardless of the language of tool output or scraped "
+            "content. If the message doesn't clearly indicate a language, "
+            f"default to {fallback_name}."
         )
 
     def process_tool_call(self, tool_name: str, tool_input: Dict[str, Any]) -> tuple[str, bool]:
@@ -406,16 +409,16 @@ CRITICAL RULES:
         # date/time is appended as a second, uncached block AFTER it — it
         # changes every request (every minute, in fact), so baking it into
         # the cached block would either invalidate the cache constantly or
-        # go stale. The language directive (#62) is a third, also-uncached
-        # block for the same reason — it's a per-session choice, not a
-        # property of this school, so it can't live in the cached prefix.
+        # go stale. The language directive (#62) is a third, always-present,
+        # also-uncached block for the same reason — it depends on both the
+        # per-session toggle and (mainly) the user's own message, neither of
+        # which is a property of this school that could live in the cached
+        # prefix.
         system = [
             {"type": "text", "text": self._system_prompt, "cache_control": {"type": "ephemeral"}},
             {"type": "text", "text": self._current_datetime_suffix()},
+            {"type": "text", "text": self._language_directive_suffix(language)},
         ]
-        language_directive = self._language_directive_suffix(language)
-        if language_directive:
-            system.append({"type": "text", "text": language_directive})
         for attempt in range(retries):
             try:
                 return self.client.beta.messages.create(
