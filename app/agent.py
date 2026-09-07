@@ -387,7 +387,14 @@ CRITICAL RULES:
         # can return HTTP 500 and alerts fire, instead of masking failures.
         key = self._session_key(user_id)
 
-        # ── Priority 1: help command ───────────────────────────────────────
+        # ── Priority 1: clear-conversation command ──────────────────────────
+        if user_message.strip().lower() in {"clear", "/clear"}:
+            self.clear_conversation(user_id)
+            return ChatReply(
+                f"New conversation started for {self.school.name}. What can I help you with?", False,
+            )
+
+        # ── Priority 2: help command ───────────────────────────────────────
         if user_message.strip().lower() in {"help", "/help"}:
             return ChatReply(
                 "Here's what I can help with:\n\n"
@@ -402,7 +409,7 @@ CRITICAL RULES:
                 False,
             )
 
-        # ── Priority 2: donate command ─────────────────────────────────────
+        # ── Priority 3: donate command ─────────────────────────────────────
         if self.school.donation_url and re.search(
             r'\b(donate|donation|donations|support the school)\b', user_message.strip().lower()
         ):
@@ -414,7 +421,7 @@ CRITICAL RULES:
                 False,
             )
 
-        # ── Priority 3: collect passive feedback ───────────────────────────
+        # ── Priority 4: collect passive feedback ───────────────────────────
         if self.redis_store.is_feedback_pending(key):
             self.redis_store.clear_feedback_pending(key)
             sentiment = self._is_feedback(user_message)
@@ -428,7 +435,7 @@ CRITICAL RULES:
                 return ChatReply(ack + " How else can I help you?", False)
             # Not a feedback reply — fall through and treat as a new question
 
-        # ── Priority 4: content filter ─────────────────────────────────────
+        # ── Priority 5: content filter ─────────────────────────────────────
         for word in ['fuck', 'shit', 'bitch', 'bastard']:
             if re.search(r'\b' + re.escape(word) + r'\b', user_message.lower()):
                 return ChatReply(
