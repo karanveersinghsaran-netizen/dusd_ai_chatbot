@@ -12,6 +12,11 @@
   "clubs_sheet_url": "https://docs.google.com/spreadsheets/d/1AYbld-z3m-lUDLbyriB0cSI45BS2yZLZmqx61ZB3YrY/export?format=csv&gid=1039277270",
   "campus_map_file": "campus_map.json",
 
+  "theme_color": "#0a2472",
+  "primary_bubble_color": "#0a2472",
+  "background_tint": "#eef1f8",
+  "logo_url": null,
+
   "bell_schedule": "Monday - All Classes:\n  Period 0:  7:15 AM – 8:15 AM\n  1st Period: 8:30 AM – 9:22 AM\n  2nd Period: 9:28 AM – 10:20 AM\n  3rd Period: 10:26 AM – 11:18 AM\n  4th Period: 11:24 AM – 12:16 PM\n  Lunch:      12:16 PM – 12:51 PM\n  5th Period: 12:57 PM – 1:49 PM\n  6th Period: 1:55 PM – 2:47 PM\n  7th Period: 2:53 PM – 3:45 PM\n\nTuesday/Thursday - Odd Day:\n  Period 0:  7:15 AM – 8:15 AM\n  1st Period: 8:30 AM – 10:06 AM\n  3rd Period: 10:12 AM – 11:48 AM\n  Lunch:      11:48 AM – 12:21 PM\n  5th Period: 12:27 PM – 2:03 PM\n  7th Period: 2:09 PM – 3:45 PM\n\nWednesday - Even Day:\n  Staff Collaboration: 8:00 AM – 9:00 AM\n  2nd Period: 9:00 AM – 10:36 AM\n  4th Period: 10:42 AM – 12:23 PM\n  Lunch:      12:23 PM – 1:03 PM\n  6th Period: 1:09 PM – 2:45 PM\n\nWednesday - Modified Schedule (Grady Days: 8/26, 9/23, 10/8, 1/20, 3/24, 4/21):\n  Staff Collaboration: 8:00 AM – 8:55 AM\n  2nd Period: 9:00 AM – 10:36 AM\n  Rally/Event: 10:42 AM – 11:42 AM\n  Lunch:       11:42 AM – 12:20 PM\n  4th Period: 12:27 PM – 2:03 PM\n  6th Period: 2:09 PM – 3:45 PM\n\nFriday - Even Day:\n  Period 0:  7:15 AM – 8:15 AM\n  2nd Period: 8:30 AM – 10:06 AM\n  4th Period: 10:12 AM – 11:53 AM\n  Lunch:      11:53 AM – 12:38 PM\n  6th Period: 12:44 PM – 2:20 PM\n\nMinimum Day (e.g. April 2nd):\n  Period 0: 7:15 AM – 8:15 AM\n  Period 1: 8:30 AM – 9:00 AM\n  Period 2: 9:06 AM – 9:36 AM\n  Period 3: 9:42 AM – 10:12 AM\n  Period 4: 10:18 AM – 10:48 AM\n  Brunch:   10:48 AM – 10:58 AM\n  Period 5: 11:04 AM – 11:34 AM\n  Period 6: 11:40 AM – 12:10 PM\n  Period 7: 12:16 PM – 12:46 PM",
 
   "useful_links": "- Bell Schedule (full page): https://dhs.dublinusd.org/apps/bell_schedules/\n- College & Career Center: https://dhs.dublinusd.org/apps/pages/index.jsp?uREC_ID=448119&type=d\n- AVID Program: https://dhs.dublinusd.org/apps/pages/index.jsp?uREC_ID=448124&type=d\n- Athletics: https://www.dublingaels.com/\n- DHS Music Department: http://www.dublinhsmusic.org/\n- Engineering and Design Academy: https://sites.google.com/dublinusd.org/deda/welcome",
