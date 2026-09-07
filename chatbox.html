@@ -97,9 +97,17 @@
     font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
     background: var(--bg);
     color: var(--text);
-    /* 100dvh (dynamic viewport) so the layout shrinks correctly when iOS
-       Safari's keyboard opens — 100vh would leave the input hidden. */
-    height: 100dvh;
+    /* --app-height (set by trackAppHeight() below, from the real, live
+       visualViewport height) is the source of truth — it's correct whether
+       the browser chrome is expanded or collapsed. The static units are
+       only a pre-JS fallback for the instant before that script runs, and
+       for the rare no-JS case: 100vh for very old browsers, 100svh (small
+       viewport — never taller than what's visible) as the safer modern
+       default so there's no flash of below-the-fold content before
+       trackAppHeight() corrects it. */
+    height: 100vh;
+    height: 100svh;
+    height: var(--app-height, 100svh);
     display: flex;
     flex-direction: column;
     -webkit-tap-highlight-color: transparent;
@@ -125,13 +133,18 @@
   }
   header .actions { justify-content: flex-end; }
   #install-btn {
+    /* Neutral (--text/--border), not --user-bubble-bg: that variable is also
+       the per-school accent (#52), and dark, low-luminance school colors
+       (e.g. navy, teal) read as low-contrast text/border on a dark-mode
+       background. Matches the existing #theme-toggle-btn/#help-btn style so
+       it stays legible regardless of theme or which school is pinned. */
     display: none;
     padding: 6px 10px;
     font-size: 0.8rem;
     font-weight: 600;
-    color: var(--user-bubble-bg);
+    color: var(--text);
     background: transparent;
-    border: 1px solid var(--user-bubble-bg);
+    border: 1px solid var(--border);
     border-radius: 999px;
     cursor: pointer;
   }
@@ -547,6 +560,28 @@
   <div id="disclaimer">AI can make mistakes. Check important information.</div>
 
   <script>
+    // Live viewport height: neither static CSS unit gets this right on its
+    // own. 100dvh can report the *large* viewport (chrome collapsed) before
+    // the user has scrolled, leaving the input below the fold on first
+    // paint. 100svh is pinned to the *smallest* the chrome ever gets, so
+    // once the chrome actually collapses (e.g. after a scroll) there's dead
+    // space at the bottom that isn't part of the app. Tracking the real,
+    // current visible height in JS and re-measuring on every resize is the
+    // only way to stay correct in both directions.
+    (function trackAppHeight() {
+      const root = document.documentElement;
+      function setAppHeight() {
+        const h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+        root.style.setProperty("--app-height", h + "px");
+      }
+      setAppHeight();
+      window.addEventListener("resize", setAppHeight);
+      window.addEventListener("orientationchange", setAppHeight);
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", setAppHeight);
+      }
+    })();
+
     // Theme toggle: defaults to following the OS's prefers-color-scheme
     // (no data-theme attribute at all). Once the user taps the button, we
     // pin an explicit choice in localStorage so it survives reloads and no
