@@ -719,6 +719,46 @@ def test_icon_route_rejects_non_png(client):
     assert resp.status_code == 404
 
 
+# ── Accessibility: /fonts/* (issue #64) ─────────────────────────────────────
+
+def test_font_route_serves_woff2(client):
+    resp = client.get("/fonts/OpenDyslexic-Regular.woff2")
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "font/woff2"
+    # WOFF2 magic bytes ("wOF2") — guards against the route silently serving
+    # the wrong file.
+    assert resp.content.startswith(b"wOF2")
+
+
+def test_font_route_serves_bold_variant(client):
+    resp = client.get("/fonts/OpenDyslexic-Bold.woff2")
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "font/woff2"
+
+
+def test_font_route_rejects_missing_file(client):
+    resp = client.get("/fonts/nonexistent.woff2")
+
+    assert resp.status_code == 404
+
+
+def test_font_route_rejects_path_traversal(client):
+    """Same defense-in-depth guard as /icons/{filename}: FastAPI's path
+    parameter normally forbids slashes, but the handler still refuses to
+    serve anything that isn't a plain filename."""
+    resp = client.get("/fonts/..%2Fsecrets.woff2")
+    assert resp.status_code == 404
+
+
+def test_font_route_rejects_non_woff2(client):
+    """Only .woff2 served — prevents the route from accidentally handing out
+    arbitrary files if something else lands in static/fonts/."""
+    resp = client.get("/fonts/OpenDyslexic-OFL.txt")
+    assert resp.status_code == 404
+
+
 def test_chatbox_html_links_to_manifest_and_apple_touch_icon(client):
     """The HTML must actually reference the PWA manifest + apple-touch-icon —
     without these tags, no browser will offer an "Install" prompt regardless
@@ -743,6 +783,22 @@ def test_chatbox_html_has_theme_toggle_and_help_button(client):
     assert 'id="help-btn"' in resp.text
     assert 'id="report-open-btn"' in resp.text
     assert 'id="thanks-btn"' in resp.text
+
+
+def test_chatbox_html_has_accessibility_settings_panel(client):
+    """Guards against the accessibility settings button/panel (issue #64)
+    silently disappearing from the served HTML — the four required controls
+    (font, text size, contrast, motion) must all be present."""
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+    resp = client.get(f"/chatbox?token={token}")
+
+    assert resp.status_code == 200
+    assert 'id="a11y-settings-btn"' in resp.text
+    assert 'id="a11y-panel"' in resp.text
+    assert 'name="a11y-font"' in resp.text
+    assert 'name="a11y-text-size"' in resp.text
+    assert 'name="a11y-contrast"' in resp.text
+    assert 'name="a11y-motion"' in resp.text
 
 
 def test_chatbox_html_has_ai_disclaimer(client):
