@@ -31,6 +31,14 @@ class SchoolConfig:
     campus_map_file: Optional[Path] = None
     donation_url: Optional[str] = None
     clubs_sheet_url: Optional[str] = None
+    # Per-school branding (#52). All optional so a school.json that predates
+    # theming still loads — callers fall back to the neutral blue theme when
+    # these are absent. logo_url is None for both current schools (no real
+    # logo assets exist yet); the chatbox renders an initials placeholder.
+    theme_color: Optional[str] = None
+    primary_bubble_color: Optional[str] = None
+    background_tint: Optional[str] = None
+    logo_url: Optional[str] = None
 
 
 def _load_school(school_dir: Path) -> SchoolConfig:
@@ -57,6 +65,10 @@ def _load_school(school_dir: Path) -> SchoolConfig:
         campus_map_file=campus_map_file,
         donation_url=raw.get("donation_url"),
         clubs_sheet_url=raw.get("clubs_sheet_url"),
+        theme_color=raw.get("theme_color"),
+        primary_bubble_color=raw.get("primary_bubble_color"),
+        background_tint=raw.get("background_tint"),
+        logo_url=raw.get("logo_url"),
     )
 
 

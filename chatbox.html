@@ -17,6 +17,12 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 
 <title>School Chat</title>
+<!-- Public per-school theme data (#52), interpolated by /chatbox at request
+     time — see main.py's _public_school_theme(). Kept as an inline data
+     island rather than a separate fetch so the widget never flashes the
+     generic theme while a request is in flight. Empty object is the
+     no-server-interpolation fallback (e.g. opening this file directly). -->
+<script id="school-theme-data" type="application/json">{}</script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 <style>
@@ -131,6 +137,23 @@
   }
   #install-btn.visible { display: inline-block; }
   #install-btn:active { opacity: 0.6; }
+
+  /* Per-school logo placeholder (#52): a colored initials circle next to the
+     title once a school is pinned. Hidden — no real logo assets exist yet —
+     until JS adds .visible with the school's brand color + initials. */
+  .school-logo {
+    display: none;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    line-height: 20px;
+    vertical-align: middle;
+    margin-right: 6px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #ffffff;
+    text-align: center;
+  }
+  .school-logo.visible { display: inline-block; }
 
   #theme-toggle-btn, #help-btn {
     width: 30px; height: 30px;
@@ -437,7 +460,7 @@
     <div class="actions-left">
       <button id="help-btn" type="button" aria-label="Help &amp; support">?</button>
     </div>
-    <div class="title">School Chat</div>
+    <div class="title"><span id="school-logo" class="school-logo" aria-hidden="true"></span><span id="title-text">School Chat</span></div>
     <div class="actions">
       <button id="theme-toggle-btn" type="button" aria-label="Toggle dark mode"></button>
       <button id="speak-toggle" type="button" aria-pressed="false"
@@ -751,6 +774,74 @@
     }
     schoolPickerEl.addEventListener("change", (e) => {
       schoolId = e.target.value;
+    });
+
+    // Per-school theming (#52): reads the theme data island embedded by
+    // /chatbox (main.py's _public_school_theme()) and reflects the pinned
+    // school's brand color + short name in the header. No school pinned
+    // (picker visible) or a school with no theme fields yet both fall back
+    // to the neutral blue default already defined in :root above.
+    const schoolThemes = JSON.parse(document.getElementById("school-theme-data").textContent || "{}");
+    const titleTextEl = document.getElementById("title-text");
+    const schoolLogoEl = document.getElementById("school-logo");
+    const defaultTitleText = titleTextEl.textContent;
+    const themeColorMetas = Array.from(document.querySelectorAll('meta[name="theme-color"]'));
+    const defaultThemeColors = themeColorMetas.map((meta) => meta.getAttribute("content"));
+
+    // "Wells Middle School" -> "Wells Middle"; matches the issue's examples
+    // ("Wells Middle Chat", "Dublin High Chat") without a separate
+    // short-name field in school.json.
+    function shortSchoolName(fullName) {
+      return fullName.split(/\s+/).filter((word) => word.toLowerCase() !== "school").join(" ");
+    }
+
+    function schoolInitials(shortName) {
+      return shortName.split(/\s+/).slice(0, 2).map((word) => word[0]).join("").toUpperCase();
+    }
+
+    function isDarkModeActive() {
+      const stored = localStorage.getItem("wms-theme");
+      if (stored) return stored === "dark";
+      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+    }
+
+    function applySchoolTheme(id) {
+      const theme = id && schoolThemes[id];
+      const root = document.documentElement;
+      if (!theme) {
+        titleTextEl.textContent = defaultTitleText;
+        schoolLogoEl.classList.remove("visible");
+        root.style.removeProperty("--user-bubble-bg");
+        root.style.removeProperty("--bg");
+        themeColorMetas.forEach((meta, i) => meta.setAttribute("content", defaultThemeColors[i]));
+        return;
+      }
+      const shortName = shortSchoolName(theme.name);
+      titleTextEl.textContent = shortName + " Chat";
+      schoolLogoEl.textContent = schoolInitials(shortName);
+      schoolLogoEl.style.background = theme.primary_bubble_color || theme.theme_color || "";
+      schoolLogoEl.classList.add("visible");
+      if (theme.primary_bubble_color) {
+        root.style.setProperty("--user-bubble-bg", theme.primary_bubble_color);
+      }
+      if (theme.theme_color) {
+        themeColorMetas.forEach((meta) => meta.setAttribute("content", theme.theme_color));
+      }
+      // Background tint only applied in light mode — a saturated school
+      // color as a full-screen background reads as garish once the surface
+      // is already dark (see the "whole-app re-theme" open question in #52).
+      if (theme.background_tint && !isDarkModeActive()) {
+        root.style.setProperty("--bg", theme.background_tint);
+      } else {
+        root.style.removeProperty("--bg");
+      }
+    }
+
+    applySchoolTheme(schoolId);
+    schoolPickerEl.addEventListener("change", () => applySchoolTheme(schoolId));
+    document.getElementById("theme-toggle-btn").addEventListener("click", () => applySchoolTheme(schoolId));
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+      if (!localStorage.getItem("wms-theme")) applySchoolTheme(schoolId);
     });
 
     function addMessage(role, text) {
