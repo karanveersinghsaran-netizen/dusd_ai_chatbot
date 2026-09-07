@@ -507,6 +507,16 @@
   .bubble p:last-child { margin-bottom: 0; }
   .bubble a { color: var(--link); }
 
+  /* Restored-history divider (#73) — marks where server-side history ends
+     and the live conversation resumes, so reopening the chatbox doesn't
+     read as a silent, unexplained jump from empty to mid-conversation. */
+  .history-divider {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    margin: 4px 0 12px;
+  }
+
   #disclaimer {
     text-align: center;
     font-size: 0.72rem;
@@ -1630,6 +1640,34 @@
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(utterance);
     }
+
+    // Restore chat history on reopen (#73): #51 already makes the
+    // server-side identity durable across tab close/reopen and PWA
+    // install — this is what makes the UI actually reflect that, instead
+    // of a student's real conversation sitting in Redis while the widget
+    // still shows a blank slate. Best-effort: a failed fetch just leaves
+    // the widget looking like a fresh session, same as it always has.
+    (async function restoreHistory() {
+      try {
+        const params = new URLSearchParams({ limit: "50" });
+        if (schoolId) params.set("school_id", schoolId);
+        if (chatboxToken) params.set("token", chatboxToken);
+        const resp = await fetch(`/chat/history?${params.toString()}`, { credentials: "include" });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const messages = data.messages || [];
+        if (messages.length === 0) return;
+
+        const divider = document.createElement("div");
+        divider.className = "history-divider";
+        divider.textContent = "— continued from earlier —";
+        messagesEl.appendChild(divider);
+        messages.forEach((m) => addMessage(m.role === "assistant" ? "bot" : "user", m.content));
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      } catch (err) {
+        // Network error — leave the widget as a fresh session.
+      }
+    })();
   </script>
 </body>
 </html>

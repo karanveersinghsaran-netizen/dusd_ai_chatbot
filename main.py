@@ -108,6 +108,15 @@ class ChatResponse(BaseModel):
     attach_map: bool
 
 
+class HistoryMessage(BaseModel):
+    role: str
+    content: str
+
+
+class HistoryResponse(BaseModel):
+    messages: list[HistoryMessage]
+
+
 class ThanksRequest(BaseModel):
     school_id: str | None = None
 
@@ -349,6 +358,32 @@ async def chat(
         plural = "s" if cap_result.remaining != 1 else ""
         text += f"\n\n_You have {cap_result.remaining} message{plural} left today._"
     return ChatResponse(reply=text, attach_map=reply.attach_map)
+
+
+@app.get("/chat/history", response_model=HistoryResponse)
+@limiter.limit("30/minute", key_func=session_or_ip_key)
+async def chat_history(
+    request: Request,
+    response: Response,
+    school_id: str | None = Query(default=None),
+    limit: int = Query(default=50, gt=0),
+    wms_session: str | None = Cookie(default=None),
+    token: str | None = Query(default=None),
+):
+    """Restore chat history on chatbox reopen (#73) — same session identity
+    resolution as /chat, so this reflects whatever conversation state that
+    identity has actually accumulated. Read-only and free (no Claude API
+    call), so only the per-session/IP burst limit applies, not the
+    stricter global one /chat uses to bound cost."""
+    user_id = resolve_user_id(token, wms_session, response)
+
+    resolved_school_id = school_id or config.DEFAULT_SCHOOL_ID
+    agent = get_agent(resolved_school_id)
+    if agent is None:
+        raise HTTPException(status_code=400, detail=f"Unknown school: {resolved_school_id}")
+
+    messages = agent.get_history(user_id, limit=limit)
+    return HistoryResponse(messages=messages)
 
 
 @app.post("/feedback/thanks", dependencies=[Depends(enforce_max_body_size)])

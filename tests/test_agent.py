@@ -506,6 +506,66 @@ def test_clear_conversation_clears_redis_session(agent):
     assert agent.redis_store.is_feedback_asked(agent._session_key("u11")) is False
 
 
+# ── Restore chat history on reopen (#73) ────────────────────────────────────
+
+def test_get_history_empty_for_fresh_session(agent):
+    assert agent.get_history("never_chatted") == []
+
+
+def test_get_history_returns_messages_oldest_first(agent):
+    key = agent._session_key("u12")
+    agent.redis_store.append_message(key, {"role": "user", "content": "hi"})
+    agent.redis_store.append_message(key, {"role": "assistant", "content": "hello!"})
+
+    history = agent.get_history("u12")
+
+    assert history == [
+        {"role": "user", "content": "hi"},
+        {"role": "assistant", "content": "hello!"},
+    ]
+
+
+def test_get_history_respects_limit():
+    """Only the most recent `limit` messages, not the oldest."""
+    with patch("app.agent.anthropic.Anthropic"):
+        redis_store = RedisStore(client=FakeRedisClient())
+        agent_ = SchoolAgent(school=get_school("wells"), redis_store=redis_store, postgres_store=MagicMock())
+    key = agent_._session_key("u13")
+    for i in range(5):
+        redis_store.append_message(key, {"role": "user", "content": str(i)})
+
+    assert agent_.get_history("u13", limit=2) == [
+        {"role": "user", "content": "3"},
+        {"role": "user", "content": "4"},
+    ]
+
+
+def test_get_history_empty_after_clear(agent):
+    key = agent._session_key("u14")
+    agent.redis_store.append_message(key, {"role": "user", "content": "hi"})
+
+    agent.clear_conversation("u14")
+
+    assert agent.get_history("u14") == []
+
+
+def test_get_history_scoped_per_school():
+    """Same user_id, different schools, SAME underlying Redis — history must
+    not bleed across (same reasoning as _session_key's school-scoping for
+    feedback: a browser could present the same session cookie to both)."""
+    with patch("app.agent.anthropic.Anthropic"):
+        shared_redis_store = RedisStore(client=FakeRedisClient())
+        wells_agent = SchoolAgent(school=get_school("wells"), redis_store=shared_redis_store, postgres_store=MagicMock())
+        dhs_agent = SchoolAgent(school=get_school("dhs"), redis_store=shared_redis_store, postgres_store=MagicMock())
+
+    shared_redis_store.append_message(
+        wells_agent._session_key("shared_user"), {"role": "user", "content": "wells message"}
+    )
+
+    assert wells_agent.get_history("shared_user") == [{"role": "user", "content": "wells message"}]
+    assert dhs_agent.get_history("shared_user") == []
+
+
 # ── Redis keys are scoped per school ────────────────────────────────────────────
 
 # ── Language preference / directive (#62) ──────────────────────────────────

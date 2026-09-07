@@ -369,6 +369,14 @@ CRITICAL RULES:
     def clear_conversation(self, user_id: str = "default"):
         self.redis_store.clear_session(self._session_key(user_id))
 
+    def get_history(self, user_id: str, limit: int = 50) -> list:
+        """Up to `limit` most recent messages for user_id (#73), oldest
+        first. Same session key clear_conversation()/chat() use, so this
+        always reflects whatever's actually stored — and returns [] right
+        after a clear, same as a session that never had any history."""
+        history = self.redis_store.get_conversation(self._session_key(user_id))
+        return history[-limit:] if limit > 0 else history
+
     def record_thanks(self, user_id: str) -> None:
         """One-tap 'send thanks' from the help popover — lightweight positive
         feedback, no comment or last-response context needed."""
