@@ -15,8 +15,10 @@ import xml.etree.ElementTree as ET
 from datetime import date, timedelta
 from email.utils import parsedate_to_datetime
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Optional
 from urllib.parse import urlparse, parse_qs
+
+from app.timezone_utils import pacific_today
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -35,11 +37,24 @@ HEADERS = {
 # District calendar (JSON-backed)
 # ---------------------------------------------------------------------------
 
+def _fmt_date(d: date) -> str:
+    """Canonical tool-output date format: ISO date + day-of-week, e.g.
+    '2026-11-04 (Wednesday)'. Tool responses stay unambiguous and machine-
+    parseable; the agent is responsible for phrasing dates for the user
+    (see the system prompt's DATE HANDLING rules in app/agent.py)."""
+    return f"{d.isoformat()} ({d.strftime('%A')})"
+
+
+def _school_year_key_for(d: date) -> str:
+    """Return the JSON filename stem for the school year containing date `d`
+    (e.g. '2025_26'). DUSD's school year starts in August."""
+    start_year = d.year if d.month >= 8 else d.year - 1
+    return f"{start_year}_{str(start_year + 1)[2:]}"
+
+
 def _current_school_year_key() -> str:
     """Return the JSON filename stem for the current school year (e.g. '2025_26')."""
-    today = date.today()
-    start_year = today.year if today.month >= 8 else today.year - 1
-    return f"{start_year}_{str(start_year + 1)[2:]}"
+    return _school_year_key_for(pacific_today())
 
 
 def _load_district_calendar(district_id: str, year_key: str = None) -> dict:
@@ -78,15 +93,16 @@ def _next_school_day(after: date, cal: dict) -> date:
 
 
 def get_school_day_status(today: date, district_id: str) -> str:
-    """Plain-English school status for a given date."""
+    """School status for a given date. Dates are rendered as ISO + day-of-week
+    (canonical tool output) — the agent phrases them for the user."""
     if today is None:
-        today = date.today()
+        today = pacific_today()
 
     cal = _load_district_calendar(district_id)
     if not cal:
         return ""
 
-    date_str = today.strftime("%A, %B %d, %Y")
+    date_str = _fmt_date(today)
 
     if today.weekday() >= 5:
         return f"{date_str} is a weekend — no school."
@@ -96,8 +112,8 @@ def get_school_day_status(today: date, district_id: str) -> str:
             resumes = _next_school_day(brk["end"], cal)
             return (
                 f"{date_str} is during {brk['name']} "
-                f"({brk['start'].strftime('%B %d')} – {brk['end'].strftime('%B %d, %Y')}). "
-                f"School resumes on {resumes.strftime('%A, %B %d, %Y')}."
+                f"({_fmt_date(brk['start'])} – {_fmt_date(brk['end'])}). "
+                f"School resumes on {_fmt_date(resumes)}."
             )
 
     if today in cal.get("no_school_days", {}):
@@ -110,14 +126,14 @@ def get_school_day_status(today: date, district_id: str) -> str:
         return f"{date_str} is a school day ({cal['academic_dates'][today]})."
 
     if today < cal.get("first_day", today):
-        return f"School has not started yet. First day is {cal['first_day'].strftime('%B %d, %Y')}."
+        return f"School has not started yet. First day is {_fmt_date(cal['first_day'])}."
 
     if today > cal.get("last_day", today):
         next_cal = _load_district_calendar(district_id, _next_year_key(_current_school_year_key()))
         if next_cal and next_cal.get("first_day"):
-            return (f"The school year has ended (last day was {cal['last_day'].strftime('%B %d, %Y')}). "
-                    f"Next school year starts on {next_cal['first_day'].strftime('%B %d, %Y')}.")
-        return f"The school year has ended (last day was {cal['last_day'].strftime('%B %d, %Y')})."
+            return (f"The school year has ended (last day was {_fmt_date(cal['last_day'])}). "
+                    f"Next school year starts on {_fmt_date(next_cal['first_day'])}.")
+        return f"The school year has ended (last day was {_fmt_date(cal['last_day'])})."
 
     return f"{date_str} is a regular school day."
 
@@ -131,7 +147,7 @@ def _next_year_key(key: str) -> str:
 def get_upcoming_no_school_days(today: date, district_id: str, limit: int = 20) -> str:
     """Return the next few no-school days and breaks, spanning into next year if needed."""
     if today is None:
-        today = date.today()
+        today = pacific_today()
 
     current_key = _current_school_year_key()
     next_key = _next_year_key(current_key)
@@ -143,13 +159,13 @@ def get_upcoming_no_school_days(today: date, district_id: str, limit: int = 20) 
             continue
         for brk in cal.get("breaks", []):
             if brk["end"] >= today:
-                upcoming.append((brk["start"], f"{brk['name']} ({brk['start'].strftime('%B %d')} – {brk['end'].strftime('%B %d, %Y')})"))
+                upcoming.append((brk["start"], f"{brk['name']} ({_fmt_date(brk['start'])} – {_fmt_date(brk['end'])})"))
         for d, reason in cal.get("no_school_days", {}).items():
             if d >= today:
-                upcoming.append((d, f"{d.strftime('%B %d, %Y')}: {reason}"))
+                upcoming.append((d, f"{_fmt_date(d)}: {reason}"))
         for d, reason in cal.get("academic_dates", {}).items():
             if d >= today:
-                upcoming.append((d, f"{d.strftime('%B %d, %Y')}: {reason}"))
+                upcoming.append((d, f"{_fmt_date(d)}: {reason}"))
 
     upcoming.sort(key=lambda x: x[0])
     seen, result = set(), []
@@ -163,6 +179,43 @@ def get_upcoming_no_school_days(today: date, district_id: str, limit: int = 20) 
     if not result:
         return "No upcoming no-school days found."
     return "Upcoming no-school days:\n" + "\n".join(f"- {r}" for r in result)
+
+
+def count_school_days_until(today: date, target: date, district_id: str) -> int:
+    """Count school days strictly between `today` (exclusive) and `target`
+    (exclusive) — a weekday that is not a no-school day and does not fall
+    within a break. Loads every school-year calendar the range spans (e.g.
+    a query crossing from spring into the next school year), so answers to
+    "how many school days until <date>" stay correct even near a year
+    boundary. Returns 0 if `target` is not after `today`."""
+    if target <= today:
+        return 0
+
+    keys = [_school_year_key_for(today)]
+    target_key = _school_year_key_for(target)
+    while keys[-1] != target_key:
+        keys.append(_next_year_key(keys[-1]))
+
+    no_school_days: set = set()
+    breaks: List[Dict] = []
+    for key in keys:
+        cal = _load_district_calendar(district_id, key)
+        if not cal:
+            continue
+        no_school_days.update(cal.get("no_school_days", {}).keys())
+        breaks.extend(cal.get("breaks", []))
+
+    count = 0
+    d = today + timedelta(days=1)
+    while d < target:
+        if (
+            d.weekday() < 5
+            and d not in no_school_days
+            and not any(b["start"] <= d <= b["end"] for b in breaks)
+        ):
+            count += 1
+        d += timedelta(days=1)
+    return count
 
 
 # ---------------------------------------------------------------------------
@@ -208,23 +261,25 @@ def _fetch_rss_events(rss_url: str) -> List[Dict]:
     return events
 
 
-def get_today_status(rss_url: str) -> str:
+def get_today_status(rss_url: str, today: Optional[date] = None) -> str:
     """Return ongoing RSS events today (injected into system prompt)."""
     try:
-        today = date.today()
+        if today is None:
+            today = pacific_today()
         ongoing = [e for e in _fetch_rss_events(rss_url) if e["start"] <= today <= e["end"]]
         if not ongoing:
             return ""
         titles = ", ".join(e["title"] for e in ongoing)
-        return f"NOTE: Today ({today.strftime('%A, %B %d, %Y')}) the following events are ongoing: {titles}."
+        return f"NOTE: Today ({_fmt_date(today)}) the following events are ongoing: {titles}."
     except Exception:
         return ""
 
 
-def get_upcoming_events(rss_url: str) -> str:
+def get_upcoming_events(rss_url: str, today: Optional[date] = None) -> str:
     """Return upcoming and ongoing RSS events sorted by start date."""
     try:
-        today = date.today()
+        if today is None:
+            today = pacific_today()
         events = [e for e in _fetch_rss_events(rss_url) if e["end"] >= today]
         if not events:
             return "No upcoming events found on the school calendar."
@@ -233,9 +288,9 @@ def get_upcoming_events(rss_url: str) -> str:
         lines = ["Upcoming Events:\n"]
         for e in events:
             if e["start"] == e["end"]:
-                date_str = e["start"].strftime("%A, %B %d, %Y")
+                date_str = _fmt_date(e["start"])
             else:
-                date_str = f"{e['start'].strftime('%B %d')} - {e['end'].strftime('%B %d, %Y')}"
+                date_str = f"{_fmt_date(e['start'])} - {_fmt_date(e['end'])}"
             tag = " [ONGOING TODAY]" if e["start"] <= today <= e["end"] else ""
             line = f"- {date_str}: {e['title']}{tag}"
             if e["description"]:
