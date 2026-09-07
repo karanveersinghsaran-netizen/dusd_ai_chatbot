@@ -275,6 +275,11 @@
   }
   #theme-toggle-btn svg { width: 16px; height: 16px; fill: currentColor; }
   #theme-toggle-btn:active, #help-btn:active, #a11y-settings-btn:active { opacity: 0.6; }
+  /* High contrast (#64) is a single fixed dark palette that always wins
+     over light/dark, so the toggle has nothing left to do while it's
+     active — disable it rather than leave a clickable button that visibly
+     does nothing. */
+  #theme-toggle-btn:disabled { opacity: 0.35; cursor: not-allowed; }
   #a11y-settings-btn { font-size: 0.7rem; font-weight: 700; }
 
   /* Shared popover shell for the iOS install hint and the help/support
@@ -911,6 +916,16 @@
         "a11y-motion": ["wms-a11y-motion", "data-motion", "auto"],
       };
 
+      // High contrast is a single fixed dark palette that always wins over
+      // light/dark (same CSS vars, later in source order) — the toggle has
+      // nothing left to do while it's active, so disable it rather than
+      // leave a clickable button that visibly does nothing.
+      const themeToggleBtn = document.getElementById("theme-toggle-btn");
+      function syncThemeToggleDisabled() {
+        themeToggleBtn.disabled = root.getAttribute("data-contrast") === "high";
+      }
+      syncThemeToggleDisabled();
+
       Object.entries(GROUPS).forEach(([name, [storageKey, attr, defaultValue]]) => {
         const inputs = Array.from(panel.querySelectorAll(`input[name="${name}"]`));
         const current = root.getAttribute(attr) || defaultValue;
@@ -923,6 +938,14 @@
               root.removeAttribute(attr);
             } else {
               root.setAttribute(attr, input.value);
+            }
+            // Re-run school theming (#52) so its --user-bubble-bg/--bg
+            // inline overrides are added or dropped immediately to match
+            // the new contrast state, instead of only refreshing on the
+            // next school-picker change or page reload.
+            if (name === "a11y-contrast") {
+              syncThemeToggleDisabled();
+              if (typeof applySchoolTheme === "function") applySchoolTheme(schoolId);
             }
           });
         });
@@ -1093,8 +1116,19 @@
       schoolLogoEl.textContent = schoolInitials(shortName);
       schoolLogoEl.style.background = theme.primary_bubble_color || theme.theme_color || "";
       schoolLogoEl.classList.add("visible");
-      if (theme.primary_bubble_color) {
+      // High contrast (#64) picks --user-bubble-bg/--bg via a CSS selector on
+      // :root[data-contrast="high"], but an inline style set here always
+      // wins over any stylesheet rule regardless of specificity — so a
+      // pinned school's color would silently stay on top of high contrast's
+      // choice (e.g. black text from high contrast, but the school's own
+      // dark blue/navy bubble background instead of high contrast's
+      // yellow). Skip the inline override while high contrast is active so
+      // its CSS rule is the only thing in control.
+      const highContrast = root.getAttribute("data-contrast") === "high";
+      if (theme.primary_bubble_color && !highContrast) {
         root.style.setProperty("--user-bubble-bg", theme.primary_bubble_color);
+      } else {
+        root.style.removeProperty("--user-bubble-bg");
       }
       if (theme.theme_color) {
         themeColorMetas.forEach((meta) => meta.setAttribute("content", theme.theme_color));
@@ -1102,7 +1136,7 @@
       // Background tint only applied in light mode — a saturated school
       // color as a full-screen background reads as garish once the surface
       // is already dark (see the "whole-app re-theme" open question in #52).
-      if (theme.background_tint && !isDarkModeActive()) {
+      if (theme.background_tint && !isDarkModeActive() && !highContrast) {
         root.style.setProperty("--bg", theme.background_tint);
       } else {
         root.style.removeProperty("--bg");
