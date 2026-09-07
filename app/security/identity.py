@@ -26,16 +26,26 @@ before this feature. Note the caveat from #51: the token IS the identity
 here, so anyone with the link shares that user's history. Acceptable during
 the preview-link phase (each admin gets their own link); real auth is out
 of scope for #51.
+
+A generic token (chatbox_token.GENERIC_USER_MARKER — issue_chatbox_token's
+generic=True, meant for a link distributed to many people at once, e.g.
+every parent at a school) is the deliberate exception: it still proves
+access, but resolve_user_id treats it as if no token were present at all,
+so identity always comes from each visitor's own session cookie instead.
+That's what keeps a mass-distributed link from merging everyone into one
+shared identity — at the cost of losing the Safari-tab/installed-PWA
+continuity a personal token provides, which doesn't apply here since
+there's no single person's identity to preserve in the first place.
 """
 from typing import Optional
 
 from fastapi import HTTPException, Response
 
-from app.security.chatbox_token import decode_chatbox_token
+from app.security.chatbox_token import GENERIC_USER_MARKER, decode_chatbox_token
 from app.security.sessions import issue_session_id, sign_session_id, verify_session_id
 
 SESSION_COOKIE_NAME = "wms_session"
-SESSION_COOKIE_MAX_AGE = 30 * 24 * 60 * 60  # 30d, refreshed on every request below
+SESSION_COOKIE_MAX_AGE = 5 * 24 * 60 * 60  # 5d, refreshed on every request below
 
 
 def resolve_user_id(
@@ -49,14 +59,19 @@ def resolve_user_id(
     future request that arrives without a token).
 
     Raises 401 if no usable identity is found and a `wms_session` cookie WAS
-    presented but fails signature verification — unless a valid token
-    already resolved identity, in which case a bad/missing cookie is simply
-    replaced rather than blocking the request, since the token is already
-    sufficient proof of identity.
+    presented but fails signature verification — unless a valid, non-generic
+    token already resolved identity, in which case a bad/missing cookie is
+    simply replaced rather than blocking the request, since the token is
+    already sufficient proof of identity.
     """
     if token:
         payload = decode_chatbox_token(token)
-        if payload is not None:
+        # A generic (mass-distribution) token proves access but deliberately
+        # carries no personal identity — fall through to the same
+        # cookie-only resolution as if no token were present at all, so a
+        # tampered cookie still 401s here rather than being silently waved
+        # through the way it would be for a real personal token.
+        if payload is not None and payload.user_id != GENERIC_USER_MARKER:
             session_id = _verify_cookie(wms_session) or issue_session_id()[0]
             _set_session_cookie(session_id, response)
             return payload.user_id

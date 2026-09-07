@@ -3,7 +3,12 @@ from unittest.mock import patch
 
 import pytest
 
-from app.security.chatbox_token import decode_chatbox_token, issue_chatbox_token, verify_chatbox_token
+from app.security.chatbox_token import (
+    GENERIC_USER_MARKER,
+    decode_chatbox_token,
+    issue_chatbox_token,
+    verify_chatbox_token,
+)
 
 KEY = "test-signing-key"
 
@@ -89,6 +94,33 @@ def test_same_user_id_yields_same_decoded_identity_across_reissues():
     token_1 = issue_chatbox_token(signing_key=KEY, user_id="admin-1", days_valid=1)
     token_2 = issue_chatbox_token(signing_key=KEY, user_id="admin-1", days_valid=30)
     assert decode_chatbox_token(token_1, KEY).user_id == decode_chatbox_token(token_2, KEY).user_id == "admin-1"
+
+
+# ── generic (mass-distribution) tokens (#51 follow-up) ──────────────────────
+
+def test_issue_generic_embeds_reserved_marker():
+    token = issue_chatbox_token(signing_key=KEY, generic=True)
+    payload = decode_chatbox_token(token, KEY)
+    assert payload is not None
+    assert payload.user_id == GENERIC_USER_MARKER
+
+
+def test_issue_generic_still_verifies_and_gates_access():
+    """A generic token is still a real, signed, expiring token — it just
+    doesn't carry personal identity. The /chatbox and /manifest.webmanifest
+    gates only check validity, so they work unchanged."""
+    token = issue_chatbox_token(signing_key=KEY, generic=True)
+    assert verify_chatbox_token(token, KEY) is True
+
+
+def test_issue_rejects_generic_and_user_id_together():
+    with pytest.raises(ValueError):
+        issue_chatbox_token(signing_key=KEY, generic=True, user_id="admin-1")
+
+
+def test_issue_rejects_user_id_equal_to_generic_marker():
+    with pytest.raises(ValueError):
+        issue_chatbox_token(signing_key=KEY, user_id=GENERIC_USER_MARKER)
 
 
 def test_decode_returns_none_for_invalid_token():

@@ -10,10 +10,10 @@ def redis_store():
     return RedisStore(client=FakeRedisClient())
 
 
-# ── TTL (#51: conversations persist 30d, refreshed on every append) ────────
+# ── TTL (#51: conversations persist 5d, refreshed on every append) ─────────
 
-def test_conv_ttl_is_30_days():
-    assert CONV_TTL_SECONDS == 30 * 24 * 60 * 60
+def test_conv_ttl_is_5_days():
+    assert CONV_TTL_SECONDS == 5 * 24 * 60 * 60
 
 
 # ── conversation history ────────────────────────────────────────────────────

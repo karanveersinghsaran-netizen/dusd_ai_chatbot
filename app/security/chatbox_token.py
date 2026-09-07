@@ -8,6 +8,11 @@ from app import config
 
 DEFAULT_VALID_DAYS = 7
 
+# Reserved user_id value marking a token as "access-only" — see issue_chatbox_token's
+# generic= param. Never producible by secrets.token_urlsafe(16) (which only ever
+# emits multi-character base64url strings), so it can't collide with a real one.
+GENERIC_USER_MARKER = "*"
+
 
 class ChatboxTokenPayload(NamedTuple):
     expires_at: int
@@ -18,6 +23,7 @@ def issue_chatbox_token(
     days_valid: int = DEFAULT_VALID_DAYS,
     signing_key: Optional[Union[str, bytes]] = None,
     user_id: Optional[str] = None,
+    generic: bool = False,
 ) -> str:
     """Mints a token encoding an expiry timestamp and a stable user_id, signed
     so neither can be forged or extended by a client. Format:
@@ -34,11 +40,28 @@ def issue_chatbox_token(
     preview link). Pass an explicit user_id to mint a REPLACEMENT link for
     an existing identity — e.g. re-issuing an admin's link after their old
     token expired, without orphaning their conversation history.
+
+    Pass generic=True instead for a link meant to be distributed to many
+    people at once (e.g. one link shared with every parent at a school so
+    they can each install it as a PWA). It still gates /chatbox and
+    /manifest.webmanifest like any other token, but deliberately carries no
+    personal identity — app.security.identity.resolve_user_id recognizes
+    GENERIC_USER_MARKER and falls back to each visitor's own per-device
+    session cookie instead, so everyone who opens the same link still gets
+    their own private conversation (at the cost of the Safari-tab/installed-
+    PWA continuity a personal token provides — acceptable here since mass
+    distribution and per-person identity are fundamentally in tension).
+    Mutually exclusive with user_id.
     """
-    if user_id is not None and "." in user_id:
-        raise ValueError("user_id must not contain '.'")
+    if generic and user_id is not None:
+        raise ValueError("generic and user_id are mutually exclusive")
+    if user_id is not None:
+        if "." in user_id:
+            raise ValueError("user_id must not contain '.'")
+        if user_id == GENERIC_USER_MARKER:
+            raise ValueError(f"user_id must not be the reserved generic marker {GENERIC_USER_MARKER!r}")
     expires_at = int(time.time()) + days_valid * 86400
-    resolved_user_id = user_id or secrets.token_urlsafe(16)
+    resolved_user_id = GENERIC_USER_MARKER if generic else (user_id or secrets.token_urlsafe(16))
     payload_str = f"{expires_at}.{resolved_user_id}"
     signature = _sign(payload_str, _resolve_key(signing_key))
     return f"{payload_str}.{signature}"

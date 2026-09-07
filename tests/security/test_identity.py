@@ -23,10 +23,10 @@ def _signing_keys():
         yield
 
 
-# ── TTL (#51: cookies persist 30d) ───────────────────────────────────────────
+# ── TTL (#51: cookies persist 5d) ────────────────────────────────────────────
 
-def test_session_cookie_max_age_is_30_days():
-    assert SESSION_COOKIE_MAX_AGE == 30 * 24 * 60 * 60
+def test_session_cookie_max_age_is_5_days():
+    assert SESSION_COOKIE_MAX_AGE == 5 * 24 * 60 * 60
 
 
 # ── no token: cookie-only fallback (unchanged pre-#51 behavior) ─────────────
@@ -81,6 +81,47 @@ def test_expired_token_falls_back_to_cookie_session_id():
     session_id, cookie_value = issue_session_id(SESSION_KEY)
     resolved = resolve_user_id(token, cookie_value, Response())
     assert resolved == session_id
+
+
+# ── generic (mass-distribution) token: never carries identity ──────────────
+
+def test_generic_token_falls_back_to_cookie_not_marker():
+    """A generic token still proves access, but must never leak the reserved
+    marker out as if it were a real identity — each visitor's own cookie
+    resolves it instead, same as if no token were present."""
+    token = issue_chatbox_token(signing_key=CHATBOX_KEY, generic=True)
+    session_id, cookie_value = issue_session_id(SESSION_KEY)
+    resolved = resolve_user_id(token, cookie_value, Response())
+    assert resolved == session_id
+
+
+def test_generic_token_no_cookie_mints_a_fresh_session_id():
+    token = issue_chatbox_token(signing_key=CHATBOX_KEY, generic=True)
+    response = Response()
+    resolved = resolve_user_id(token, None, response)
+    assert resolved
+    assert "wms_session=" in response.headers.get("set-cookie", "")
+
+
+def test_generic_token_with_invalid_cookie_still_raises_401():
+    """Unlike a real personal token (which proves identity on its own and so
+    tolerates a bad cookie), a generic token proves nothing about who this
+    is — a tampered cookie is the only identity signal available, so it must
+    still 401 exactly like the no-token case."""
+    token = issue_chatbox_token(signing_key=CHATBOX_KEY, generic=True)
+    with pytest.raises(HTTPException) as exc_info:
+        resolve_user_id(token, "garbage.tampered", Response())
+    assert exc_info.value.status_code == 401
+
+
+def test_generic_token_two_visitors_get_different_identities():
+    """The actual point of a generic token: many people opening the SAME
+    link must NOT collide into one shared identity — each visitor's own
+    (absent, in this simulation) cookie mints its own fresh session id."""
+    token = issue_chatbox_token(signing_key=CHATBOX_KEY, generic=True)
+    parent_a = resolve_user_id(token, None, Response())
+    parent_b = resolve_user_id(token, None, Response())
+    assert parent_a != parent_b
 
 
 # ── the actual #51 scenario: same token, separate cookie jars ──────────────

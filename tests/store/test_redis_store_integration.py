@@ -39,7 +39,7 @@ def test_conversation_ttl_is_set(redis_store, redis_container):
     redis_store.append_message("u1", {"role": "user", "content": "hi"})
     client = redis_container.get_client(decode_responses=True)
     ttl = client.ttl("wms:conv:u1")
-    assert 0 < ttl <= 30 * 24 * 60 * 60
+    assert 0 < ttl <= 5 * 24 * 60 * 60
 
 
 def test_flags_persist_across_store_instances(redis_store, redis_container):
