@@ -49,9 +49,8 @@ PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
 
 # Daily message cap (#71): a cost/abuse guard on /chat. Default per-user cap
 # when a school doesn't override it via daily_message_cap in its school.json
-# (app/schools.py). ~50/day is a starting point per issue #71, pending real
-# usage telemetry.
-DEFAULT_DAILY_MESSAGE_CAP = int(os.getenv("DEFAULT_DAILY_MESSAGE_CAP", "50"))
+# (app/schools.py). 20/day is a starting point, pending real usage telemetry.
+DEFAULT_DAILY_MESSAGE_CAP = int(os.getenv("DEFAULT_DAILY_MESSAGE_CAP", "20"))
 
 # Session ids exempt from the daily message cap — staff/testing accounts
 # (#71). A session id is only known after a user's first /chat request (it's

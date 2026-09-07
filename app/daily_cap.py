@@ -33,7 +33,7 @@ FRIENDLY_CAP_MESSAGE = (
 # How many messages of headroom left before we start warning the user they're
 # about to hit the cap. Small and fixed rather than a percentage of the
 # per-school limit — "2 left" reads the same whether the cap is 5 (testing)
-# or 50 (production), and stays a light touch rather than nagging on every
+# or 20 (production), and stays a light touch rather than nagging on every
 # message once someone's partway through their day.
 WARNING_THRESHOLD = 2
 
