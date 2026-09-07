@@ -375,6 +375,61 @@
   }
   #send:disabled { opacity: 0.4; cursor: not-allowed; }
   #send svg { width: 20px; height: 20px; fill: currentColor; }
+
+  /* Voice input (mic) button, styled to match #send. */
+  #mic-btn {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  #mic-btn svg { width: 20px; height: 20px; fill: currentColor; }
+  #mic-btn.listening {
+    background: #ff3b30;
+    border-color: #ff3b30;
+    color: #ffffff;
+    animation: mic-pulse 1.2s infinite ease-in-out;
+  }
+  @keyframes mic-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4); }
+    50%      { box-shadow: 0 0 0 8px rgba(255, 59, 48, 0); }
+  }
+  #mic-btn:disabled { opacity: 0.35; cursor: not-allowed; animation: none; }
+
+  /* Voice output (speaker) toggle, lives in the header actions area. */
+  #speak-toggle {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    vertical-align: middle;
+  }
+  #speak-toggle svg { width: 18px; height: 18px; fill: currentColor; }
+  #speak-toggle[aria-pressed="true"] { color: var(--user-bubble-bg); }
+  #speak-toggle.speaking { animation: speak-pulse 1s infinite ease-in-out; }
+  @keyframes speak-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.5; }
+  }
+  #speak-toggle:disabled { opacity: 0.3; cursor: not-allowed; animation: none; }
+
+  /* Visually-hidden live region announcing speech status to screen readers. */
+  #voice-status {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
 </style>
 </head>
 <body>
@@ -385,9 +440,15 @@
     <div class="title">School Chat</div>
     <div class="actions">
       <button id="theme-toggle-btn" type="button" aria-label="Toggle dark mode"></button>
+      <button id="speak-toggle" type="button" aria-pressed="false"
+              aria-label="Turn on spoken replies" title="Turn on spoken replies">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10v4h4l5 5V5L7 10H3zm13.5 2c0-1.77-1.02-3.29-2.5-4.03v8.06c1.48-.74 2.5-2.26 2.5-4.03zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+      </button>
       <button id="install-btn" type="button" aria-label="Install app">Install</button>
     </div>
   </header>
+
+  <div id="voice-status" aria-live="polite" role="status"></div>
 
   <div id="ios-install-hint" class="popover" role="dialog" aria-labelledby="ios-install-title">
     <button class="close" type="button" aria-label="Dismiss">×</button>
@@ -449,6 +510,10 @@
   <div id="messages"></div>
 
   <div id="input-row">
+    <button id="mic-btn" type="button" aria-pressed="false"
+            aria-label="Start voice input" title="Start voice input">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
+    </button>
     <input id="input" type="text" placeholder="Ask a question..." autocomplete="off"
            autocapitalize="sentences" enterkeyhint="send">
     <button id="send" aria-label="Send">
@@ -745,6 +810,7 @@
         }
         const data = await resp.json();
         addMessage("bot", data.reply);
+        speakReply(data.reply);
       } catch (err) {
         pending.remove();
         addMessage("error", "Sorry, I couldn't reach the server. Check your connection and try again.");
@@ -758,6 +824,139 @@
     inputEl.addEventListener("keydown", (e) => {
       if (e.key === "Enter") sendMessage();
     });
+
+    // Language used for both recognition and synthesis. Kept as a single
+    // named constant (never inlined) so the multi-language feature (#62)
+    // can later swap this for a user-selected locale without touching the
+    // speech wiring itself.
+    const VOICE_LANG = "en-US";
+
+    // ---- Voice input (speech-to-text) --------------------------------------
+    // Uses the browser's native Web Speech API — no external services. Mic
+    // access is only ever requested from an explicit tap on #mic-btn; it is
+    // never started automatically on page load (privacy requirement).
+    const micBtn = document.getElementById("mic-btn");
+    const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const speechRecognitionSupported = !!SpeechRecognitionCtor;
+
+    let recognition = null;
+    let recognizing = false;
+
+    function setMicState(listening) {
+      recognizing = listening;
+      micBtn.classList.toggle("listening", listening);
+      micBtn.setAttribute("aria-pressed", listening ? "true" : "false");
+      const label = listening ? "Stop voice input" : "Start voice input";
+      micBtn.setAttribute("aria-label", label);
+      micBtn.title = label;
+    }
+
+    if (!speechRecognitionSupported) {
+      // Graceful fallback: disable the button and explain why via a native
+      // tooltip + accessible label instead of crashing or silently no-oping.
+      micBtn.disabled = true;
+      micBtn.setAttribute("aria-label", "Voice input isn't supported in this browser");
+      micBtn.title = "Voice input isn't supported in this browser";
+    } else {
+      micBtn.addEventListener("click", () => {
+        if (recognizing) {
+          recognition && recognition.stop();
+          return;
+        }
+
+        recognition = new SpeechRecognitionCtor();
+        recognition.lang = VOICE_LANG;
+        recognition.continuous = false; // browser auto-stops after silence
+        recognition.interimResults = true;
+        recognition.maxAlternatives = 1;
+
+        recognition.addEventListener("start", () => setMicState(true));
+        recognition.addEventListener("end", () => {
+          setMicState(false);
+          inputEl.focus();
+        });
+        recognition.addEventListener("error", (e) => {
+          setMicState(false);
+          if (e.error !== "no-speech" && e.error !== "aborted") {
+            addMessage("error", "Couldn't access the microphone. Please check your permissions and try again.");
+          }
+        });
+        recognition.addEventListener("result", (e) => {
+          // Populate the input field so the user can review/edit before
+          // sending — transcribed text is never auto-sent.
+          let transcript = "";
+          for (let i = 0; i < e.results.length; i++) {
+            transcript += e.results[i][0].transcript;
+          }
+          inputEl.value = transcript;
+        });
+
+        try {
+          recognition.start();
+        } catch (err) {
+          setMicState(false);
+        }
+      });
+    }
+
+    // ---- Voice output (text-to-speech) -------------------------------------
+    const speakToggle = document.getElementById("speak-toggle");
+    const voiceStatusEl = document.getElementById("voice-status");
+    const speechSynthesisSupported =
+      "speechSynthesis" in window && typeof SpeechSynthesisUtterance !== "undefined";
+    let speakRepliesEnabled = false;
+
+    if (!speechSynthesisSupported) {
+      speakToggle.disabled = true;
+      speakToggle.setAttribute("aria-label", "Spoken replies aren't supported in this browser");
+      speakToggle.title = "Spoken replies aren't supported in this browser";
+    } else {
+      speakToggle.addEventListener("click", () => {
+        speakRepliesEnabled = !speakRepliesEnabled;
+        speakToggle.setAttribute("aria-pressed", speakRepliesEnabled ? "true" : "false");
+        const label = speakRepliesEnabled ? "Turn off spoken replies" : "Turn on spoken replies";
+        speakToggle.setAttribute("aria-label", label);
+        speakToggle.title = label;
+        if (!speakRepliesEnabled) {
+          window.speechSynthesis.cancel();
+          speakToggle.classList.remove("speaking");
+          voiceStatusEl.textContent = "";
+        }
+      });
+    }
+
+    // Strip the Markdown syntax bot replies are rendered with so the speech
+    // synthesizer doesn't read out literal "**", "#", "[", "]" characters.
+    function textForSpeech(markdown) {
+      return markdown
+        .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+        .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+        .replace(/[*_`#>~]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function speakReply(text) {
+      if (!speechSynthesisSupported || !speakRepliesEnabled) return;
+      const utterance = new SpeechSynthesisUtterance(textForSpeech(text));
+      utterance.lang = VOICE_LANG;
+      utterance.onstart = () => {
+        speakToggle.classList.add("speaking");
+        voiceStatusEl.textContent = "Speaking reply";
+      };
+      utterance.onend = () => {
+        speakToggle.classList.remove("speaking");
+        voiceStatusEl.textContent = "";
+      };
+      utterance.onerror = () => {
+        speakToggle.classList.remove("speaking");
+        voiceStatusEl.textContent = "";
+      };
+      // Cancel anything still being read so overlapping replies don't talk
+      // over each other.
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+    }
   </script>
 </body>
 </html>
