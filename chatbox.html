@@ -1235,6 +1235,12 @@
       if (fromInput) inputEl.value = "";
       sendEl.disabled = true;
       inputEl.disabled = true;
+      // Matches app/agent.py's exact clear-command trigger set. Still shown
+      // like any other message — if the request fails below, the error
+      // needs something to show what was actually sent; the whole point of
+      // wiping messagesEl on success (further down) already removes this
+      // bubble along with everything else once the clear is confirmed.
+      const isClearCommand = ["clear", "/clear"].includes(text.toLowerCase());
       addMessage("user", text);
       const pending = addMessage("pending", "");
 
@@ -1271,6 +1277,10 @@
           return;
         }
         const data = await resp.json();
+        // Only wipe the visible transcript after the server confirms the
+        // clear actually happened — never pre-emptively, so a failed/network
+        // request (handled above/below) never loses history for nothing.
+        if (isClearCommand) messagesEl.innerHTML = "";
         addMessage("bot", data.reply);
         speakReply(data.reply);
       } catch (err) {
