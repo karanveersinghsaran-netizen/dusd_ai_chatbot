@@ -245,6 +245,13 @@ CRITICAL RULES:
         if tool_name == "get_campus_directions":
             try:
                 campus = json.loads(self.school.campus_map_file.read_text(encoding="utf-8"))
+                # Prefer our own same-origin image endpoint over whatever static
+                # map_url is checked into campus_map.json — the repo is private,
+                # so a raw.githubusercontent.com link 404s for any unauthenticated
+                # visitor. Falls back to the static value when PUBLIC_BASE_URL
+                # isn't configured (e.g. local dev).
+                if config.PUBLIC_BASE_URL:
+                    campus["map_url"] = f"{config.PUBLIC_BASE_URL}/schools/{self.school.id}/campus-map"
                 return (
                     f"Campus map image: {campus['map_url']}\n\n"
                     f"{json.dumps(campus, indent=2)}",

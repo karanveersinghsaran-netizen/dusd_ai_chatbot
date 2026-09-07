@@ -2,3 +2,6 @@ project_id      = "wms-chatbot-staging"
 region          = "us-west1"
 service_name    = "wms-chatbot"
 allowed_origins = "https://wms.dublinusd.org,https://staging.wms.dublinusd.org"
+# Set this once you know the deployed Cloud Run URL (or custom domain) — a
+# chicken-and-egg value, since Cloud Run assigns the URL on first deploy.
+public_base_url = "https://wms-chatbot-xxxxxxxxxx-uw.a.run.app"

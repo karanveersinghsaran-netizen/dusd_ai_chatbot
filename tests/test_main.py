@@ -503,6 +503,25 @@ def test_icon_route_rejects_non_png(client):
     assert resp.status_code == 404
 
 
+# ── /schools/{school_id}/campus-map ──────────────────────────────────────────
+
+def test_campus_map_route_serves_dhs_image(client):
+    resp = client.get("/schools/dhs/campus-map")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/jpeg"
+
+
+def test_campus_map_route_serves_wells_image(client):
+    resp = client.get("/schools/wells/campus-map")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/png"
+
+
+def test_campus_map_route_rejects_unknown_school(client):
+    resp = client.get("/schools/nonexistent/campus-map")
+    assert resp.status_code == 404
+
+
 def test_chatbox_html_links_to_manifest_and_apple_touch_icon(client):
     """The HTML must actually reference the PWA manifest + apple-touch-icon —
     without these tags, no browser will offer an "Install" prompt regardless

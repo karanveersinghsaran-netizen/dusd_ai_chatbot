@@ -39,3 +39,10 @@ ALLOWED_ORIGINS = [
 # School resolved for a /chat request that doesn't specify school_id — keeps
 # embeds that predate multi-school support working unmodified.
 DEFAULT_SCHOOL_ID = os.getenv("DEFAULT_SCHOOL_ID", "wells")
+
+# Public origin this app is reachable at (e.g. https://chat.dublinusd.org or a
+# Cloud Run *.run.app URL). Used to build absolute links — e.g. the campus map
+# image at /schools/{id}/campus-map — that get echoed into chat replies, since
+# a relative path won't reliably render as a clickable link there. Unset in
+# local dev; set this once the app has a stable deployed URL.
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")

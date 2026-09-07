@@ -103,12 +103,26 @@ def test_get_campus_directions_tool_present_when_school_has_campus_map(agent, dh
 
 
 def test_get_campus_directions_parses_dhs_campus_map(dhs_agent):
-    result, attach_map = dhs_agent.process_tool_call(
-        "get_campus_directions", {"destination": "library"}
-    )
-    assert "Library/Hub" in result
+    with patch("app.agent.config.PUBLIC_BASE_URL", ""):
+        result, attach_map = dhs_agent.process_tool_call(
+            "get_campus_directions", {"destination": "library"}
+        )
+    assert '"Library"' in result
     assert "campus_map.jpg" in result
     assert attach_map is True
+
+
+def test_get_campus_directions_uses_static_map_url_without_public_base_url(dhs_agent):
+    with patch("app.agent.config.PUBLIC_BASE_URL", ""):
+        result, _ = dhs_agent.process_tool_call("get_campus_directions", {"destination": "library"})
+    assert "Campus map image: https://raw.githubusercontent.com" in result
+
+
+def test_get_campus_directions_prefers_same_origin_url_when_public_base_url_set(dhs_agent):
+    with patch("app.agent.config.PUBLIC_BASE_URL", "https://chat.dublinusd.org"):
+        result, _ = dhs_agent.process_tool_call("get_campus_directions", {"destination": "library"})
+    assert "Campus map image: https://chat.dublinusd.org/schools/dhs/campus-map" in result
+    assert "raw.githubusercontent.com" not in result
 
 
 def test_get_club_list_tool_present_when_school_has_clubs_sheet(dhs_agent):
