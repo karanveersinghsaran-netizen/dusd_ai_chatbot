@@ -83,6 +83,12 @@ module "cloud_run" {
   region       = var.region
   service_name = var.service_name
 
+  # Real families now reach this via the flyer link — a cold start on their
+  # first (only?) visit is a worse impression than the small always-on
+  # cost. Was 0 (scale-to-zero) since this is nominally "staging"; keeping
+  # one instance warm removes cold starts entirely.
+  min_instances = 1
+
   vpc_connector_id = module.network.vpc_connector_id
 
   plain_env_vars = {
