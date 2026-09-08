@@ -143,6 +143,17 @@ def test_get_club_list_cites_the_human_viewable_sheet_not_the_csv_export(dhs_age
     assert attach_map is False
 
 
+def test_get_no_school_days_cites_the_instructional_calendar_pdf_not_the_events_page(dhs_agent):
+    """The no-school-days tool must cite the district's board-approved
+    calendar PDF (data/calendars/dusd/2026_27.json's source_url) — not the
+    generic events page used for get_calendar_events, which used to be
+    reused here and pointed users at the wrong source."""
+    result, _ = dhs_agent.process_tool_call("get_no_school_days", {})
+
+    assert "SOURCE: https://drive.google.com/file/d/14AAnvvkvnC8lkoJCbXcr-jwp8t1gci5q/view" in result
+    assert "apps/events" not in result
+
+
 # ── _call_api passes system as list with cache_control ────────────────────────
 
 def test_call_api_system_is_list_with_cache_control(agent):
