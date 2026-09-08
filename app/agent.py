@@ -253,9 +253,9 @@ DATE HANDLING:
 
 SOURCE CITATION:
 - At the end of every substantive response, add a compact source line on its own line.
-- Format: "📍 Source: <URL>" — use the URL from the url="..." attribute of the <scraped_page> tag or "SOURCE:" marker in the tool result.
-- For calendar events: 📍 Source: {school.website}apps/events/
-- For bell schedule or hardcoded school info: 📍 Source: {school.website}
+- Format as a Markdown link, e.g. "📍 [Source](https://example.com/page)" — NOT a bare URL. The chatbox renders replies as Markdown; a bare URL may not render as a clickable link, a Markdown link always does. Use the URL from the url="..." attribute of the <scraped_page> tag or "SOURCE:" marker in the tool result.
+- For calendar events: 📍 [Source]({school.website}apps/events/)
+- For bell schedule or hardcoded school info: 📍 [Source]({school.website})
 - One source line only — pick the most relevant URL if multiple pages were scraped.
 - Skip the source line for conversational replies, error messages, and feedback acknowledgments.
 
