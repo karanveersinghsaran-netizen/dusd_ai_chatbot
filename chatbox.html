@@ -244,7 +244,9 @@
        buttons across both side columns (theme/help/a11y/lang/speak/clear/
        install), which read as cluttered controls rather than an app header.
        Everything but the single always-visible action now lives one tap
-       away inside #menu-panel (see below). */
+       away inside #menu-panel (see below) — except install, which gets its
+       own explicit banner (see #install-banner) since burying a high-value,
+       opportunistic action behind a menu tap kills its discoverability. */
     display: flex;
     align-items: center;
     gap: 8px;
@@ -283,9 +285,9 @@
   }
   .school-logo.visible { display: inline-block; }
 
-  /* The single top-level header control — everything else (theme, spoken
-     replies, accessibility, language, help, clear, install) lives inside
-     the menu it opens (#menu-panel below), one tap away instead of
+  /* The single top-level header control — everything else except install
+     (theme, spoken replies, accessibility, language, help, clear) lives
+     inside the menu it opens (#menu-panel below), one tap away instead of
      permanently on-screen. Sized a bit larger than the old 30px icon
      circles for a more deliberate, thumb-friendly target. */
   #menu-btn {
@@ -381,11 +383,59 @@
   .menu-row-icon svg { width: 20px; height: 20px; fill: currentColor; }
   .menu-row-label { flex: 1; min-width: 0; }
   .menu-row-value { flex-shrink: 0; color: var(--text-muted); font-size: 0.85rem; }
-  /* Neutral (--text/--border), not --user-bubble-bg: that variable is also
-     the per-school accent (#52), and dark, low-luminance school colors
-     (e.g. navy, teal) read as low-contrast on a dark-mode background. */
-  #install-btn { display: none; }
-  #install-btn.visible { display: flex; }
+
+  /* Install banner — deliberately its own explicit, always-in-view strip
+     rather than a #menu-panel row; see the HTML comment above it. Hidden by
+     default; wireInstallBanner() adds .visible only once the browser
+     reports the app is actually installable (or unconditionally on iOS,
+     which never fires that signal). */
+  #install-banner {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  #install-banner.visible { display: flex; }
+  .install-banner-icon { flex-shrink: 0; font-size: 1.2rem; }
+  .install-banner-text {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--text);
+  }
+  /* --user-bubble-bg/--user-bubble-text are always set as a matched pair
+     (base theme or per-school #52), unlike using the accent as a bare text
+     color on a neutral background — so this CTA fill is safe regardless of
+     which school's color is active. Same pairing #send already uses. */
+  #install-btn {
+    flex-shrink: 0;
+    padding: 7px 16px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--user-bubble-text);
+    background: var(--user-bubble-bg);
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  #install-btn:active { opacity: 0.75; }
+  #install-banner-dismiss {
+    flex-shrink: 0;
+    width: 28px; height: 28px;
+    padding: 0;
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #install-banner-dismiss:active { opacity: 0.6; }
+
   #speak-toggle[aria-pressed="true"] .menu-row-icon { color: var(--user-bubble-bg); }
   #speak-toggle.speaking .menu-row-icon { animation: speak-pulse 1s infinite ease-in-out; }
   @keyframes speak-pulse {
@@ -677,13 +727,32 @@
     </button>
   </header>
 
+  <!-- Install is deliberately NOT inside #menu-panel with everything else —
+       burying a high-value, opportunistic action (install prompt) behind an
+       overflow menu tap kills its discoverability; almost nobody would find
+       it there. It's its own explicit, always-in-view banner instead,
+       shown only when the browser reports the app is actually installable
+       (or on iOS, which never fires that signal, shown unconditionally).
+       Dismissing hides it for the rest of this browser session only
+       (sessionStorage) — not forever — so it doesn't nag mid-session but
+       still gets a fresh chance to be seen on the next visit. -->
+  <div id="install-banner" role="region" aria-label="Install app">
+    <span class="install-banner-icon" aria-hidden="true">📲</span>
+    <span class="install-banner-text" id="install-banner-text">Install app</span>
+    <button id="install-btn" type="button" aria-label="Install app">
+      <span id="install-btn-label">Install</span>
+    </button>
+    <button id="install-banner-dismiss" type="button" aria-label="Dismiss">×</button>
+  </div>
+
   <div id="voice-status" aria-live="polite" role="status"></div>
 
-  <!-- Single overflow menu holding every control that used to sit as its own
-       icon/pill button directly in the header. Each row below is the exact
-       same <button> (same id, same click-handling JS) that used to live in
-       the header — only its markup location and visual style changed, so
-       none of the wiring further down needed to change. -->
+  <!-- Overflow menu holding every OTHER control that used to sit as its own
+       icon/pill button directly in the header (install is deliberately not
+       here — see #install-banner above). Each row below is the exact same
+       <button> (same id, same click-handling JS) that used to live in the
+       header — only its markup location and visual style changed, so none
+       of the wiring further down needed to change. -->
   <div id="menu-panel" class="popover menu-panel" role="dialog" aria-labelledby="menu-panel-title">
     <button class="close" type="button" aria-label="Dismiss">×</button>
     <div id="menu-panel-title" style="font-weight: 600; margin-bottom: 6px;">Menu</div>
@@ -719,11 +788,6 @@
     <button id="clear-btn" type="button" class="menu-row" aria-label="Clear conversation">
       <span class="menu-row-icon" aria-hidden="true">🧹</span>
       <span class="menu-row-label" id="clear-btn-label">Clear conversation</span>
-    </button>
-
-    <button id="install-btn" type="button" class="menu-row" aria-label="Install app">
-      <span class="menu-row-icon" aria-hidden="true">📲</span>
-      <span class="menu-row-label" id="install-btn-label">Install app</span>
     </button>
   </div>
 
@@ -1140,61 +1204,84 @@
     // trigger the install sheet programmatically and have to show a manual
     // hint instead. Everywhere else (Android Chrome, desktop Chrome/Edge) we
     // capture the browser's deferred prompt and fire it on click.
-    (function wireInstallButton() {
+    (function wireInstallBanner() {
+      const banner = document.getElementById("install-banner");
       const btn = document.getElementById("install-btn");
+      const dismissBtn = document.getElementById("install-banner-dismiss");
       const iosHint = document.getElementById("ios-install-hint");
       const iosHintClose = iosHint.querySelector(".close");
+      const DISMISSED_KEY = "wms-install-banner-dismissed";
 
-      // If already running as an installed PWA, hide the button entirely —
-      // no point offering "install" to someone already inside the app.
+      // If already running as an installed PWA, there's nothing to offer —
+      // don't even wire up the dismiss/session-storage machinery below.
       const isStandalone =
         window.matchMedia("(display-mode: standalone)").matches ||
         window.navigator.standalone === true;
       if (isStandalone) return;
+
+      // sessionStorage (not localStorage): dismissing quiets the banner for
+      // the rest of THIS browser session, not forever — it still gets a
+      // fresh chance to be seen next visit, rather than being suppressed
+      // permanently after one dismissal.
+      let dismissedThisSession = false;
+      try { dismissedThisSession = sessionStorage.getItem(DISMISSED_KEY) === "1"; } catch (e) {}
+
+      function showBanner() {
+        if (!dismissedThisSession) banner.classList.add("visible");
+      }
+      function hideBanner() {
+        banner.classList.remove("visible");
+      }
 
       const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) && !window.MSStream;
 
       let deferredPrompt = null;
       window.addEventListener("beforeinstallprompt", (e) => {
         // Chrome/Edge/Android: prevent the mini-infobar; we'll trigger the
-        // real prompt from our own button so users get a discoverable action
-        // instead of an easy-to-miss browser banner.
+        // real prompt from our own banner so users get a discoverable,
+        // explicit action instead of an easy-to-miss browser banner.
         e.preventDefault();
         deferredPrompt = e;
-        btn.classList.add("visible");
+        showBanner();
       });
 
-      // iOS Safari never fires beforeinstallprompt, so show the button up
-      // front and route its click to the manual instructions overlay.
-      if (isIOS) btn.classList.add("visible");
+      // iOS Safari never fires beforeinstallprompt, so show the banner up
+      // front and route its action button to the manual instructions overlay.
+      if (isIOS) showBanner();
 
       btn.addEventListener("click", async () => {
         if (deferredPrompt) {
           deferredPrompt.prompt();
           const { outcome } = await deferredPrompt.userChoice;
           deferredPrompt = null;
-          if (outcome === "accepted") btn.classList.remove("visible");
+          if (outcome === "accepted") hideBanner();
         } else if (isIOS) {
           iosHint.classList.add("visible");
         }
       });
 
+      dismissBtn.addEventListener("click", () => {
+        hideBanner();
+        try { sessionStorage.setItem(DISMISSED_KEY, "1"); } catch (e) {}
+      });
+
       iosHintClose.addEventListener("click", () => iosHint.classList.remove("visible"));
 
       // If the install completes (Chrome's `appinstalled` event), hide the
-      // button so it doesn't stick around post-install on a stale tab.
+      // banner so it doesn't stick around post-install on a stale tab.
       window.addEventListener("appinstalled", () => {
-        btn.classList.remove("visible");
+        hideBanner();
         deferredPrompt = null;
       });
     })();
 
-    // Header overflow menu (#menu-panel): holds every control that used to
-    // be its own icon/pill button directly in the header (theme, spoken
-    // replies, accessibility, language, help, clear, install). None of
-    // those buttons' own wiring above changed — this only opens/closes the
-    // shell around them, matching the open/close pattern used by
-    // wireA11yPanel/wireLangPanel above.
+    // Header overflow menu (#menu-panel): holds every other control that
+    // used to be its own icon/pill button directly in the header (theme,
+    // spoken replies, accessibility, language, help, clear — install is
+    // deliberately excluded, see #install-banner/wireInstallBanner above).
+    // None of those buttons' own wiring above changed — this only
+    // opens/closes the shell around them, matching the open/close pattern
+    // used by wireA11yPanel/wireLangPanel above.
     (function wireMenuPanel() {
       const btn = document.getElementById("menu-btn");
       const panel = document.getElementById("menu-panel");
@@ -1230,9 +1317,9 @@
         }
       });
       // Every row either opens a different popover (accessibility/language)
-      // or performs an action (theme/speak/clear/install) — in every case
-      // the menu itself shouldn't linger open underneath, so close it
-      // whenever any row is activated.
+      // or performs an action (theme/speak/clear) — in every case the menu
+      // itself shouldn't linger open underneath, so close it whenever any
+      // row is activated.
       panel.addEventListener("click", (e) => {
         if (e.target.closest(".menu-row")) closePanel();
       });
@@ -1578,16 +1665,20 @@
       sendEl.setAttribute("aria-label", strings.send);
       document.getElementById("help-btn").setAttribute("aria-label", strings.help);
       // These buttons are now full-width .menu-row rows with room for the
-      // fuller phrase (strings.clear/.install), not the short pill labels
-      // (clearLabel/installLabel) the old cramped header buttons needed —
-      // and only the label span updates now, so the icon span survives.
+      // fuller phrase (strings.clear), not the short pill label (clearLabel)
+      // the old cramped header button needed — and only the label span
+      // updates now, so the icon span survives.
       document.getElementById("help-btn-label").textContent = strings.help;
       const clearBtn = document.getElementById("clear-btn");
       clearBtn.setAttribute("aria-label", strings.clear);
       document.getElementById("clear-btn-label").textContent = strings.clear;
+      // #install-banner has room for both: the fuller phrase as the banner's
+      // own explanatory text, and the short pill label on its compact action
+      // button — "Install app  [Install]", not "Install app  [Install app]".
+      document.getElementById("install-banner-text").textContent = strings.install;
       const installBtn = document.getElementById("install-btn");
       installBtn.setAttribute("aria-label", strings.install);
-      document.getElementById("install-btn-label").textContent = strings.install;
+      document.getElementById("install-btn-label").textContent = strings.installLabel;
     }
 
     (function wireLangPanel() {
