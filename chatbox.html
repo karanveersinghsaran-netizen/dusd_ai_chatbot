@@ -186,19 +186,27 @@
   :root[data-motion="reduce"] #messages { scroll-behavior: auto; }
 
   * { box-sizing: border-box; }
-  /* overflow: hidden locks the outer document itself from ever scrolling.
-     Without it, focusing #input near the bottom of the screen triggers the
-     mobile browser's native "scroll the focused element into view" — which
-     pans the whole document (not just the internal #messages scroll area
-     this layout is built around), yanking the header up and off-screen.
-     It also guarantees the body (sized to the live viewport height via
-     --app-height below) always exactly fills what's visible, so #input-row
-     can never end up below the fold with no way to scroll down to it —
-     both bugs reported when opening the raw URL in a normal mobile browser
-     tab (as opposed to the installed PWA, where standalone display mode
-     happens to avoid this by having no address-bar chrome to begin with). */
+  /* overflow: hidden alone isn't enough on every mobile browser: focusing
+     #input near the bottom of the screen still triggers some engines'
+     (notably Android Chrome) native "scroll the focused element into view"
+     behavior, which pans the whole document — not just the internal
+     #messages scroll area this layout is built around — yanking the header
+     up and off-screen. position: fixed removes body from the document's
+     scrolling flow entirely, so there is nothing left for that native
+     behavior to scroll; overflow: hidden stays as a belt-and-suspenders
+     second layer. Together they also guarantee the body (sized to the live
+     viewport height via --app-height below) always exactly fills what's
+     visible, so #input-row can never end up below the fold with no way to
+     scroll down to it — both bugs reported when opening the raw URL in a
+     normal mobile browser tab (as opposed to the installed PWA, where
+     standalone display mode happens to avoid this by having no address-bar
+     chrome to begin with). */
   html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
   body {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
     font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
     background: var(--bg);
     color: var(--text);
@@ -220,130 +228,75 @@
   }
 
   header {
-    display: grid;
-    /* auto (not a fixed 60px) — the side columns have grown from one icon
-       button each (original design) to up to four (theme/help/a11y/lang on
-       one side, theme/speak/clear/install on the other, across several
-       features added independently). A fixed 60px badly undersized them,
-       so Grid let the buttons visually overflow into the center title
-       column instead of reserving room for them — hence the overlapping
-       mess. auto sizes each side to whatever it actually contains. */
-    grid-template-columns: auto 1fr auto;
+    /* Simple flex row — logo+title leading, one "more" button trailing.
+       Previously a 3-column grid holding up to seven separate icon/pill
+       buttons across both side columns (theme/help/a11y/lang/speak/clear/
+       install), which read as cluttered controls rather than an app header.
+       Everything but the single always-visible action now lives one tap
+       away inside #menu-panel (see below). */
+    display: flex;
     align-items: center;
-    padding: calc(env(safe-area-inset-top) + 10px) 12px 10px;
+    gap: 8px;
+    padding: calc(env(safe-area-inset-top) + 10px) 14px 10px;
     background: var(--surface);
     border-bottom: 1px solid var(--border);
-    font-size: 0.95rem;
+    font-size: 1rem;
     font-weight: 600;
     flex-shrink: 0;
   }
   header .title {
-    text-align: center;
-    /* Grid items default to min-width: auto, which stops them shrinking
-       below their content size — with the side columns now claiming
-       whatever width their buttons need, the title needs to be able to
-       shrink (and truncate) rather than forcing the header wider than the
-       screen. */
+    flex: 1;
     min-width: 0;
+    display: flex;
+    align-items: center;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
   }
-  header .actions-left, header .actions {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-shrink: 0;
-  }
-  header .actions { justify-content: flex-end; }
-  #install-btn {
-    /* Neutral (--text/--border), not --user-bubble-bg: that variable is also
-       the per-school accent (#52), and dark, low-luminance school colors
-       (e.g. navy, teal) read as low-contrast text/border on a dark-mode
-       background. Matches the existing #theme-toggle-btn/#help-btn style so
-       it stays legible regardless of theme or which school is pinned. */
-    display: none;
-    padding: 6px 10px;
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--text);
-    background: transparent;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    cursor: pointer;
-  }
-  #install-btn.visible { display: inline-block; }
-  #install-btn:active { opacity: 0.6; }
-
-  /* Same pill style as #install-btn (see note above), but always visible —
-     unlike install, clearing isn't conditional on platform capability. */
-  #clear-btn {
-    padding: 6px 10px;
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--text);
-    background: transparent;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    cursor: pointer;
-  }
-  #clear-btn:active { opacity: 0.6; }
 
   /* Per-school logo placeholder (#52): a colored initials circle next to the
      title once a school is pinned. Hidden — no real logo assets exist yet —
      until JS adds .visible with the school's brand color + initials. */
   .school-logo {
     display: none;
-    width: 20px; height: 20px;
+    width: 26px; height: 26px;
     border-radius: 50%;
-    line-height: 20px;
+    line-height: 26px;
     vertical-align: middle;
-    margin-right: 6px;
-    font-size: 0.65rem;
+    margin-right: 8px;
+    font-size: 0.72rem;
     font-weight: 700;
     color: #ffffff;
     text-align: center;
+    flex-shrink: 0;
   }
   .school-logo.visible { display: inline-block; }
 
-  #theme-toggle-btn, #help-btn, #a11y-settings-btn, #lang-toggle-btn {
-    width: 30px; height: 30px;
+  /* The single top-level header control — everything else (theme, spoken
+     replies, accessibility, language, help, clear, install) lives inside
+     the menu it opens (#menu-panel below), one tap away instead of
+     permanently on-screen. Sized a bit larger than the old 30px icon
+     circles for a more deliberate, thumb-friendly target. */
+  #menu-btn {
+    width: 38px; height: 38px;
     padding: 0;
-    font-size: 1rem;
     color: var(--text);
     background: transparent;
     border: 1px solid var(--border);
     border-radius: 50%;
     cursor: pointer;
     display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
   }
-  #theme-toggle-btn svg { width: 16px; height: 16px; fill: currentColor; }
-  #theme-toggle-btn:active, #help-btn:active, #a11y-settings-btn:active, #lang-toggle-btn:active { opacity: 0.6; }
-  /* (hover: hover) scopes this to devices with a real pointer — otherwise a
-     tap on touchscreens leaves the hover fill stuck until the next tap
-     elsewhere. Reuses --border for the fill so it's already theme-aware
-     (light/dark/high-contrast) with no extra variable needed. */
+  #menu-btn svg { width: 20px; height: 20px; fill: currentColor; }
+  #menu-btn:active { opacity: 0.6; }
   @media (hover: hover) {
-    #theme-toggle-btn:not(:disabled):hover,
-    #help-btn:hover,
-    #a11y-settings-btn:hover,
-    #lang-toggle-btn:hover {
-      background: var(--border);
-    }
+    #menu-btn:hover { background: var(--border); }
   }
-  /* High contrast (#64) is a single fixed dark palette that always wins
-     over light/dark, so the toggle has nothing left to do while it's
-     active — disable it rather than leave a clickable button that visibly
-     does nothing. */
-  #theme-toggle-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-  #a11y-settings-btn { font-size: 0.7rem; font-weight: 700; }
-  /* Smaller than the other header buttons' 1rem default so the two-letter
-     (EN/ES) and single-character (简/繁) badges all fit the 30px circle
-     without wrapping or overflowing (#62). */
-  #lang-toggle-btn { font-size: 0.62rem; font-weight: 700; }
 
-  /* Shared popover shell for the iOS install hint and the help/support
-     panel — both are small dismissible cards anchored below the header. */
+  /* Shared popover shell for the iOS install hint, help/support panel, and
+     the header's own overflow menu — all small dismissible cards anchored
+     below the header. */
   .popover {
     position: fixed;
     left: 12px; right: 12px;
@@ -357,6 +310,12 @@
     line-height: 1.4;
     z-index: 10;
     display: none;
+  }
+  /* #menu-panel narrows itself to a right-anchored dropdown on wide screens
+     (tablet/desktop) rather than stretching the same 12px-inset-both-sides
+     width as a phone — it reads as a menu, not a full-width card. */
+  @media (min-width: 480px) {
+    #menu-panel { left: auto; width: 280px; }
   }
   .popover.visible { display: block; }
   .popover .close {
@@ -376,6 +335,51 @@
     border-radius: 4px;
     font-family: inherit;
     font-size: 0.85em;
+  }
+
+  /* Menu rows inside #menu-panel — full-width, larger tap targets than the
+     old 30px header icon circles, each a single native <button> so the
+     whole row (icon + label + value) is tappable, not just the glyph. */
+  .menu-panel .menu-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 12px 4px;
+    background: none;
+    border: none;
+    font: inherit;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+  }
+  .menu-panel .menu-row + .menu-row { border-top: 1px solid var(--border); }
+  .menu-panel .menu-row:active { opacity: 0.6; }
+  .menu-panel .menu-row:disabled { opacity: 0.35; cursor: not-allowed; }
+  @media (hover: hover) {
+    .menu-panel .menu-row:not(:disabled):hover { background: var(--bg); }
+  }
+  .menu-row-icon {
+    flex-shrink: 0;
+    width: 22px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.05rem;
+  }
+  .menu-row-icon svg { width: 20px; height: 20px; fill: currentColor; }
+  .menu-row-label { flex: 1; min-width: 0; }
+  .menu-row-value { flex-shrink: 0; color: var(--text-muted); font-size: 0.85rem; }
+  /* Neutral (--text/--border), not --user-bubble-bg: that variable is also
+     the per-school accent (#52), and dark, low-luminance school colors
+     (e.g. navy, teal) read as low-contrast on a dark-mode background. */
+  #install-btn { display: none; }
+  #install-btn.visible { display: flex; }
+  #speak-toggle[aria-pressed="true"] .menu-row-icon { color: var(--user-bubble-bg); }
+  #speak-toggle.speaking .menu-row-icon { animation: speak-pulse 1s infinite ease-in-out; }
+  @keyframes speak-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.5; }
   }
 
   /* Accessibility settings panel option groups (issue #64) — pill-style
@@ -636,25 +640,10 @@
   }
   #mic-btn:disabled { opacity: 0.35; cursor: not-allowed; animation: none; }
 
-  /* Voice output (speaker) toggle, lives in the header actions area. */
-  #speak-toggle {
-    width: 32px; height: 32px;
-    border-radius: 50%;
-    border: none;
-    background: transparent;
-    color: var(--text-muted);
-    cursor: pointer;
-    display: inline-flex; align-items: center; justify-content: center;
-    vertical-align: middle;
-  }
-  #speak-toggle svg { width: 18px; height: 18px; fill: currentColor; }
-  #speak-toggle[aria-pressed="true"] { color: var(--user-bubble-bg); }
-  #speak-toggle.speaking { animation: speak-pulse 1s infinite ease-in-out; }
-  @keyframes speak-pulse {
-    0%, 100% { opacity: 1; }
-    50%      { opacity: 0.5; }
-  }
-  #speak-toggle:disabled { opacity: 0.3; cursor: not-allowed; animation: none; }
+  /* Voice output (speaker) toggle — now a .menu-row inside #menu-panel; its
+     layout comes from that shared class, state colors from the rules
+     defined alongside .menu-row above. */
+  #speak-toggle:disabled { opacity: 0.35; cursor: not-allowed; animation: none; }
 
   /* Visually-hidden live region announcing speech status to screen readers. */
   #voice-status {
@@ -670,28 +659,62 @@
 </head>
 <body>
   <header>
-    <div class="actions-left">
-      <button id="help-btn" type="button" aria-label="Help &amp; support">?</button>
-      <button id="a11y-settings-btn" type="button" aria-haspopup="dialog"
-              aria-controls="a11y-panel" aria-expanded="false"
-              aria-label="Accessibility settings">Aa</button>
-      <button id="lang-toggle-btn" type="button" aria-haspopup="dialog"
-              aria-controls="lang-panel" aria-expanded="false"
-              aria-label="Change language">EN</button>
-    </div>
     <div class="title"><span id="school-logo" class="school-logo" aria-hidden="true"></span><span id="title-text">School Chat</span></div>
-    <div class="actions">
-      <button id="theme-toggle-btn" type="button" aria-label="Toggle dark mode"></button>
-      <button id="speak-toggle" type="button" aria-pressed="false"
-              aria-label="Turn on spoken replies" title="Turn on spoken replies">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10v4h4l5 5V5L7 10H3zm13.5 2c0-1.77-1.02-3.29-2.5-4.03v8.06c1.48-.74 2.5-2.26 2.5-4.03zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
-      </button>
-      <button id="clear-btn" type="button" aria-label="Clear conversation">Clear</button>
-      <button id="install-btn" type="button" aria-label="Install app">Install</button>
-    </div>
+    <button id="menu-btn" type="button" aria-haspopup="dialog" aria-controls="menu-panel"
+            aria-expanded="false" aria-label="Menu">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>
+    </button>
   </header>
 
   <div id="voice-status" aria-live="polite" role="status"></div>
+
+  <!-- Single overflow menu holding every control that used to sit as its own
+       icon/pill button directly in the header. Each row below is the exact
+       same <button> (same id, same click-handling JS) that used to live in
+       the header — only its markup location and visual style changed, so
+       none of the wiring further down needed to change. -->
+  <div id="menu-panel" class="popover menu-panel" role="dialog" aria-labelledby="menu-panel-title">
+    <button class="close" type="button" aria-label="Dismiss">×</button>
+    <div id="menu-panel-title" style="font-weight: 600; margin-bottom: 6px;">Menu</div>
+
+    <button id="theme-toggle-btn" type="button" class="menu-row" aria-label="Toggle dark mode"></button>
+
+    <button id="speak-toggle" type="button" class="menu-row" aria-pressed="false"
+            aria-label="Turn on spoken replies" title="Turn on spoken replies">
+      <span class="menu-row-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M3 10v4h4l5 5V5L7 10H3zm13.5 2c0-1.77-1.02-3.29-2.5-4.03v8.06c1.48-.74 2.5-2.26 2.5-4.03zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+      </span>
+      <span class="menu-row-label">Spoken replies</span>
+    </button>
+
+    <button id="a11y-settings-btn" type="button" class="menu-row" aria-haspopup="dialog"
+            aria-controls="a11y-panel" aria-expanded="false" aria-label="Accessibility settings">
+      <span class="menu-row-icon" aria-hidden="true">Aa</span>
+      <span class="menu-row-label">Accessibility settings</span>
+    </button>
+
+    <button id="lang-toggle-btn" type="button" class="menu-row" aria-haspopup="dialog"
+            aria-controls="lang-panel" aria-expanded="false" aria-label="Change language">
+      <span class="menu-row-icon" aria-hidden="true">🌐</span>
+      <span class="menu-row-label">Language</span>
+      <span class="menu-row-value"></span>
+    </button>
+
+    <button id="help-btn" type="button" class="menu-row" aria-label="Help &amp; support">
+      <span class="menu-row-icon" aria-hidden="true">❓</span>
+      <span class="menu-row-label" id="help-btn-label">Help &amp; support</span>
+    </button>
+
+    <button id="clear-btn" type="button" class="menu-row" aria-label="Clear conversation">
+      <span class="menu-row-icon" aria-hidden="true">🧹</span>
+      <span class="menu-row-label" id="clear-btn-label">Clear conversation</span>
+    </button>
+
+    <button id="install-btn" type="button" class="menu-row" aria-label="Install app">
+      <span class="menu-row-icon" aria-hidden="true">📲</span>
+      <span class="menu-row-label" id="install-btn-label">Install app</span>
+    </button>
+  </div>
 
   <div id="ios-install-hint" class="popover" role="dialog" aria-labelledby="ios-install-title">
     <button class="close" type="button" aria-label="Dismiss">×</button>
@@ -869,9 +892,15 @@
       }
 
       function render() {
-        // Icon shows the mode a click will switch TO, matching how most
-        // apps label a dark-mode toggle (moon = "go dark", sun = "go light").
-        btn.innerHTML = currentlyDark() ? SUN_ICON_SVG : MOON_ICON_SVG;
+        // Icon + label both show the mode a click will switch TO, matching
+        // how most apps label a dark-mode toggle (moon = "go dark", sun =
+        // "go light"). btn is now a full-width .menu-row (moved out of the
+        // header into #menu-panel), so this builds icon + label together
+        // rather than just swapping the bare icon.
+        const dark = currentlyDark();
+        btn.innerHTML =
+          '<span class="menu-row-icon" aria-hidden="true">' + (dark ? SUN_ICON_SVG : MOON_ICON_SVG) + "</span>" +
+          '<span class="menu-row-label">' + (dark ? "Light mode" : "Dark mode") + "</span>";
       }
 
       const stored = localStorage.getItem(THEME_KEY);
@@ -1136,6 +1165,55 @@
       });
     })();
 
+    // Header overflow menu (#menu-panel): holds every control that used to
+    // be its own icon/pill button directly in the header (theme, spoken
+    // replies, accessibility, language, help, clear, install). None of
+    // those buttons' own wiring above changed — this only opens/closes the
+    // shell around them, matching the open/close pattern used by
+    // wireA11yPanel/wireLangPanel above.
+    (function wireMenuPanel() {
+      const btn = document.getElementById("menu-btn");
+      const panel = document.getElementById("menu-panel");
+      const closeBtn = panel.querySelector(".close");
+
+      function openPanel() {
+        panel.classList.add("visible");
+        btn.setAttribute("aria-expanded", "true");
+        const firstRow = panel.querySelector(".menu-row:not(:disabled)") || closeBtn;
+        firstRow.focus();
+      }
+      function closePanel() {
+        panel.classList.remove("visible");
+        btn.setAttribute("aria-expanded", "false");
+      }
+
+      btn.addEventListener("click", () => {
+        if (panel.classList.contains("visible")) {
+          closePanel();
+          btn.focus();
+        } else {
+          openPanel();
+        }
+      });
+      closeBtn.addEventListener("click", () => {
+        closePanel();
+        btn.focus();
+      });
+      panel.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          closePanel();
+          btn.focus();
+        }
+      });
+      // Every row either opens a different popover (accessibility/language)
+      // or performs an action (theme/speak/clear/install) — in every case
+      // the menu itself shouldn't linger open underneath, so close it
+      // whenever any row is activated.
+      panel.addEventListener("click", (e) => {
+        if (e.target.closest(".menu-row")) closePanel();
+      });
+    })();
+
     // Dismiss any open popover (help, report form, iOS install hint) on an
     // outside click. Excludes their trigger buttons too, so the click that
     // just opened a popover doesn't immediately close it again as it bubbles
@@ -1143,7 +1221,7 @@
     document.addEventListener("click", (e) => {
       document.querySelectorAll(".popover.visible").forEach((popover) => {
         if (popover.contains(e.target)) return;
-        if (e.target.closest("#help-btn, #install-btn, #report-open-btn, #a11y-settings-btn, #lang-toggle-btn")) return;
+        if (e.target.closest("#menu-btn, #help-btn, #install-btn, #report-open-btn, #a11y-settings-btn, #lang-toggle-btn")) return;
         popover.classList.remove("visible");
         // Keep any trigger button's aria-expanded in sync when its popover
         // gets dismissed this way rather than via its own close button.
@@ -1475,12 +1553,17 @@
       inputEl.placeholder = strings.placeholder;
       sendEl.setAttribute("aria-label", strings.send);
       document.getElementById("help-btn").setAttribute("aria-label", strings.help);
+      // These buttons are now full-width .menu-row rows with room for the
+      // fuller phrase (strings.clear/.install), not the short pill labels
+      // (clearLabel/installLabel) the old cramped header buttons needed —
+      // and only the label span updates now, so the icon span survives.
+      document.getElementById("help-btn-label").textContent = strings.help;
       const clearBtn = document.getElementById("clear-btn");
       clearBtn.setAttribute("aria-label", strings.clear);
-      clearBtn.textContent = strings.clearLabel;
+      document.getElementById("clear-btn-label").textContent = strings.clear;
       const installBtn = document.getElementById("install-btn");
       installBtn.setAttribute("aria-label", strings.install);
-      installBtn.textContent = strings.installLabel;
+      document.getElementById("install-btn-label").textContent = strings.install;
     }
 
     (function wireLangPanel() {
@@ -1490,8 +1573,11 @@
       const radios = Array.from(panel.querySelectorAll('input[name="chat-lang"]'));
 
       function renderBadge() {
+        // btn is a .menu-row (icon + "Language" label + this trailing
+        // value) — only the value span updates, unlike the old header
+        // icon-circle where the badge WAS the button's entire content.
         const entry = CHAT_LANGUAGES.find((l) => l.code === chatLanguage);
-        btn.textContent = entry.badge;
+        btn.querySelector(".menu-row-value").textContent = entry.badge;
         btn.title = "Language: " + entry.label;
       }
 
