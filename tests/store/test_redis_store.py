@@ -1,7 +1,7 @@
 """Unit tests for RedisStore (app/store/redis_store.py)."""
 import pytest
 
-from app.store.redis_store import CONV_TTL_SECONDS, RedisStore, _msgcount_key
+from app.store.redis_store import CONV_TTL_SECONDS, MAX_HISTORY, RedisStore, _msgcount_key
 from tests.store.conftest import FakeRedisClient
 
 
@@ -32,12 +32,13 @@ def test_append_message_persists_and_orders(redis_store):
 
 
 def test_append_message_trims_to_max_history(redis_store):
-    for i in range(25):
+    overflow = 5
+    for i in range(MAX_HISTORY + overflow):
         redis_store.append_message("u1", {"role": "user", "content": str(i)})
     history = redis_store.get_conversation("u1")
-    assert len(history) == 20
-    assert history[0]["content"] == "5"
-    assert history[-1]["content"] == "24"
+    assert len(history) == MAX_HISTORY
+    assert history[0]["content"] == str(overflow)
+    assert history[-1]["content"] == str(MAX_HISTORY + overflow - 1)
 
 
 def test_conversation_is_per_session(redis_store):
@@ -49,6 +50,37 @@ def test_clear_conversation(redis_store):
     redis_store.append_message("u1", {"role": "user", "content": "a"})
     redis_store.clear_conversation("u1")
     assert redis_store.get_conversation("u1") == []
+
+
+# ── conversation truncation flag ─────────────────────────────────────────────
+
+def test_conversation_was_truncated_false_when_never_appended(redis_store):
+    assert redis_store.conversation_was_truncated("u1") is False
+
+
+def test_conversation_was_truncated_false_under_max_history(redis_store):
+    for i in range(MAX_HISTORY):
+        redis_store.append_message("u1", {"role": "user", "content": str(i)})
+    assert redis_store.conversation_was_truncated("u1") is False
+
+
+def test_conversation_was_truncated_true_once_over_max_history(redis_store):
+    for i in range(MAX_HISTORY + 1):
+        redis_store.append_message("u1", {"role": "user", "content": str(i)})
+    assert redis_store.conversation_was_truncated("u1") is True
+
+
+def test_conversation_was_truncated_is_per_session(redis_store):
+    for i in range(MAX_HISTORY + 1):
+        redis_store.append_message("u1", {"role": "user", "content": str(i)})
+    assert redis_store.conversation_was_truncated("u2") is False
+
+
+def test_clear_session_resets_truncation_flag(redis_store):
+    for i in range(MAX_HISTORY + 1):
+        redis_store.append_message("u1", {"role": "user", "content": str(i)})
+    redis_store.clear_session("u1")
+    assert redis_store.conversation_was_truncated("u1") is False
 
 
 # ── last response ────────────────────────────────────────────────────────────

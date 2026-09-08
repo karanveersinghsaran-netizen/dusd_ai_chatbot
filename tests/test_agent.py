@@ -226,6 +226,69 @@ def test_call_api_includes_prompt_caching_beta(agent):
     assert "prompt-caching-2024-07-31" in kwargs.get("betas", [])
 
 
+# ── Conversation-truncated notice (#history-cap) ────────────────────────────
+
+def test_call_api_omits_truncation_notice_by_default(agent):
+    mock_response = MagicMock()
+    mock_response.stop_reason = "end_turn"
+    agent.client.beta.messages.create.return_value = mock_response
+
+    agent._call_api([{"role": "user", "content": "hi"}])
+
+    _, kwargs = agent.client.beta.messages.create.call_args
+    assert len(kwargs["system"]) == 3
+
+
+def test_call_api_adds_truncation_notice_when_flagged(agent):
+    from app.store.redis_store import MAX_HISTORY
+
+    mock_response = MagicMock()
+    mock_response.stop_reason = "end_turn"
+    agent.client.beta.messages.create.return_value = mock_response
+
+    agent._call_api([{"role": "user", "content": "hi"}], conversation_truncated=True)
+
+    _, kwargs = agent.client.beta.messages.create.call_args
+    system = kwargs["system"]
+    assert len(system) == 4
+    assert "cache_control" not in system[3]
+    assert str(MAX_HISTORY) in system[3]["text"]
+    assert "only retain the most recent conversation" in system[3]["text"]
+
+
+def test_chat_tells_model_when_conversation_was_truncated(agent):
+    """End-to-end: once a session has appended more than MAX_HISTORY
+    messages, chat() must pass the truncation notice through to _call_api
+    without the caller having to know about it."""
+    from app.store.redis_store import MAX_HISTORY
+
+    key = agent._session_key("truncated_user")
+    for i in range(MAX_HISTORY + 1):
+        agent.redis_store.append_message(key, {"role": "user", "content": str(i)})
+
+    agent.client.beta.messages.create.return_value = _text_response("answer")
+
+    with patch("app.agent.get_school_day_status", return_value=""), \
+         patch("app.agent.get_today_status", return_value=""):
+        agent.chat("did I ask about something last week?", user_id="truncated_user")
+
+    _, kwargs = agent.client.beta.messages.create.call_args
+    system = kwargs["system"]
+    assert len(system) == 4
+    assert str(MAX_HISTORY) in system[3]["text"]
+
+
+def test_chat_omits_truncation_notice_for_short_conversation(agent):
+    agent.client.beta.messages.create.return_value = _text_response("answer")
+
+    with patch("app.agent.get_school_day_status", return_value=""), \
+         patch("app.agent.get_today_status", return_value=""):
+        agent.chat("hi", user_id="fresh_user")
+
+    _, kwargs = agent.client.beta.messages.create.call_args
+    assert len(kwargs["system"]) == 3
+
+
 # ── Last tool has cache_control ───────────────────────────────────────────────
 
 def test_last_tool_has_cache_control(agent):
