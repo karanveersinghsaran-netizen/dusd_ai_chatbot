@@ -186,7 +186,18 @@
   :root[data-motion="reduce"] #messages { scroll-behavior: auto; }
 
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; height: 100%; }
+  /* overflow: hidden locks the outer document itself from ever scrolling.
+     Without it, focusing #input near the bottom of the screen triggers the
+     mobile browser's native "scroll the focused element into view" — which
+     pans the whole document (not just the internal #messages scroll area
+     this layout is built around), yanking the header up and off-screen.
+     It also guarantees the body (sized to the live viewport height via
+     --app-height below) always exactly fills what's visible, so #input-row
+     can never end up below the fold with no way to scroll down to it —
+     both bugs reported when opening the raw URL in a normal mobile browser
+     tab (as opposed to the installed PWA, where standalone display mode
+     happens to avoid this by having no address-bar chrome to begin with). */
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
     background: var(--bg);
@@ -210,7 +221,14 @@
 
   header {
     display: grid;
-    grid-template-columns: 60px 1fr 60px;
+    /* auto (not a fixed 60px) — the side columns have grown from one icon
+       button each (original design) to up to four (theme/help/a11y/lang on
+       one side, theme/speak/clear/install on the other, across several
+       features added independently). A fixed 60px badly undersized them,
+       so Grid let the buttons visually overflow into the center title
+       column instead of reserving room for them — hence the overlapping
+       mess. auto sizes each side to whatever it actually contains. */
+    grid-template-columns: auto 1fr auto;
     align-items: center;
     padding: calc(env(safe-area-inset-top) + 10px) 12px 10px;
     background: var(--surface);
@@ -219,11 +237,23 @@
     font-weight: 600;
     flex-shrink: 0;
   }
-  header .title { text-align: center; }
+  header .title {
+    text-align: center;
+    /* Grid items default to min-width: auto, which stops them shrinking
+       below their content size — with the side columns now claiming
+       whatever width their buttons need, the title needs to be able to
+       shrink (and truncate) rather than forcing the header wider than the
+       screen. */
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
   header .actions-left, header .actions {
     display: flex;
     align-items: center;
     gap: 6px;
+    flex-shrink: 0;
   }
   header .actions { justify-content: flex-end; }
   #install-btn {
