@@ -200,6 +200,91 @@ def test_chat_with_unknown_school_id_returns_400(client):
     assert resp.status_code == 400
 
 
+# ── GET /chat/history: restore chat on reopen (#73) ─────────────────────────
+
+def test_history_empty_for_fresh_session(client):
+    mock_agent = _mock_agent()
+    mock_agent.get_history.return_value = []
+    with patch("main.get_agent", return_value=mock_agent):
+        resp = client.get("/chat/history")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"messages": []}
+
+
+def test_history_returns_stored_messages(client):
+    mock_agent = _mock_agent()
+    mock_agent.get_history.return_value = [
+        {"role": "user", "content": "hi"},
+        {"role": "assistant", "content": "hello!"},
+    ]
+    with patch("main.get_agent", return_value=mock_agent):
+        resp = client.get("/chat/history")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "messages": [
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": "hello!"},
+        ]
+    }
+
+
+def test_history_uses_same_identity_as_chat(client):
+    """A message sent via /chat, then fetched via /chat/history with the
+    same cookie jar, must resolve to the same user_id — same
+    resolve_user_id() call both endpoints share."""
+    mock_agent = _mock_agent()
+    with patch("main.get_agent", return_value=mock_agent):
+        client.post("/chat", json={"message": "hi"})
+        client.get("/chat/history")
+
+    chat_user_id = mock_agent.chat.call_args.kwargs["user_id"]
+    history_user_id = mock_agent.get_history.call_args.args[0]
+    assert history_user_id == chat_user_id
+
+
+def test_history_passes_limit_through(client):
+    mock_agent = _mock_agent()
+    mock_agent.get_history.return_value = []
+    with patch("main.get_agent", return_value=mock_agent):
+        client.get("/chat/history?limit=5")
+
+    assert mock_agent.get_history.call_args.kwargs["limit"] == 5
+
+
+def test_history_defaults_to_wells(client):
+    with patch("main.get_agent", return_value=_mock_agent()) as mock_get_agent:
+        client.get("/chat/history")
+
+    mock_get_agent.assert_called_once_with("wells")
+
+
+def test_history_with_school_id_resolves_that_school(client):
+    with patch("main.get_agent", return_value=_mock_agent()) as mock_get_agent:
+        client.get("/chat/history?school_id=dhs")
+
+    mock_get_agent.assert_called_once_with("dhs")
+
+
+def test_history_with_unknown_school_id_returns_400(client):
+    with patch("main.get_agent", return_value=None):
+        resp = client.get("/chat/history?school_id=nonexistent")
+
+    assert resp.status_code == 400
+
+
+def test_history_with_token_uses_token_user_id(client):
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY, user_id="admin-1")
+    mock_agent = _mock_agent()
+    mock_agent.get_history.return_value = []
+    with patch("main.get_agent", return_value=mock_agent):
+        resp = client.get(f"/chat/history?token={token}")
+
+    assert resp.status_code == 200
+    assert mock_agent.get_history.call_args.args[0] == "admin-1"
+
+
 # ── /feedback/thanks ─────────────────────────────────────────────────────────
 
 def test_thanks_without_cookie_mints_session_and_records(client):
