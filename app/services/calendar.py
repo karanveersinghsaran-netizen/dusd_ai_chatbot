@@ -165,7 +165,7 @@ def get_upcoming_no_school_days(today: date, district_id: str, limit: int = 20) 
                 upcoming.append((d, f"{_fmt_date(d)}: {reason}"))
         for d, reason in cal.get("academic_dates", {}).items():
             if d >= today:
-                upcoming.append((d, f"{_fmt_date(d)}: {reason}"))
+                upcoming.append((d, f"{_fmt_date(d)}: {reason} (regular school day, not a day off)"))
 
     upcoming.sort(key=lambda x: x[0])
     seen, result = set(), []
