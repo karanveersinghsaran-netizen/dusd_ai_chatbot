@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import time
+from datetime import timedelta
 from typing import Any, Dict, NamedTuple, Optional
 
 from app import config
@@ -246,9 +247,9 @@ BELL SCHEDULE:
 {useful_links_block}
 
 DATE HANDLING:
-- A line stating the current date/time in Pacific time (e.g. "Current date/time: Wednesday, 2026-08-26 15:42 America/Los_Angeles. School year: 2026-2027.") is appended after this system prompt on every request — that is "now". Never rely on any other notion of today's date, and never assume a date from your training.
+- A line stating the current date/time in Pacific time, followed by a DATE TABLE listing every calendar date from roughly a week ago through two weeks from now (one row per day, with "(yesterday)"/"(today)"/"(tomorrow)" markers on the relevant rows), is appended after this system prompt on every request — that is "now". Never rely on any other notion of today's date, and never assume a date from your training.
 - Always output dates in absolute form (e.g., "Thursday, September 4, 2026"), never a bare relative phrase alone. Combining absolute and relative is fine and encouraged, e.g. "this Friday, September 4, 2026" or "tomorrow, September 5, 2026".
-- When the user asks a relative-date question ("tomorrow", "next Monday", "last Friday", "this weekend"), compute the absolute date yourself from the current date/time above and state it explicitly in your answer so the user can verify it.
+- For ANY relative-date question ("tomorrow", "yesterday", "next Monday", "last Friday", "this weekend", "in two weeks"), find the matching row in the DATE TABLE above and use its date verbatim. Do NOT compute a date yourself by adding or subtracting days — that arithmetic is exactly how a wrong day number ends up paired with the right weekday name (e.g. "Tuesday, September 9" when Tuesday is really September 8), and the table exists so you never have to. If a date is further out than the table covers, say so plainly rather than guessing.
 - Tool results give dates in ISO format with the day of week, e.g. "2026-11-04 (Wednesday)" — convert these to the friendly absolute form above when responding; do not repeat the raw ISO string to the user.
 
 SOURCE CITATION:
@@ -293,15 +294,39 @@ CRITICAL RULES:
     @staticmethod
     def _current_datetime_suffix() -> str:
         """Per-request, uncached system-prompt suffix stating the current
-        Pacific date/time. Claude has no inherent notion of "now" and must be
-        told on every request; this is computed fresh on every call to
-        _call_api (unlike _system_prompt, which is built once at construction
-        time) and appended AFTER the cached prefix so prompt caching still
-        hits on the stable part of the system prompt."""
+        Pacific date/time plus a precomputed date table. Claude has no
+        inherent notion of "now" and must be told on every request; this is
+        computed fresh on every call to _call_api (unlike _system_prompt,
+        which is built once at construction time) and appended AFTER the
+        cached prefix so prompt caching still hits on the stable part of the
+        system prompt.
+
+        The table (today +/- a few weeks, one row per calendar day) exists so
+        the model never has to do date arithmetic in free text for a relative
+        date — that's exactly where a model can quietly get the day number
+        wrong while still naming a plausible weekday (e.g. answering
+        "Tuesday, September 9" when Tuesday was really September 8, a
+        mismatch a reader is unlikely to catch since the weekday name reads
+        as confirmation). Its job becomes "find the matching row", not
+        "compute the answer" — covering not just "tomorrow" but "next
+        Monday", "last Friday", "this weekend", etc."""
         now = pacific_now()
+        today = now.date()
+        rows = []
+        for offset in range(-7, 15):
+            d = today + timedelta(days=offset)
+            marker = {-1: " (yesterday)", 0: " (today)", 1: " (tomorrow)"}.get(offset, "")
+            rows.append(f"{d.strftime('%A, %B %d, %Y')}{marker}")
+        date_table = (
+            "DATE TABLE — use the matching row to resolve any relative date "
+            "reference (tomorrow, yesterday, next/last <weekday>, this/next "
+            "weekend, in N days/weeks); never compute a date yourself by "
+            "adding or subtracting days:\n" + "\n".join(rows)
+        )
         return (
             f"Current date/time: {now.strftime('%A, %Y-%m-%d %H:%M')} America/Los_Angeles. "
-            f"School year: {school_year_label(now.date())}."
+            f"School year: {school_year_label(today)}.\n"
+            f"{date_table}"
         )
 
     @staticmethod
