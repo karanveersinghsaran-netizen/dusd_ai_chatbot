@@ -10,11 +10,19 @@ LAST_RESPONSE_TTL_SECONDS = 24 * 60 * 60  # tied to conversation lifetime
 FEEDBACK_ASKED_TTL_SECONDS = 24 * 60 * 60 # "ask once" window
 PENDING_TTL_SECONDS = 30 * 60             # window for user to answer 1/2
 LANGUAGE_TTL_SECONDS = 24 * 60 * 60       # tied to session cookie lifetime (#62)
-MAX_HISTORY = 20
+MAX_HISTORY = 100
 
 
 def _conv_key(session_id: str) -> str:
     return f"wms:conv:{session_id}"
+
+
+def _conv_count_key(session_id: str) -> str:
+    """Total messages ever appended to this session, uncapped — unlike the
+    conversation itself, this is never trimmed to MAX_HISTORY, so comparing
+    the two tells us whether earlier history has been dropped (see
+    conversation_was_truncated())."""
+    return f"wms:conv_count:{session_id}"
 
 
 def _last_response_key(session_id: str) -> str:
@@ -52,6 +60,20 @@ class RedisStore:
         if len(history) > MAX_HISTORY:
             history = history[-MAX_HISTORY:]
         self.client.setex(_conv_key(session_id), CONV_TTL_SECONDS, json.dumps(history))
+        # Uncapped running count, same TTL/refresh behavior as the
+        # conversation itself — see conversation_was_truncated().
+        count_key = _conv_count_key(session_id)
+        self.client.incr(count_key)
+        self.client.expire(count_key, CONV_TTL_SECONDS)
+
+    def conversation_was_truncated(self, session_id: str) -> bool:
+        """True once more messages have ever been appended to this session
+        than MAX_HISTORY retains — i.e. earlier history has been dropped and
+        is no longer visible in get_conversation(). Lets the agent tell the
+        model so it can say "I only keep recent conversation" honestly
+        instead of guessing when asked about something older."""
+        raw = self.client.get(_conv_count_key(session_id))
+        return int(raw) > MAX_HISTORY if raw else False
 
     def clear_conversation(self, session_id: str) -> None:
         self.client.delete(_conv_key(session_id))
@@ -120,6 +142,7 @@ class RedisStore:
         identity/settings), not something a fresh chat should reset."""
         self.client.delete(
             _conv_key(session_id),
+            _conv_count_key(session_id),
             _last_response_key(session_id),
             _feedback_asked_key(session_id),
             _feedback_pending_key(session_id),
