@@ -26,6 +26,12 @@ from app.security.middleware import (
 from app.store.postgres_store import store as postgres_store
 from app.store.redis_store import store as redis_store
 
+# Without this, the root logger defaults to WARNING and every INFO-level log
+# (e.g. app.agent's per-message Anthropic usage/cost logging) is silently
+# dropped rather than reaching stdout — which is what Cloud Run ships to
+# Google Cloud Logging. This must run at import time, since Cloud Run's
+# entrypoint is `uvicorn main:app`, not the `__main__` block below.
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="DUSD School Chatbot")
