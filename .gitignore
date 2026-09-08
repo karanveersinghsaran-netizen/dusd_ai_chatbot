@@ -42,6 +42,9 @@ CLAUDE.md
 # Local design docs — never commit
 docs/production_plan.md
 
+# Promotional flyer assets (local working files, not app code) — never commit
+marketing/
+
 # Database
 *.db
 *.sqlite3
