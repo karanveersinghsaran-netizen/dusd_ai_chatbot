@@ -16,6 +16,7 @@ from app.services.calendar import (
     get_upcoming_no_school_days,
     get_school_day_status,
     get_today_status,
+    get_calendar_source_url,
 )
 from app.store.redis_store import MAX_HISTORY, RedisStore, store as default_redis_store
 from app.store.postgres_store import PostgresStore, store as default_postgres_store
@@ -367,9 +368,12 @@ CRITICAL RULES:
             events_url = f"{self.school.website}apps/events/"
             return (f"SOURCE: {events_url}\n\n" + get_upcoming_events(self.school.rss_url), False)
         if tool_name == "get_no_school_days":
-            events_url = f"{self.school.website}apps/events/"
+            source_url = (
+                get_calendar_source_url(self.school.district_id)
+                or f"{self.school.website}apps/events/"
+            )
             return (
-                f"SOURCE: {events_url}\n\n"
+                f"SOURCE: {source_url}\n\n"
                 + get_upcoming_no_school_days(pacific_today(), self.school.district_id),
                 False,
             )

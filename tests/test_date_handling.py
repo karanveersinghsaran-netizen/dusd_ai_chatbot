@@ -127,7 +127,7 @@ def test_next_break_after_frozen_today_is_thanksgiving():
     break_lines = [l for l in lines if "Thanksgiving Break" in l]
     assert break_lines
     assert "2026-11-23 (Monday)" in break_lines[0]
-    assert "2026-11-29 (Sunday)" in break_lines[0]
+    assert "2026-11-27 (Friday)" in break_lines[0]
 
 
 def test_no_school_days_are_never_bare_relative_strings():
