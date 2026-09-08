@@ -224,3 +224,49 @@ def test_agent_datetime_suffix_uses_frozen_pacific_time(monkeypatch):
     # Never UTC.
     assert "UTC" not in suffix
     assert "GMT" not in suffix
+
+
+def test_agent_datetime_suffix_date_table_has_correct_weekday_date_pairs(monkeypatch):
+    """Regression test: a real production reply once said 'Tomorrow is
+    Tuesday, September 9' when Tuesday was actually September 8 — the model
+    got the weekday right but the day number wrong doing free-text date
+    arithmetic. _current_datetime_suffix() now hands over a precomputed
+    DATE TABLE instead, so every relative-date answer is a lookup, not a
+    calculation. This pins the table itself never produces that mismatch:
+    every row's weekday name must match what datetime.date actually computes
+    for that row's date, and the yesterday/today/tomorrow markers must land
+    on the correct rows relative to the frozen 'now' (Wednesday, 2026-11-04)."""
+    from unittest.mock import MagicMock
+    from app.agent import SchoolAgent
+    from app.schools import get_school
+    from app.store.redis_store import RedisStore
+    from tests.store.conftest import FakeRedisClient
+
+    with patch("app.agent.anthropic.Anthropic"):
+        agent = SchoolAgent(
+            school=get_school("wells"),
+            redis_store=RedisStore(client=FakeRedisClient()),
+            postgres_store=MagicMock(),
+        )
+
+    suffix = agent._current_datetime_suffix()
+    assert "DATE TABLE" in suffix
+
+    # Every date in the table must be internally consistent: the weekday
+    # name printed on a row must be what Python's own date arithmetic
+    # computes for that same calendar date — i.e. no row can pair a real
+    # date with the wrong day-of-week (which is exactly what free-text
+    # model arithmetic got wrong in production).
+    for line in suffix.splitlines():
+        line = line.split(" (")[0].strip()
+        try:
+            parsed = datetime.datetime.strptime(line, "%A, %B %d, %Y").date()
+        except ValueError:
+            continue  # not a date row (e.g. the table's header line)
+        assert parsed.strftime("%A") == line.split(",")[0], (
+            f"row {line!r} pairs the wrong weekday with its date"
+        )
+
+    assert "Tuesday, November 03, 2026 (yesterday)" in suffix
+    assert "Wednesday, November 04, 2026 (today)" in suffix
+    assert "Thursday, November 05, 2026 (tomorrow)" in suffix
