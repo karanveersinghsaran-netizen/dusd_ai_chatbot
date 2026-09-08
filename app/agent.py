@@ -1,6 +1,7 @@
 import anthropic
 import hashlib
 import json
+import logging
 import re
 import time
 from typing import Any, Dict, NamedTuple, Optional
@@ -18,6 +19,39 @@ from app.services.calendar import (
 from app.store.redis_store import RedisStore, store as default_redis_store
 from app.store.postgres_store import PostgresStore, store as default_postgres_store
 from app.timezone_utils import pacific_now, pacific_today, school_year_label
+
+logger = logging.getLogger(__name__)
+
+# Per-million-token pricing for the pinned model (claude-haiku-4-5), used only
+# to turn logged token counts into an estimated dollar cost (#cost-estimate).
+# Cache write/read rates are the standard ~1.25x/~0.1x multipliers on the
+# input rate. Update these if the model or Anthropic's pricing changes —
+# see platform.claude.com/docs/en/pricing.
+_PRICE_PER_MTOK_INPUT = 1.00
+_PRICE_PER_MTOK_OUTPUT = 5.00
+_PRICE_PER_MTOK_CACHE_WRITE = 1.25
+_PRICE_PER_MTOK_CACHE_READ = 0.10
+
+
+def _usage_field(usage: Any, name: str) -> int:
+    """Best-effort read of one token-count field off a `usage` block. Real API
+    responses always carry plain ints here; test doubles (MagicMock) don't —
+    telemetry should never break a real chat response, so this fails soft to 0
+    rather than raising."""
+    try:
+        return int(getattr(usage, name) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _estimate_cost_usd(usage: Any) -> float:
+    """Estimate the USD cost of one API response from its `usage` block."""
+    return (
+        _usage_field(usage, "input_tokens") * _PRICE_PER_MTOK_INPUT
+        + _usage_field(usage, "output_tokens") * _PRICE_PER_MTOK_OUTPUT
+        + _usage_field(usage, "cache_creation_input_tokens") * _PRICE_PER_MTOK_CACHE_WRITE
+        + _usage_field(usage, "cache_read_input_tokens") * _PRICE_PER_MTOK_CACHE_READ
+    ) / 1_000_000
 
 
 class ChatReply(NamedTuple):
@@ -429,7 +463,7 @@ CRITICAL RULES:
         ]
         for attempt in range(retries):
             try:
-                return self.client.beta.messages.create(
+                response = self.client.beta.messages.create(
                     model=self.model,
                     max_tokens=4096,
                     system=system,
@@ -437,6 +471,19 @@ CRITICAL RULES:
                     messages=messages,
                     betas=["prompt-caching-2024-07-31"],
                 )
+                usage = response.usage
+                logger.info(
+                    "anthropic_api_call school_id=%s model=%s input_tokens=%d output_tokens=%d "
+                    "cache_creation_input_tokens=%d cache_read_input_tokens=%d cost_usd=%.6f",
+                    self.school.id,
+                    self.model,
+                    _usage_field(usage, "input_tokens"),
+                    _usage_field(usage, "output_tokens"),
+                    _usage_field(usage, "cache_creation_input_tokens"),
+                    _usage_field(usage, "cache_read_input_tokens"),
+                    _estimate_cost_usd(usage),
+                )
+                return response
             except (anthropic.RateLimitError, anthropic.InternalServerError):
                 if attempt < retries - 1:
                     time.sleep(2 ** attempt)
@@ -536,6 +583,11 @@ CRITICAL RULES:
         response = self._call_api(messages, language=preferred_language)
 
         attach_map = False
+        api_calls = 1
+        total_input = _usage_field(response.usage, "input_tokens")
+        total_output = _usage_field(response.usage, "output_tokens")
+        total_cache_creation = _usage_field(response.usage, "cache_creation_input_tokens")
+        total_cache_read = _usage_field(response.usage, "cache_read_input_tokens")
 
         # Agentic loop — process ALL tool_use blocks before next API call
         while response.stop_reason == "tool_use":
@@ -560,6 +612,34 @@ CRITICAL RULES:
             messages.append({"role": "assistant", "content": response.content})
             messages.append({"role": "user", "content": tool_results})
             response = self._call_api(messages, language=preferred_language)
+            api_calls += 1
+            total_input += _usage_field(response.usage, "input_tokens")
+            total_output += _usage_field(response.usage, "output_tokens")
+            total_cache_creation += _usage_field(response.usage, "cache_creation_input_tokens")
+            total_cache_read += _usage_field(response.usage, "cache_read_input_tokens")
+
+        # One summary line per user-facing message — the per-call lines in
+        # _call_api are useful for cache-hit diagnosis, but this is what
+        # answers "what did this message cost" without having to correlate
+        # multiple log lines (#cost-estimate).
+        session_hash = hashlib.sha256(key.encode()).hexdigest()[:12]
+        logger.info(
+            "anthropic_message_cost school_id=%s session=%s api_calls=%d input_tokens=%d "
+            "output_tokens=%d cache_creation_input_tokens=%d cache_read_input_tokens=%d cost_usd=%.6f",
+            self.school.id,
+            session_hash,
+            api_calls,
+            total_input,
+            total_output,
+            total_cache_creation,
+            total_cache_read,
+            (
+                total_input * _PRICE_PER_MTOK_INPUT
+                + total_output * _PRICE_PER_MTOK_OUTPUT
+                + total_cache_creation * _PRICE_PER_MTOK_CACHE_WRITE
+                + total_cache_read * _PRICE_PER_MTOK_CACHE_READ
+            ) / 1_000_000,
+        )
 
         final_response = "".join(
             block.text for block in response.content if hasattr(block, "text")
