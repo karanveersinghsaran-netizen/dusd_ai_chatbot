@@ -72,6 +72,7 @@ def _load_district_calendar(district_id: str, year_key: str = None) -> dict:
         return date.fromisoformat(s)
 
     return {
+        "source_url":     raw.get("source_url"),
         "first_day":      to_date(raw.get("first_day", "1900-01-01")),
         "last_day":       to_date(raw.get("last_day",  "1900-01-01")),
         "no_school_days": {to_date(k): v for k, v in raw.get("no_school_days", {}).items()},
@@ -80,6 +81,13 @@ def _load_district_calendar(district_id: str, year_key: str = None) -> dict:
         "minimum_days":   {to_date(k): v for k, v in raw.get("minimum_days", {}).items()},
         "academic_dates": {to_date(k): v for k, v in raw.get("academic_dates", {}).items()},
     }
+
+
+def get_calendar_source_url(district_id: str) -> Optional[str]:
+    """Return the source document URL for the current school year's
+    instructional calendar (e.g. the board-approved PDF it was transcribed
+    from), or None if the calendar file doesn't declare one."""
+    return _load_district_calendar(district_id).get("source_url")
 
 
 def _next_school_day(after: date, cal: dict) -> date:
