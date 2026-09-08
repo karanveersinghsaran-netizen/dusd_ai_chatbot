@@ -207,6 +207,17 @@
     top: 0;
     left: 0;
     width: 100%;
+    /* Compensates for visualViewport.offsetTop (set by trackAppHeight()
+       below). position: fixed pins body to the LAYOUT viewport's origin,
+       which never moves — but on-screen-keyboard handling in some engines
+       (notably iOS Safari in standalone/installed-PWA mode) shifts the
+       VISUAL viewport's origin down instead of just shrinking its height.
+       Without this, body — sized correctly to the shrunk visible height,
+       but still anchored to the top of the full, keyboard-covered screen —
+       ends up entirely above the actually-visible window, taking
+       #input-row with it: the classic "focus the input and it disappears
+       upward" bug in installed PWAs. */
+    transform: translateY(var(--app-offset-top, 0px));
     font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
     background: var(--bg);
     color: var(--text);
@@ -854,14 +865,27 @@
     (function trackAppHeight() {
       const root = document.documentElement;
       function setAppHeight() {
-        const h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+        const vv = window.visualViewport;
+        const h = (vv && vv.height) || window.innerHeight;
         root.style.setProperty("--app-height", h + "px");
+        // Some engines (iOS Safari in standalone/installed-PWA mode, most
+        // notably) shift the visual viewport's origin down when the
+        // keyboard opens instead of only shrinking its height — body is
+        // position: fixed relative to the LAYOUT viewport (see the CSS
+        // comment above body's rule), so without this compensation it stays
+        // pinned to the top of the full screen while the actually-visible
+        // window has moved down past it, taking #input-row with it.
+        root.style.setProperty("--app-offset-top", ((vv && vv.offsetTop) || 0) + "px");
       }
       setAppHeight();
       window.addEventListener("resize", setAppHeight);
       window.addEventListener("orientationchange", setAppHeight);
       if (window.visualViewport) {
         window.visualViewport.addEventListener("resize", setAppHeight);
+        // offsetTop can also change independently of a resize (e.g. the
+        // page itself scrolling within the visual viewport) — visualViewport
+        // fires its own "scroll" event for that.
+        window.visualViewport.addEventListener("scroll", setAppHeight);
       }
     })();
 
