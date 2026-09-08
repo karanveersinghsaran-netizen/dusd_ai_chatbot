@@ -17,7 +17,7 @@ from app.services.calendar import (
     get_school_day_status,
     get_today_status,
 )
-from app.store.redis_store import RedisStore, store as default_redis_store
+from app.store.redis_store import MAX_HISTORY, RedisStore, store as default_redis_store
 from app.store.postgres_store import PostgresStore, store as default_postgres_store
 from app.timezone_utils import pacific_now, pacific_today, school_year_label
 
@@ -469,7 +469,13 @@ CRITICAL RULES:
             screenshot_content_type=screenshot_content_type,
         )
 
-    def _call_api(self, messages: list, language: str = DEFAULT_LANGUAGE, retries: int = 3) -> Any:
+    def _call_api(
+        self,
+        messages: list,
+        language: str = DEFAULT_LANGUAGE,
+        retries: int = 3,
+        conversation_truncated: bool = False,
+    ) -> Any:
         """Call Claude API with exponential backoff for transient errors."""
         # The cached prefix (school info, tools, instructions) is byte-stable
         # across calls, so it's one cache_control-marked block. The current
@@ -486,6 +492,23 @@ CRITICAL RULES:
             {"type": "text", "text": self._current_datetime_suffix()},
             {"type": "text", "text": self._language_directive_suffix(language)},
         ]
+        # Only added once this session has actually exceeded MAX_HISTORY —
+        # true for a small fraction of sessions, so it stays out of the
+        # always-present blocks above rather than padding every request.
+        # Without it, the model has no way to distinguish "this genuinely
+        # never came up" from "it came up, but that part of the conversation
+        # was already dropped" and will guess instead of saying so.
+        if conversation_truncated:
+            system.append({
+                "type": "text",
+                "text": (
+                    f"This conversation has more history than you can see — only the "
+                    f"most recent {MAX_HISTORY} messages are kept. If the user asks about "
+                    f"something from earlier that isn't in the messages above, tell them "
+                    f"you only retain the most recent conversation and don't have access "
+                    f"to anything older, rather than guessing."
+                ),
+            })
         for attempt in range(retries):
             try:
                 response = self.client.beta.messages.create(
@@ -599,13 +622,19 @@ CRITICAL RULES:
         # ── Normal chat flow ───────────────────────────────────────────────
         history = self.redis_store.get_conversation(key)
         messages = history + [{"role": "user", "content": user_message}]
+        # Checked once per turn against state as of BEFORE this turn's own
+        # append below — reflects whether history was ALREADY trimmed going
+        # into this question, which is what matters for answering it honestly.
+        conversation_truncated = self.redis_store.conversation_was_truncated(key)
 
         # Prepend dynamic context (date, school status) to the first user message so
         # the system prompt stays byte-stable and prompt caching hits on every turn.
         if len(messages) == 1:
             messages[0] = {"role": "user", "content": f"{self._dynamic_context()}\n\n{messages[0]['content']}"}
 
-        response = self._call_api(messages, language=preferred_language)
+        response = self._call_api(
+            messages, language=preferred_language, conversation_truncated=conversation_truncated,
+        )
 
         attach_map = False
         api_calls = 1
@@ -636,7 +665,9 @@ CRITICAL RULES:
 
             messages.append({"role": "assistant", "content": response.content})
             messages.append({"role": "user", "content": tool_results})
-            response = self._call_api(messages, language=preferred_language)
+            response = self._call_api(
+                messages, language=preferred_language, conversation_truncated=conversation_truncated,
+            )
             api_calls += 1
             total_input += _usage_field(response.usage, "input_tokens")
             total_output += _usage_field(response.usage, "output_tokens")
