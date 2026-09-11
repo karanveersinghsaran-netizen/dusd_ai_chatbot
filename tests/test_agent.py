@@ -638,6 +638,20 @@ def test_record_report_persists_name_email_and_message(agent):
     assert kwargs["last_response"] == "previous answer"
 
 
+def test_record_report_feature_idea_uses_distinct_type_and_sentiment(agent):
+    """report_type='feature' must be filterable in Postgres as its own
+    feedback.type, distinct from a problem report — and 'positive' sentiment
+    since a feature idea isn't a complaint."""
+    agent.record_report(
+        user_id="u10b", name="Jamie", email="jamie@example.com",
+        message="could you add a lunch menu lookup?", report_type="feature",
+    )
+
+    _, kwargs = agent.postgres_store.record_feedback.call_args
+    assert kwargs["feedback_type"] == "feature_request"
+    assert kwargs["sentiment"] == "positive"
+
+
 def test_record_report_propagates_postgres_failures(agent):
     """Unlike passive/thanks feedback, report submission failures must NOT be
     swallowed — the /feedback/report endpoint needs to see the exception so it
