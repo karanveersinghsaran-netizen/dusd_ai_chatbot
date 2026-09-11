@@ -1,35 +1,48 @@
 """Regression guard for hardcoded bell_schedule content in data/schools/*/school.json.
 
-Catches the class of bug found in production: a Grady Day date transcribed
-wrong (10/8 instead of 10/28) silently paired the wrong weekday with the
-"Wednesday - Modified Schedule" section, only caught by a parent
-cross-checking the live DHS bell schedule page. Grady Days are documented —
-both in our data and on the live page — as always falling on a Wednesday,
-which is directly verifiable without hitting the network.
+Catches two related bugs found in production:
+
+1. A Grady Day date transcribed wrong (10/8 instead of 10/28), silently
+   paired with the "Wednesday - Modified Schedule" heading — only caught by
+   a parent cross-checking the live DHS bell schedule page.
+2. Even after fixing #1, the model kept mis-stating weekdays for the
+   further-out Grady Days (guessing "Monday" for dates that are actually
+   Wednesday) because it was computing them itself instead of reading a
+   given value. The fix was to spell out "Month Day, Year (Weekday)" for
+   every Grady Day directly in the source data, per the system prompt's
+   DATE HANDLING rule that the model may only state a weekday it was
+   actually given — never compute one.
+
+This test guards both: every Grady Day's stated weekday must match what
+Python's own date arithmetic computes for that date, and — since Grady Days
+are documented as always a modified *Wednesday* schedule — that weekday must
+specifically be Wednesday.
 """
 import re
-from datetime import date
+from datetime import datetime
 
 from app.schools import get_school
 
-# DHS's 2026-27 school year runs Aug 2026 - May 2027; Grady Day dates in the
-# bell schedule text are bare "M/D" with no year, so months 7-12 belong to
-# 2026 and 1-6 to 2027. Update alongside the Grady Days list when the school
-# year rolls over.
-_MONTH_TO_YEAR = {m: 2026 if m >= 7 else 2027 for m in range(1, 13)}
-
 
 def _parse_grady_days(bell_schedule: str) -> list:
-    match = re.search(r"Grady Days:\s*([\d/,\s]+)\)", bell_schedule)
-    assert match, "expected a 'Grady Days: ...)' list in the DHS bell schedule text"
-    dates = []
-    for part in match.group(1).split(","):
-        month, day = (int(x) for x in part.strip().split("/"))
-        dates.append(date(_MONTH_TO_YEAR[month], month, day))
-    return dates
+    match = re.search(r"Grady Days:\s*(.+?)\):", bell_schedule)
+    assert match, "expected a 'Grady Days: ...):' list in the DHS bell schedule text"
+    entries = []
+    for part in match.group(1).split("), "):
+        part = part.strip().rstrip(")")
+        date_str, weekday_label = part.split(" (")
+        entries.append((datetime.strptime(date_str, "%B %d, %Y").date(), weekday_label))
+    return entries
 
 
-def test_dhs_grady_days_all_fall_on_a_wednesday():
+def test_dhs_grady_days_have_correct_and_matching_weekdays():
     dhs = get_school("dhs")
-    for d in _parse_grady_days(dhs.bell_schedule):
-        assert d.strftime("%A") == "Wednesday", f"{d.isoformat()} is not a Wednesday"
+    entries = _parse_grady_days(dhs.bell_schedule)
+    assert len(entries) == 6
+
+    for d, stated_weekday in entries:
+        actual_weekday = d.strftime("%A")
+        assert stated_weekday == actual_weekday, (
+            f"{d.isoformat()} is labeled '{stated_weekday}' but is actually {actual_weekday}"
+        )
+        assert actual_weekday == "Wednesday", f"{d.isoformat()} is not a Wednesday"
