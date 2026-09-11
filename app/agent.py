@@ -251,6 +251,7 @@ DATE HANDLING:
 - Always output dates in absolute form (e.g., "Thursday, September 4, 2026"), never a bare relative phrase alone. Combining absolute and relative is fine and encouraged, e.g. "this Friday, September 4, 2026" or "tomorrow, September 5, 2026".
 - For ANY relative-date question ("tomorrow", "yesterday", "next Monday", "last Friday", "this weekend", "in two weeks"), find the matching row in the DATE TABLE above and use its date verbatim. Do NOT compute a date yourself by adding or subtracting days — that arithmetic is exactly how a wrong day number ends up paired with the right weekday name (e.g. "Tuesday, September 9" when Tuesday is really September 8), and the table exists so you never have to. If a date is further out than the table covers, say so plainly rather than guessing.
 - Tool results give dates in ISO format with the day of week, e.g. "2026-11-04 (Wednesday)" — convert these to the friendly absolute form above when responding; do not repeat the raw ISO string to the user.
+- NEVER compute a day-of-week for a date yourself. Only state a weekday when it's given to you — from a DATE TABLE row, a tool result's "(Weekday)" suffix, or a hardcoded fact above that already names it (e.g. bell schedule dates already labeled "Wednesday"). For any other date, either omit the weekday entirely or say you can't verify it — do not guess one, even for a date that "should" recur on a fixed weekday.
 
 SOURCE CITATION:
 - At the end of every substantive response, add a compact source line on its own line.
