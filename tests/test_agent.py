@@ -182,8 +182,73 @@ def test_call_api_system_is_list_with_cache_control(agent):
     assert isinstance(system, list)
     assert len(system) == 3
     assert system[0]["type"] == "text"
-    assert system[0]["cache_control"] == {"type": "ephemeral"}
+    assert system[0]["cache_control"] == {"type": "ephemeral", "ttl": "5m"}
     assert system[0]["text"] == agent._system_prompt
+
+
+def test_call_api_puts_cache_breakpoint_on_last_message(agent):
+    """Beyond the tools+system prefix (shared across every user of a school),
+    the LAST message must also carry a cache_control breakpoint — otherwise a
+    tool-calling turn's second (and later) API call reprocesses the entire
+    prior conversation at full price instead of reading it from cache."""
+    mock_response = MagicMock()
+    mock_response.stop_reason = "end_turn"
+    agent.client.beta.messages.create.return_value = mock_response
+
+    agent._call_api([
+        {"role": "user", "content": "first turn"},
+        {"role": "assistant", "content": "reply"},
+        {"role": "user", "content": "second turn"},
+    ])
+
+    _, kwargs = agent.client.beta.messages.create.call_args
+    messages = kwargs["messages"]
+    assert len(messages) == 3
+    # Untouched earlier messages keep their original plain-string content —
+    # only the last message is transformed.
+    assert messages[0]["content"] == "first turn"
+    assert messages[1]["content"] == "reply"
+    last_content = messages[2]["content"]
+    assert last_content == [
+        {"type": "text", "text": "second turn", "cache_control": {"type": "ephemeral", "ttl": "5m"}}
+    ]
+
+
+def test_call_api_cache_breakpoint_does_not_mutate_input_messages(agent):
+    """_with_cache_breakpoint must return a copy — the caller's `messages`
+    list (built from chat()'s local state, not persisted directly) must
+    never end up carrying cache_control or content-block-list mutations."""
+    mock_response = MagicMock()
+    mock_response.stop_reason = "end_turn"
+    agent.client.beta.messages.create.return_value = mock_response
+
+    original = [{"role": "user", "content": "hi"}]
+    agent._call_api(original)
+
+    assert original == [{"role": "user", "content": "hi"}]
+
+
+def test_call_api_cache_breakpoint_on_tool_result_message(agent):
+    """The tool-loop's follow-up call appends a user message whose content is
+    already a list of tool_result blocks (not a string) — the breakpoint must
+    land on the last block in that list without disturbing the others."""
+    mock_response = MagicMock()
+    mock_response.stop_reason = "end_turn"
+    agent.client.beta.messages.create.return_value = mock_response
+
+    tool_results = [
+        {"type": "tool_result", "tool_use_id": "t1", "content": "result one"},
+        {"type": "tool_result", "tool_use_id": "t2", "content": "result two"},
+    ]
+    agent._call_api([{"role": "user", "content": tool_results}])
+
+    _, kwargs = agent.client.beta.messages.create.call_args
+    sent_content = kwargs["messages"][0]["content"]
+    assert sent_content[0] == {"type": "tool_result", "tool_use_id": "t1", "content": "result one"}
+    assert sent_content[1] == {
+        "type": "tool_result", "tool_use_id": "t2", "content": "result two",
+        "cache_control": {"type": "ephemeral", "ttl": "5m"},
+    }
 
 
 def test_call_api_appends_uncached_datetime_suffix_after_cached_prefix(agent):
@@ -235,20 +300,21 @@ def test_datetime_suffix_recomputed_on_every_call(agent):
     assert "2026-11-05" in second_suffix
 
 
-def test_call_api_includes_prompt_caching_beta(agent):
+def test_call_api_uses_beta_namespace_without_a_stale_betas_flag(agent):
+    """Prompt caching is GA and needs no beta header — client.beta.messages.create
+    is still used (in case a future feature needs the namespace), but the old
+    2024 prompt-caching beta flag must not be sent."""
     mock_response = MagicMock()
     mock_response.stop_reason = "end_turn"
     agent.client.beta.messages.create.return_value = mock_response
 
     agent._call_api([{"role": "user", "content": "hi"}])
 
-    # Regression guard: the betas= kwarg only exists on client.beta.messages.create
-    # in anthropic==0.39.0; sending it to client.messages.create raises TypeError.
     agent.client.beta.messages.create.assert_called_once()
     agent.client.messages.create.assert_not_called()
 
     _, kwargs = agent.client.beta.messages.create.call_args
-    assert "prompt-caching-2024-07-31" in kwargs.get("betas", [])
+    assert "betas" not in kwargs
 
 
 # ── Conversation-truncated notice (#history-cap) ────────────────────────────
@@ -318,7 +384,7 @@ def test_chat_omits_truncation_notice_for_short_conversation(agent):
 
 def test_last_tool_has_cache_control(agent):
     last_tool = agent.tools[-1]
-    assert last_tool.get("cache_control") == {"type": "ephemeral"}
+    assert last_tool.get("cache_control") == {"type": "ephemeral", "ttl": "5m"}
 
 
 def test_non_last_tools_have_no_cache_control(agent):
@@ -332,13 +398,13 @@ def test_last_tool_has_cache_control_for_dhs(dhs_agent):
     directions, club roster — a given school has registered."""
     last_tool = dhs_agent.tools[-1]
     assert last_tool["name"] == "get_club_list"
-    assert last_tool.get("cache_control") == {"type": "ephemeral"}
+    assert last_tool.get("cache_control") == {"type": "ephemeral", "ttl": "5m"}
 
 
 def test_last_tool_has_cache_control_without_campus_map(agent_without_campus_map):
     last_tool = agent_without_campus_map.tools[-1]
     assert last_tool["name"] == "get_club_list"
-    assert last_tool.get("cache_control") == {"type": "ephemeral"}
+    assert last_tool.get("cache_control") == {"type": "ephemeral", "ttl": "5m"}
 
 
 # ── Dynamic context injected into first user message only ─────────────────────
@@ -355,8 +421,11 @@ def test_dynamic_context_prepended_to_first_message(agent):
     _, kwargs = agent.client.beta.messages.create.call_args
     first_message = kwargs["messages"][0]
     assert first_message["role"] == "user"
-    assert first_message["content"].startswith("[Context:")
-    assert "What time does school start?" in first_message["content"]
+    # content is a content-block list (not a bare string) — _call_api wraps
+    # the last message with a cache_control breakpoint before sending.
+    first_message_text = first_message["content"][0]["text"]
+    assert first_message_text.startswith("[Context:")
+    assert "What time does school start?" in first_message_text
 
 
 def test_dynamic_context_not_stored_in_history(agent):
@@ -384,7 +453,7 @@ def test_dynamic_context_not_prepended_on_subsequent_turns(agent):
 
     last_call_messages = agent.client.beta.messages.create.call_args_list[-1][1]["messages"]
     second_user_message = [m for m in last_call_messages if m["role"] == "user"][1]
-    assert not second_user_message["content"].startswith("[Context:")
+    assert not second_user_message["content"][0]["text"].startswith("[Context:")
 
 
 # ── State now lives in the injected RedisStore, not on the agent instance ─────
@@ -506,8 +575,9 @@ def test_next_message_after_clear_has_no_prior_history(agent):
     # Only the fresh post-clear turn is present — no bleed-through from the
     # conversation that existed before "clear" wiped it.
     assert len(last_call_messages) == 1
-    assert "First question" not in last_call_messages[0]["content"]
-    assert "Second question" in last_call_messages[0]["content"]
+    last_message_text = last_call_messages[0]["content"][0]["text"]
+    assert "First question" not in last_message_text
+    assert "Second question" in last_message_text
 
 
 # ── Feedback flow routes through the injected RedisStore ───────────────────────
