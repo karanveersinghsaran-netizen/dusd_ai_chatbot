@@ -741,8 +741,15 @@ def test_chatbox_route_embeds_public_school_theme_data(client):
     assert theme_data["wells"]["primary_bubble_color"] == "#00695c"
     assert theme_data["dhs"]["name"] == "Dublin High School"
     assert theme_data["dhs"]["primary_bubble_color"] == "#0a2472"
-    # Operational fields (phone, bell schedule, ...) must NOT leak into the
-    # public payload sent to the browser.
+    # bell_schedule_url IS meant to leak — it's a public URL (same sensitivity
+    # as school.website), exposed so the chatbox can render an always-visible
+    # bell schedule link without spending an AI call on a very common question.
+    assert theme_data["wells"]["bell_schedule_url"] == (
+        "https://drive.google.com/file/d/1ylPRVuaMTKY0Y9_iyOqpC0nkVpmH6ZWN/view"
+    )
+    assert theme_data["dhs"]["bell_schedule_url"] == "https://dhs.dublinusd.org/apps/bell_schedules/"
+    # Other operational fields (phone, the full bell schedule text, ...) must
+    # still NOT leak into the public payload sent to the browser.
     assert "phone" not in theme_data["wells"]
     assert "bell_schedule" not in theme_data["wells"]
 
