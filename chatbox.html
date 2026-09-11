@@ -307,6 +307,31 @@
     #menu-btn:hover { background: var(--border); }
   }
 
+  /* Bell schedule link — a real, always-visible <a>, not something the user
+     has to ask the AI for. It's the single most common question this chatbot
+     gets, and answering it costs an API call every time unless there's a
+     direct, no-tokens-spent way to just look it up. Deliberately styled and
+     placed like #menu-btn (same size, same circle-icon treatment) rather
+     than buried inside #menu-panel — same "give it its own explicit control"
+     reasoning already applied to Install (see #install-banner). href is set
+     by applySchoolTheme() below, from the pinned school's bell_schedule_url. */
+  #bell-schedule-link {
+    width: 38px; height: 38px;
+    color: var(--text);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    font-size: 1.05rem;
+    text-decoration: none;
+  }
+  #bell-schedule-link:active { opacity: 0.6; }
+  @media (hover: hover) {
+    #bell-schedule-link:hover { background: var(--border); }
+  }
+
   /* Shared popover shell for the iOS install hint, help/support panel, and
      the header's own overflow menu — all small dismissible cards anchored
      below the header. */
@@ -730,6 +755,8 @@
 <body>
   <header>
     <div class="title"><span id="school-logo" class="school-logo" aria-hidden="true"></span><span id="title-text">School Chat</span></div>
+    <a id="bell-schedule-link" href="#" target="_blank" rel="noopener noreferrer"
+       aria-label="Bell schedule" title="Bell schedule">🔔</a>
     <button id="menu-btn" type="button" aria-haspopup="dialog" aria-controls="menu-panel"
             aria-expanded="false" aria-label="Menu">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>
@@ -1404,6 +1431,7 @@
     const schoolThemes = JSON.parse(document.getElementById("school-theme-data").textContent || "{}");
     const titleTextEl = document.getElementById("title-text");
     const schoolLogoEl = document.getElementById("school-logo");
+    const bellScheduleLinkEl = document.getElementById("bell-schedule-link");
     const themeColorMetas = Array.from(document.querySelectorAll('meta[name="theme-color"]'));
     const defaultThemeColors = themeColorMetas.map((meta) => meta.getAttribute("content"));
 
@@ -1429,11 +1457,14 @@
       const root = document.documentElement;
       if (!theme) {
         schoolLogoEl.classList.remove("visible");
+        bellScheduleLinkEl.style.display = "none";
         root.style.removeProperty("--user-bubble-bg");
         root.style.removeProperty("--bg");
         themeColorMetas.forEach((meta, i) => meta.setAttribute("content", defaultThemeColors[i]));
         return;
       }
+      bellScheduleLinkEl.href = theme.bell_schedule_url;
+      bellScheduleLinkEl.style.display = theme.bell_schedule_url ? "" : "none";
       const shortName = shortSchoolName(theme.name);
       schoolLogoEl.textContent = schoolInitials(shortName);
       schoolLogoEl.style.background = theme.primary_bubble_color || theme.theme_color || "";
