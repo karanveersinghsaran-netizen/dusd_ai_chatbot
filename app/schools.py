@@ -31,6 +31,11 @@ class SchoolConfig:
     campus_map_file: Optional[Path] = None
     donation_url: Optional[str] = None
     clubs_sheet_url: Optional[str] = None
+    # Where the bell schedule itself is published — cited as the SOURCE
+    # for bell-schedule questions instead of the generic school website,
+    # since that's the page/document a parent can actually cross-check
+    # times against. Falls back to school.website if unset.
+    bell_schedule_url: Optional[str] = None
     # Per-school branding (#52). All optional so a school.json that predates
     # theming still loads — callers fall back to the neutral blue theme when
     # these are absent. logo_url is None for both current schools (no real
@@ -74,6 +79,7 @@ def _load_school(school_dir: Path) -> SchoolConfig:
         campus_map_file=campus_map_file,
         donation_url=raw.get("donation_url"),
         clubs_sheet_url=raw.get("clubs_sheet_url"),
+        bell_schedule_url=raw.get("bell_schedule_url"),
         theme_color=raw.get("theme_color"),
         primary_bubble_color=raw.get("primary_bubble_color"),
         background_tint=raw.get("background_tint"),
