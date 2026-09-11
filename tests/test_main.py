@@ -1068,6 +1068,50 @@ def test_icon_route_rejects_non_png(client):
     assert resp.status_code == 404
 
 
+# ── Root-level browser-probe icon paths (/favicon.ico + apple-touch-icon-*) ──
+# These aliases exist purely to stop browsers' auto-probes filling the Cloud
+# Run 4xx logs with harmless 404s — real users get their icon from the
+# HTML's <link> tags, not these root paths.
+
+def test_favicon_ico_serves_png(client):
+    """Browsers auto-fetch /favicon.ico on every page load. Serving the 192px
+    PNG (browsers accept image/png at this path) kills the biggest source of
+    4xx noise in the deployed logs."""
+    resp = client.get("/favicon.ico")
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/png"
+    assert resp.content.startswith(b"\x89PNG\r\n\x1a\n")
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/apple-touch-icon.png",
+        "/apple-touch-icon-precomposed.png",
+        "/apple-touch-icon-120x120.png",
+        "/apple-touch-icon-120x120-precomposed.png",
+    ],
+)
+def test_root_apple_touch_icon_aliases_serve_png(client, path):
+    """iOS Safari probes each of these paths at the root before it parses the
+    HTML's <link rel="apple-touch-icon">. All four aliases must resolve to the
+    same PNG so the deployed 4xx graph stops filling with iOS icon probes."""
+    resp = client.get(path)
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/png"
+    assert resp.content.startswith(b"\x89PNG\r\n\x1a\n")
+
+
+def test_root_icon_aliases_are_cached(client):
+    """Serve with a long cache-control so browsers don't re-fetch the same
+    static asset on every page load."""
+    for path in ("/favicon.ico", "/apple-touch-icon.png"):
+        resp = client.get(path)
+        assert "max-age" in resp.headers.get("cache-control", "")
+
+
 # ── /schools/{school_id}/campus-map ──────────────────────────────────────────
 
 def test_campus_map_route_serves_dhs_image(client):

@@ -290,6 +290,50 @@ async def pwa_icon(filename: str):
     return FileResponse(icon_path, media_type="image/png")
 
 
+# ── Root-level browser-probe paths ──────────────────────────────────────────
+# Browsers auto-request /favicon.ico on every page load, and iOS Safari probes
+# a handful of well-known apple-touch-icon-* paths (with/without -precomposed,
+# with/without a size suffix) before it parses the HTML's <link> tags — so
+# even though the chatbox HTML DOES declare /icons/apple-touch-icon.png, iOS
+# still asks for the root-level paths. Without these aliases the Cloud Run
+# 4xx graph fills with harmless 404s that drown out real errors.
+_ROOT_FAVICON_PATH = STATIC_DIR / "icons" / "icon-192.png"
+_ROOT_APPLE_TOUCH_ICON_PATH = STATIC_DIR / "icons" / "apple-touch-icon.png"
+# Cache aggressively — the underlying PNGs only change when the icon design
+# changes, and the file path (not content) is what browsers key their cache on.
+_ROOT_ICON_CACHE_HEADERS = {"cache-control": "public, max-age=86400"}
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    # image/png (not image/x-icon) is what the file actually is — every current
+    # browser accepts a PNG served at /favicon.ico.
+    return FileResponse(_ROOT_FAVICON_PATH, media_type="image/png", headers=_ROOT_ICON_CACHE_HEADERS)
+
+
+async def _root_apple_touch_icon():
+    return FileResponse(
+        _ROOT_APPLE_TOUCH_ICON_PATH, media_type="image/png", headers=_ROOT_ICON_CACHE_HEADERS
+    )
+
+
+# Aliases iOS Safari probes at the root before reading the HTML's <link
+# rel="apple-touch-icon">. All resolve to the same 180x180 PNG — iOS scales
+# it down for the smaller variants.
+for _apple_touch_icon_alias in (
+    "/apple-touch-icon.png",
+    "/apple-touch-icon-precomposed.png",
+    "/apple-touch-icon-120x120.png",
+    "/apple-touch-icon-120x120-precomposed.png",
+):
+    app.add_api_route(
+        _apple_touch_icon_alias,
+        _root_apple_touch_icon,
+        methods=["GET"],
+        include_in_schema=False,
+    )
+
+
 @app.get("/schools/{school_id}/campus-map")
 async def campus_map_image(school_id: str):
     """Serves a school's campus map image from our own origin. The repo is
