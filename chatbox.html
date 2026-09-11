@@ -384,6 +384,15 @@
   .menu-row-label { flex: 1; min-width: 0; }
   .menu-row-value { flex-shrink: 0; color: var(--text-muted); font-size: 0.85rem; }
 
+  .menu-panel-credit {
+    margin-top: 8px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
   /* Install banner — deliberately its own explicit, always-in-view strip
      rather than a #menu-panel row; see the HTML comment above it. Hidden by
      default; wireInstallBanner() adds .visible only once the browser
@@ -789,14 +798,16 @@
       <span class="menu-row-icon" aria-hidden="true">🧹</span>
       <span class="menu-row-label" id="clear-btn-label">Clear conversation</span>
     </button>
+
+    <div class="menu-panel-credit">Developed by a DHS Freshman</div>
   </div>
 
   <div id="ios-install-hint" class="popover" role="dialog" aria-labelledby="ios-install-title">
     <button class="close" type="button" aria-label="Dismiss">×</button>
     <div id="ios-install-title" style="font-weight: 600; margin-bottom: 6px;">Install this app</div>
     <div>
-      Tap the <strong>Share</strong> icon <span aria-hidden="true">⬆︎</span> at the bottom
-      of Safari, then choose <kbd>Add to Home Screen</kbd>.
+      Tap the <strong>Share</strong> icon <span aria-hidden="true">⬆︎</span>,
+      then choose <kbd>Add to Home Screen</kbd>.
     </div>
   </div>
 
@@ -1199,11 +1210,14 @@
       });
     })();
 
-    // Install-button wiring. Two separate flows because iOS Safari refuses to
-    // implement the standard beforeinstallprompt API — so on iPhone we can't
-    // trigger the install sheet programmatically and have to show a manual
-    // hint instead. Everywhere else (Android Chrome, desktop Chrome/Edge) we
-    // capture the browser's deferred prompt and fire it on click.
+    // Install-button wiring. Two separate flows because no browser on iOS
+    // implements the standard beforeinstallprompt API — every iOS browser
+    // (Safari, Chrome-for-iOS, Firefox-for-iOS, etc.) is a WebKit wrapper
+    // under Apple's rules, so on iPhone we can't trigger the install sheet
+    // programmatically and have to show a manual hint instead (deliberately
+    // not naming a specific browser in that hint — see #ios-install-hint).
+    // Everywhere else (Android Chrome, desktop Chrome/Edge) we capture the
+    // browser's deferred prompt and fire it on click.
     (function wireInstallBanner() {
       const banner = document.getElementById("install-banner");
       const btn = document.getElementById("install-btn");
