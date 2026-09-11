@@ -93,6 +93,20 @@ def test_system_prompt_is_specific_to_school(agent, dhs_agent):
     assert agent._system_prompt != dhs_agent._system_prompt
 
 
+def test_system_prompt_cites_bell_schedule_url_for_bell_schedule_questions(agent, dhs_agent):
+    """Bell schedule questions must cite the school's actual bell-schedule
+    page/document (school.bell_schedule_url), not the generic site root —
+    a parent needs to be able to cross-check exact times."""
+    assert "bell schedule questions: 📍 [Source](https://drive.google.com/file/d/1ylPRVuaMTKY0Y9_iyOqpC0nkVpmH6ZWN/view)" in agent._system_prompt
+    assert "bell schedule questions: 📍 [Source](https://dhs.dublinusd.org/apps/bell_schedules/)" in dhs_agent._system_prompt
+
+
+def test_system_prompt_bell_schedule_source_falls_back_to_website_when_unset(agent):
+    school = replace(agent.school, bell_schedule_url=None)
+    prompt = SchoolAgent._build_system_prompt(school)
+    assert f"bell schedule questions: 📍 [Source]({school.website})" in prompt
+
+
 def test_get_campus_directions_tool_omitted_when_school_has_no_campus_map(agent_without_campus_map):
     assert "get_campus_directions" not in [t["name"] for t in agent_without_campus_map.tools]
 
