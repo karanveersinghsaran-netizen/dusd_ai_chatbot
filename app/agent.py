@@ -485,19 +485,23 @@ CRITICAL RULES:
         name: str,
         email: str,
         message: str,
+        report_type: str = "problem",
         screenshot: Optional[bytes] = None,
         screenshot_content_type: str = "",
     ) -> None:
-        """Persist a problem report submitted through the help-popover form.
-        Unlike _record_feedback's passive/reaction paths, exceptions here are
-        NOT swallowed — the caller (POST /feedback/report) should surface a
-        5xx rather than tell the submitter their report was saved when it wasn't."""
+        """Persist a problem report or feature idea submitted through the
+        help-popover form. report_type distinguishes the two ("problem" or
+        "feature") so reviewers can filter feedback.type in Postgres without
+        parsing free text. Unlike _record_feedback's passive/reaction paths,
+        exceptions here are NOT swallowed — the caller (POST /feedback/report)
+        should surface a 5xx rather than tell the submitter their report was
+        saved when it wasn't."""
         session_hash = hashlib.sha256(self._session_key(user_id).encode()).hexdigest()[:12]
         self.postgres_store.record_feedback(
             school_id=self.school.id,
             session_hash=session_hash,
-            feedback_type="report",
-            sentiment="negative",
+            feedback_type="feature_request" if report_type == "feature" else "report",
+            sentiment="positive" if report_type == "feature" else "negative",
             raw=message.strip(),
             comment=message.strip(),
             last_response=self.redis_store.get_last_response(self._session_key(user_id)) or "",
