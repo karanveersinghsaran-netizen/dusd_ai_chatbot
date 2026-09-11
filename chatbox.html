@@ -1923,7 +1923,7 @@
     // of a student's real conversation sitting in Redis while the widget
     // still shows a blank slate. Best-effort: a failed fetch just leaves
     // the widget looking like a fresh session, same as it always has.
-    (async function restoreHistory() {
+    async function restoreHistory() {
       try {
         const params = new URLSearchParams({ limit: "50" });
         if (schoolId) params.set("school_id", schoolId);
@@ -1943,7 +1943,18 @@
       } catch (err) {
         // Network error — leave the widget as a fresh session.
       }
-    })();
+    }
+    restoreHistory();
+
+    // Real embeds always pin ?school= — this only fires on the dev-only
+    // picker (see #school-picker above). Without it, switching schools left
+    // the OLD school's messages on screen and never loaded the new one's —
+    // Redis already separates history per school (_session_key in
+    // app/agent.py), but the visible chat window didn't follow along.
+    schoolPickerEl.addEventListener("change", () => {
+      messagesEl.innerHTML = "";
+      restoreHistory();
+    });
   </script>
 </body>
 </html>
