@@ -62,3 +62,15 @@ DAILY_CAP_WHITELIST = {
     for session_id in os.getenv("DAILY_CAP_WHITELIST", "").split(",")
     if session_id.strip()
 }
+
+# Prompt-cache TTL for the tools+system-prompt breakpoint (app/agent.py), which
+# is shared across every user of a school. Anthropic's default ephemeral cache
+# is 5 minutes; a 1-hour cache write costs 2x instead of 1.25x, so it only pays
+# for itself once a school sees 3+ requests within that hour. This app is new
+# with no real traffic data yet — default to "5m" (Anthropic's own default,
+# passed explicitly here so the two are never silently different) until usage
+# in the Anthropic Console shows whether requests per school cluster within an
+# hour; flip to "1h" via env var then, no code change needed.
+PROMPT_CACHE_TTL = os.getenv("PROMPT_CACHE_TTL", "5m")
+if PROMPT_CACHE_TTL not in ("5m", "1h"):
+    raise ValueError(f"PROMPT_CACHE_TTL must be '5m' or '1h', got {PROMPT_CACHE_TTL!r}")

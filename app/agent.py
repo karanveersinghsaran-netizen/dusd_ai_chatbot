@@ -35,6 +35,36 @@ _PRICE_PER_MTOK_CACHE_WRITE = 1.25
 _PRICE_PER_MTOK_CACHE_READ = 0.10
 
 
+def _cache_control() -> Dict[str, str]:
+    """The ephemeral cache_control block used at every breakpoint, TTL driven
+    by config.PROMPT_CACHE_TTL (see app/config.py for why it's an env var
+    rather than hardcoded)."""
+    return {"type": "ephemeral", "ttl": config.PROMPT_CACHE_TTL}
+
+
+def _with_cache_breakpoint(messages: list) -> list:
+    """Return a copy of `messages` with a cache_control breakpoint on the last
+    content block of the last message. Anthropic caches everything up to and
+    including a breakpoint, so this lets the next API call — whether the next
+    turn in the conversation, or the next tool-loop iteration within THIS
+    turn — reuse everything before it instead of reprocessing the full
+    history at full price. Never mutates the input list or its dicts (the
+    caller's `messages` is also what gets persisted to Redis after the turn,
+    via the original user_message/final_response strings — not this list —
+    but copying defensively costs nothing and avoids any risk of a cache_control
+    key leaking into stored state)."""
+    if not messages:
+        return messages
+    *rest, last = messages
+    content = last["content"]
+    if isinstance(content, str):
+        new_content = [{"type": "text", "text": content, "cache_control": _cache_control()}]
+    else:
+        new_content = list(content)
+        new_content[-1] = {**new_content[-1], "cache_control": _cache_control()}
+    return rest + [{**last, "content": new_content}]
+
+
 def _usage_field(usage: Any, name: str) -> int:
     """Best-effort read of one token-count field off a `usage` block. Real API
     responses always carry plain ints here; test doubles (MagicMock) don't —
@@ -191,7 +221,7 @@ class SchoolAgent:
         # Anthropic caches everything up to and including it, so the tools
         # block itself is cached regardless of which optional tools a given
         # school has registered above.
-        self.tools[-1]["cache_control"] = {"type": "ephemeral"}
+        self.tools[-1]["cache_control"] = _cache_control()
 
         self._system_prompt = self._build_system_prompt(school)
 
@@ -496,10 +526,18 @@ CRITICAL RULES:
         # which is a property of this school that could live in the cached
         # prefix.
         system = [
-            {"type": "text", "text": self._system_prompt, "cache_control": {"type": "ephemeral"}},
+            {"type": "text", "text": self._system_prompt, "cache_control": _cache_control()},
             {"type": "text", "text": self._current_datetime_suffix()},
             {"type": "text", "text": self._language_directive_suffix(language)},
         ]
+        # A second breakpoint on the last message: Anthropic caches everything
+        # up to and including a breakpoint, so this lets the NEXT call — the
+        # next conversation turn, or the next tool-loop iteration within this
+        # same turn — reuse this call's messages too, not just the tools+system
+        # prefix above. Doesn't depend on cross-request traffic volume the way
+        # the TTL choice does: a tool-calling turn issues 2+ calls seconds
+        # apart, well within even the default 5-minute TTL, every time.
+        cacheable_messages = _with_cache_breakpoint(messages)
         # Only added once this session has actually exceeded MAX_HISTORY —
         # true for a small fraction of sessions, so it stays out of the
         # always-present blocks above rather than padding every request.
@@ -524,8 +562,7 @@ CRITICAL RULES:
                     max_tokens=4096,
                     system=system,
                     tools=self.tools,
-                    messages=messages,
-                    betas=["prompt-caching-2024-07-31"],
+                    messages=cacheable_messages,
                 )
                 usage = response.usage
                 logger.info(
