@@ -842,18 +842,25 @@
     <button class="close" type="button" aria-label="Dismiss">×</button>
     <div id="help-title" style="font-weight: 600; margin-bottom: 6px;">Need help?</div>
     <div style="margin-bottom: 12px;">
-      Something not working, or feedback on the assistant? Let us know below.
+      Something not working, or an idea for the assistant? Let us know below.
     </div>
     <div class="help-actions">
-      <button id="report-open-btn" type="button" class="help-action-btn">🐞 Report a problem</button>
+      <button id="report-open-btn" type="button" class="help-action-btn">🐞 Report a problem or idea</button>
       <button id="thanks-btn" type="button" class="help-action-btn">🙏 Send thanks</button>
     </div>
   </div>
 
   <div id="report-popover" class="popover" role="dialog" aria-labelledby="report-title">
     <button class="close" type="button" aria-label="Dismiss">×</button>
-    <div id="report-title" style="font-weight: 600; margin-bottom: 6px;">Report a problem</div>
+    <div id="report-title" style="font-weight: 600; margin-bottom: 6px;">Report a problem or idea</div>
     <form id="report-form">
+      <fieldset class="form-field" style="border: none; padding: 0; margin: 0;">
+        <legend style="padding: 0; margin-bottom: 4px;">What's this about?</legend>
+        <div class="a11y-options">
+          <label><input type="radio" name="report_type" value="problem" checked> 🐞 A problem</label>
+          <label><input type="radio" name="report_type" value="feature"> 💡 A feature idea</label>
+        </div>
+      </fieldset>
       <label class="form-field">
         <span>Name</span>
         <input type="text" id="report-name" name="name" required autocomplete="name">
@@ -863,8 +870,9 @@
         <input type="email" id="report-email" name="email" required autocomplete="email">
       </label>
       <label class="form-field">
-        <span>What went wrong?</span>
-        <textarea id="report-message" name="message" required rows="3"></textarea>
+        <span>Tell us more</span>
+        <textarea id="report-message" name="message" required rows="3"
+                  placeholder="What went wrong, or what would you like to see?"></textarea>
       </label>
       <label class="form-field">
         <span>Screenshot (optional)</span>

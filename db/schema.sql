@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS feedback (
     id BIGSERIAL PRIMARY KEY,
     school_id TEXT NOT NULL,
     session_hash TEXT NOT NULL,
-    type TEXT NOT NULL,              -- 'passive' | 'thanks' | 'report'
+    type TEXT NOT NULL,              -- 'passive' | 'thanks' | 'report' | 'feature_request'
     sentiment TEXT NOT NULL,         -- 'positive' | 'negative'
     raw TEXT NOT NULL,
     comment TEXT,

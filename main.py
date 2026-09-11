@@ -426,21 +426,25 @@ async def report(
     name: str = Form(...),
     email: str = Form(...),
     message: str = Form(...),
+    report_type: str = Form(default="problem"),
     school_id: str | None = Form(default=None),
     screenshot: UploadFile | None = File(default=None),
     wms_session: str | None = Cookie(default=None),
     token: str | None = Query(default=None),
 ):
-    """Problem-report form surfaced from the help popover: name, email, a
-    description of the issue, and an optional screenshot. Replaces the old
-    in-chat /report command with structured submissions reviewers can act on."""
+    """Report form surfaced from the help popover: name, email, a
+    description, an optional screenshot, and whether it's a problem or a
+    feature idea (report_type). Replaces the old in-chat /report command
+    with structured submissions reviewers can act on."""
     name = name.strip()
     email = email.strip()
     message = message.strip()
     if not name or not email or not message:
-        raise HTTPException(status_code=422, detail="Name, email, and problem description are required")
+        raise HTTPException(status_code=422, detail="Name, email, and description are required")
     if not EMAIL_RE.match(email):
         raise HTTPException(status_code=422, detail="Enter a valid email address")
+    if report_type not in ("problem", "feature"):
+        raise HTTPException(status_code=422, detail="report_type must be 'problem' or 'feature'")
 
     user_id = resolve_user_id(token, wms_session, response)
 
@@ -464,6 +468,7 @@ async def report(
         name=name,
         email=email,
         message=message,
+        report_type=report_type,
         screenshot=screenshot_bytes,
         screenshot_content_type=screenshot_content_type,
     )

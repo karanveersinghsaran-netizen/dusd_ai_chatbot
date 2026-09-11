@@ -385,6 +385,33 @@ def test_report_invalid_email_returns_422(client):
     assert resp.status_code == 422
 
 
+def test_report_defaults_report_type_to_problem(client):
+    """An older client that never sends report_type (or the form's default
+    radio state) must still record as a problem report, not error."""
+    mock_agent = _mock_agent()
+    with patch("main.get_agent", return_value=mock_agent):
+        resp = client.post("/feedback/report", data=_report_form())
+
+    assert resp.status_code == 200
+    assert mock_agent.record_report.call_args.kwargs["report_type"] == "problem"
+
+
+def test_report_passes_feature_report_type_through(client):
+    mock_agent = _mock_agent()
+    with patch("main.get_agent", return_value=mock_agent):
+        resp = client.post("/feedback/report", data=_report_form(report_type="feature"))
+
+    assert resp.status_code == 200
+    assert mock_agent.record_report.call_args.kwargs["report_type"] == "feature"
+
+
+def test_report_rejects_invalid_report_type(client):
+    with patch("main.get_agent", return_value=_mock_agent()):
+        resp = client.post("/feedback/report", data=_report_form(report_type="bogus"))
+
+    assert resp.status_code == 422
+
+
 def test_report_with_unknown_school_id_returns_400(client):
     with patch("main.get_agent", return_value=None):
         resp = client.post("/feedback/report", data=_report_form(school_id="nonexistent"))
