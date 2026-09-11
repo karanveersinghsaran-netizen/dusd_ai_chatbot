@@ -81,12 +81,13 @@ SCHOOL_ICON_VARIANTS = [
 
 
 def _public_school_theme() -> dict:
-    """Per-school branding safe to expose to the chatbox frontend (#52) — name
-    and colors only, none of the operational fields (phone, bell schedule,
-    etc.) that SchoolConfig also carries. Embedded into chatbox.html at
-    request time so the widget can render the pinned school's theme without
-    an extra round trip, and can react live if the dev-only school picker is
-    used to switch schools."""
+    """Per-school branding safe to expose to the chatbox frontend (#52) — name,
+    colors, and the bell schedule link. Everything here is either cosmetic or
+    a public URL (same sensitivity as school.website, unlike phone/address),
+    so none of it needs to go through the AI. Embedded into chatbox.html at
+    request time so the widget can render the pinned school's theme (and its
+    always-visible bell schedule link) without an extra round trip, and can
+    react live if the dev-only school picker is used to switch schools."""
     return {
         school.id: {
             "name": school.name,
@@ -94,6 +95,7 @@ def _public_school_theme() -> dict:
             "primary_bubble_color": school.primary_bubble_color,
             "background_tint": school.background_tint,
             "logo_url": school.logo_url,
+            "bell_schedule_url": school.bell_schedule_url or school.website,
         }
         for school in load_schools().values()
     }
