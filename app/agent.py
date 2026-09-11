@@ -212,6 +212,8 @@ class SchoolAgent:
         contact_lines.append(f"Website: {school.website}")
         contact_lines.append(f"District: {school.district}")
 
+        bell_schedule_source = school.bell_schedule_url or school.website
+
         # Translated useful-links labels (#62), when a school.json provides them.
         # Kept in the single cached system prompt (not a per-request suffix,
         # unlike the language directive below) alongside the English list —
@@ -258,7 +260,8 @@ SOURCE CITATION:
 - At the end of every substantive response, add a compact source line on its own line.
 - Format as a Markdown link, e.g. "📍 [Source](https://example.com/page)" — NOT a bare URL. The chatbox renders replies as Markdown; a bare URL may not render as a clickable link, a Markdown link always does. Use the URL from the url="..." attribute of the <scraped_page> tag or "SOURCE:" marker in the tool result.
 - For calendar events: 📍 [Source]({school.website}apps/events/)
-- For bell schedule or hardcoded school info: 📍 [Source]({school.website})
+- For bell schedule questions: 📍 [Source]({bell_schedule_source})
+- For other hardcoded school info: 📍 [Source]({school.website})
 - One source line only — pick the most relevant URL if multiple pages were scraped.
 - Skip the source line for conversational replies, error messages, and feedback acknowledgments.
 
