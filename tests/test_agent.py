@@ -104,6 +104,7 @@ def test_get_school_information_page_group_enum_includes_new_groups(agent):
     enum = tool["input_schema"]["properties"]["page_group"]["enum"]
     assert "athletics" in enum
     assert "family" in enum
+    assert "enrollment" in enum
     assert "technology" in enum
 
 
@@ -113,6 +114,7 @@ def test_dhs_pages_has_new_page_groups_populated():
     dhs = get_school("dhs")
     assert len(dhs.pages["athletics"]) >= 1
     assert len(dhs.pages["family"]) >= 1
+    assert len(dhs.pages["enrollment"]) >= 1
     assert len(dhs.pages["technology"]) >= 1
 
 
