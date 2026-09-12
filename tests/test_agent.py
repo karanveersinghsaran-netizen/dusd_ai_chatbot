@@ -181,8 +181,25 @@ def test_get_course_catalog_no_department_returns_overview(dhs_agent):
 
     mock_fn.assert_called_once_with("dusd", None)
     assert "230 credits" in result
-    assert "SOURCE: https://dhs.dublinusd.org/" in result
+    assert "SOURCE: https://docs.google.com/document/d/1DxIYs_qW9sHB3rNxSrdz8QDy3Vp_lSKUbBSIYrFjigU/edit" in result
     assert attach_map is False
+
+
+def test_get_course_catalog_source_falls_back_to_website_when_unset():
+    """A school with has_course_catalog=True but no course_catalog_url set
+    must still cite something usable, not crash or cite 'None'."""
+    school = replace(get_school("dhs"), course_catalog_url=None)
+    with patch("app.agent.anthropic.Anthropic"):
+        agent = SchoolAgent(
+            school=school,
+            redis_store=RedisStore(client=FakeRedisClient()),
+            postgres_store=MagicMock(),
+        )
+
+    with patch("app.agent.get_course_catalog_section", return_value="..."):
+        result, _ = agent.process_tool_call("get_course_catalog", {})
+
+    assert f"SOURCE: {school.website}" in result
 
 
 def test_get_course_catalog_with_department_passes_it_through(dhs_agent):

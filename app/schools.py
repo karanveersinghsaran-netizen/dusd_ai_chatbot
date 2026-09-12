@@ -42,6 +42,10 @@ class SchoolConfig:
     # must be opted into per school rather than inferred from district_id
     # (both a middle school and its high school share the same district_id).
     has_course_catalog: bool = False
+    # Where the course catalog itself is published — cited as the SOURCE for
+    # course-catalog questions instead of the generic school website, same
+    # reasoning as bell_schedule_url. Falls back to school.website if unset.
+    course_catalog_url: Optional[str] = None
     # Per-school branding (#52). All optional so a school.json that predates
     # theming still loads — callers fall back to the neutral blue theme when
     # these are absent. logo_url is None for both current schools (no real
@@ -87,6 +91,7 @@ def _load_school(school_dir: Path) -> SchoolConfig:
         clubs_sheet_url=raw.get("clubs_sheet_url"),
         bell_schedule_url=raw.get("bell_schedule_url"),
         has_course_catalog=raw.get("has_course_catalog", False),
+        course_catalog_url=raw.get("course_catalog_url"),
         theme_color=raw.get("theme_color"),
         primary_bubble_color=raw.get("primary_bubble_color"),
         background_tint=raw.get("background_tint"),

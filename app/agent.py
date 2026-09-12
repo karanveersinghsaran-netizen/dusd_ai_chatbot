@@ -468,7 +468,8 @@ CRITICAL RULES:
         if tool_name == "get_course_catalog":
             department = tool_input.get("department")
             section = get_course_catalog_section(self.school.district_id, department)
-            return (f"SOURCE: {self.school.website}\n\n" + section, False)
+            source_url = self.school.course_catalog_url or self.school.website
+            return (f"SOURCE: {source_url}\n\n" + section, False)
         return ("Tool not found", False)
 
     def _is_feedback(self, message: str) -> str | None:
