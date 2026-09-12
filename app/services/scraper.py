@@ -1,6 +1,9 @@
+import time
 import requests
 import urllib3
-from typing import List
+from typing import List, Optional
+
+from app import config
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -14,13 +17,22 @@ HEADERS = {
 
 
 class WebsiteScraper:
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, cache_ttl_seconds: Optional[int] = None):
         self.base_url = base_url
-        self.cache = {}
+        # None (the default) reads config.SCRAPER_CACHE_TTL_SECONDS at call
+        # time rather than construction time, so tests can monkeypatch the
+        # config value without needing to reconstruct the scraper — an
+        # explicit int here (e.g. in a test) always wins over that default.
+        self.cache_ttl_seconds = cache_ttl_seconds
+        self.cache = {}  # url -> (text, cached_at_monotonic)
 
     def scrape_page(self, url: str) -> str:
-        if url in self.cache:
-            return self.cache[url]
+        ttl = self.cache_ttl_seconds if self.cache_ttl_seconds is not None else config.SCRAPER_CACHE_TTL_SECONDS
+        cached = self.cache.get(url)
+        if cached is not None:
+            text, cached_at = cached
+            if time.monotonic() - cached_at < ttl:
+                return text
         try:
             from bs4 import BeautifulSoup
             response = requests.get(url, timeout=10, verify=False, headers=HEADERS)
@@ -32,7 +44,7 @@ class WebsiteScraper:
             lines = (line.strip() for line in text.splitlines())
             chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
             text = " ".join(chunk for chunk in chunks if chunk)
-            self.cache[url] = text
+            self.cache[url] = (text, time.monotonic())
             return text
         except Exception as e:
             return f"Error scraping {url}: {str(e)}"
