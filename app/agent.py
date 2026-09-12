@@ -10,6 +10,7 @@ from typing import Any, Dict, NamedTuple, Optional
 from app import config
 from app.schools import SchoolConfig, get_school
 from app.services.clubs import get_club_list
+from app.services.course_catalog import get_course_catalog_section, get_department_names
 from app.services.scraper import WebsiteScraper
 from app.services.calendar import (
     get_upcoming_events,
@@ -215,6 +216,37 @@ class SchoolAgent:
                     "get_school_information's general 'clubs' page for that kind of detail."
                 ),
                 "input_schema": {"type": "object", "properties": {}},
+            })
+
+        if school.has_course_catalog:
+            departments = get_department_names(school.district_id)
+            department_property = {
+                "type": "string",
+                "description": (
+                    "Which department's course listing to fetch — e.g. a specific class, its "
+                    "prerequisites, or what's offered in a subject area. Omit entirely for "
+                    "graduation requirements, UC/CSU admission criteria, the grading system, "
+                    "AP/Honors course limits, or schedule-change/withdrawal policy questions instead."
+                ),
+            }
+            if departments:
+                department_property["enum"] = departments
+            self.tools.append({
+                "name": "get_course_catalog",
+                "description": (
+                    f"Get information from the {school.district} Grades 9-12 Course Catalog: course "
+                    "descriptions, prerequisites ('Essential Skills'), grade levels, and UC/CSU "
+                    "college-prep designations for a department, OR (when 'department' is omitted) "
+                    "the catalog's front matter — graduation credit requirements, UC/CSU A-G admission "
+                    "criteria, grading system, AP/Honors course limits, and schedule-change/withdrawal "
+                    "policies. Use this for any question about specific courses, what to take next, "
+                    "prerequisites, electives, how many credits are needed to graduate, or course "
+                    "withdrawal/change rules."
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"department": department_property},
+                },
             })
 
         # Whichever tool ends up last carries the cache_control breakpoint —
@@ -433,6 +465,10 @@ CRITICAL RULES:
             # actually fetched — clicking a CSV download link isn't useful.
             sheet_url = self.school.clubs_sheet_url.replace("export?format=csv&gid=", "edit?gid=")
             return (f"SOURCE: {sheet_url}\n\n" + get_club_list(self.school.clubs_sheet_url), False)
+        if tool_name == "get_course_catalog":
+            department = tool_input.get("department")
+            section = get_course_catalog_section(self.school.district_id, department)
+            return (f"SOURCE: {self.school.website}\n\n" + section, False)
         return ("Tool not found", False)
 
     def _is_feedback(self, message: str) -> str | None:

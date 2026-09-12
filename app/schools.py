@@ -36,6 +36,12 @@ class SchoolConfig:
     # since that's the page/document a parent can actually cross-check
     # times against. Falls back to school.website if unset.
     bell_schedule_url: Optional[str] = None
+    # Gates the get_course_catalog tool (app/agent.py) — the district's
+    # Grades 9-12 course catalog (data/course_catalogs/<district_id>/) only
+    # applies to comprehensive high schools, not middle schools, so this
+    # must be opted into per school rather than inferred from district_id
+    # (both a middle school and its high school share the same district_id).
+    has_course_catalog: bool = False
     # Per-school branding (#52). All optional so a school.json that predates
     # theming still loads — callers fall back to the neutral blue theme when
     # these are absent. logo_url is None for both current schools (no real
@@ -80,6 +86,7 @@ def _load_school(school_dir: Path) -> SchoolConfig:
         donation_url=raw.get("donation_url"),
         clubs_sheet_url=raw.get("clubs_sheet_url"),
         bell_schedule_url=raw.get("bell_schedule_url"),
+        has_course_catalog=raw.get("has_course_catalog", False),
         theme_color=raw.get("theme_color"),
         primary_bubble_color=raw.get("primary_bubble_color"),
         background_tint=raw.get("background_tint"),

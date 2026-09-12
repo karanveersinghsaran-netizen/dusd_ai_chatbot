@@ -157,6 +157,42 @@ def test_get_club_list_cites_the_human_viewable_sheet_not_the_csv_export(dhs_age
     assert attach_map is False
 
 
+def test_get_course_catalog_tool_present_when_school_has_catalog(dhs_agent):
+    assert "get_course_catalog" in [t["name"] for t in dhs_agent.tools]
+
+
+def test_get_course_catalog_tool_omitted_for_middle_school(agent):
+    """Wells is a middle school — the Grades 9-12 course catalog doesn't
+    apply, even though it shares DHS's district_id (and therefore its
+    course-catalog data directory)."""
+    assert "get_course_catalog" not in [t["name"] for t in agent.tools]
+
+
+def test_get_course_catalog_department_enum_lists_real_departments(dhs_agent):
+    tool = next(t for t in dhs_agent.tools if t["name"] == "get_course_catalog")
+    department_schema = tool["input_schema"]["properties"]["department"]
+    assert "Engineering" in department_schema["enum"]
+    assert "Mathematics" in department_schema["enum"]
+
+
+def test_get_course_catalog_no_department_returns_overview(dhs_agent):
+    with patch("app.agent.get_course_catalog_section", return_value="Graduation requires 230 credits.") as mock_fn:
+        result, attach_map = dhs_agent.process_tool_call("get_course_catalog", {})
+
+    mock_fn.assert_called_once_with("dusd", None)
+    assert "230 credits" in result
+    assert "SOURCE: https://dhs.dublinusd.org/" in result
+    assert attach_map is False
+
+
+def test_get_course_catalog_with_department_passes_it_through(dhs_agent):
+    with patch("app.agent.get_course_catalog_section", return_value="PLTW Introduction to Engineering Design...") as mock_fn:
+        result, _ = dhs_agent.process_tool_call("get_course_catalog", {"department": "Engineering"})
+
+    mock_fn.assert_called_once_with("dusd", "Engineering")
+    assert "PLTW" in result
+
+
 def test_get_no_school_days_cites_the_instructional_calendar_pdf_not_the_events_page(dhs_agent):
     """The no-school-days tool must cite the district's board-approved
     calendar PDF (data/calendars/dusd/2026_27.json's source_url) — not the
@@ -394,16 +430,17 @@ def test_non_last_tools_have_no_cache_control(agent):
 
 def test_last_tool_has_cache_control_for_dhs(dhs_agent):
     """The cache_control breakpoint must land on whichever tool ends up last
-    (get_club_list, for DHS), regardless of which optional tools — campus
-    directions, club roster — a given school has registered."""
+    (get_course_catalog, for DHS), regardless of which optional tools —
+    campus directions, club roster, course catalog — a given school has
+    registered."""
     last_tool = dhs_agent.tools[-1]
-    assert last_tool["name"] == "get_club_list"
+    assert last_tool["name"] == "get_course_catalog"
     assert last_tool.get("cache_control") == {"type": "ephemeral", "ttl": "5m"}
 
 
 def test_last_tool_has_cache_control_without_campus_map(agent_without_campus_map):
     last_tool = agent_without_campus_map.tools[-1]
-    assert last_tool["name"] == "get_club_list"
+    assert last_tool["name"] == "get_course_catalog"
     assert last_tool.get("cache_control") == {"type": "ephemeral", "ttl": "5m"}
 
 
