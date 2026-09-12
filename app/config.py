@@ -79,6 +79,8 @@ if PROMPT_CACHE_TTL not in ("5m", "1h"):
 # Cloud Run keeps at least one instance warm (infra/envs/staging/main.tf), so
 # without a TTL a scraped page could stay stale for as long as that instance
 # lives — potentially days — with no way to see a school's own site updates
-# (staff directory, academics page, ...) short of a redeploy. 1 hour balances
-# freshness against not re-scraping the same page on every single request.
-SCRAPER_CACHE_TTL_SECONDS = int(os.getenv("SCRAPER_CACHE_TTL_SECONDS", "3600"))
+# (staff directory, academics page, ...) short of a redeploy. School website
+# content (staff, academics, attendance policy, ...) changes on the order of
+# days/weeks, not minutes, so a full day balances freshness against not
+# re-scraping the same page on every single request.
+SCRAPER_CACHE_TTL_SECONDS = int(os.getenv("SCRAPER_CACHE_TTL_SECONDS", str(24 * 3600)))
