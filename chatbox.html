@@ -358,10 +358,11 @@
     font-size: 1.05rem;
   }
   /* The unconditional display:flex above beats the UA stylesheet's
-     [hidden] { display: none }, since an ID selector always wins on
-     specificity — without this override, JS setting .hidden = true (for a
-     school with no announcements) would update the DOM attribute but the
-     button would stay visually visible regardless. */
+     [hidden] { display: none } on specificity (an ID selector always wins),
+     which would silently break any future hidden-attribute toggle on this
+     button — kept as a defensive override even though nothing currently
+     hides it (the button is a permanent fixture; an empty announcement list
+     renders "No announcements yet" instead of hiding). */
   #announcements-btn[hidden] { display: none; }
   #announcements-btn:active { opacity: 0.6; }
   @media (hover: hover) {
@@ -382,6 +383,7 @@
   }
   .announcement-item-title { font-weight: 600; margin-bottom: 2px; }
   .announcement-item-date { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 4px; }
+  .announcement-empty { color: var(--text-muted); font-size: 0.9rem; }
 
   /* Shared popover shell for the iOS install hint, help/support panel, and
      the header's own overflow menu — all small dismissible cards anchored
@@ -809,7 +811,7 @@
     <a id="bell-schedule-link" href="#" target="_blank" rel="noopener noreferrer"
        aria-label="Bell schedule" title="Bell schedule">🔔</a>
     <button id="announcements-btn" type="button" aria-haspopup="dialog" aria-controls="announcements-popover"
-            aria-label="What's new" title="What's new" hidden>
+            aria-label="What's new" title="What's new">
       <span aria-hidden="true">📣</span>
       <span id="announcements-badge" class="badge-dot" hidden></span>
     </button>
@@ -1580,12 +1582,17 @@
     const announcementsCloseBtn = announcementsPopover.querySelector(".close");
 
     function renderAnnouncements(id) {
+      // Always visible — a permanent fixture like #bell-schedule-link, not
+      // something that appears/disappears based on whether this school
+      // currently has news. A school with nothing to announce yet just
+      // shows an empty-state message instead of hiding the button.
+      announcementsBtn.hidden = false;
       const announcements = (id && announcementsBySchool[id]) || [];
       if (announcements.length === 0) {
-        announcementsBtn.hidden = true;
+        announcementsListEl.innerHTML = '<div class="announcement-empty">No announcements yet.</div>';
+        announcementsBadge.hidden = true;
         return;
       }
-      announcementsBtn.hidden = false;
       announcementsListEl.innerHTML = announcements.map((a) => (
         `<div class="announcement-item">` +
         `<div class="announcement-item-title">${a.title}</div>` +
