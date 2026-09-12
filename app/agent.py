@@ -125,7 +125,7 @@ class SchoolAgent:
                 "description": (
                     f"Get information about {school.name} from the school website. "
                     "Use this to answer questions about the school such as: staff, programs, "
-                    "academics, clubs, contact info, and announcements. "
+                    "academics, clubs, athletics, contact info, and announcements. "
                     "Use the 'page_group' parameter to target specific sections: "
                     "'principal' for principal/assistant principal/admin info, "
                     "'staff' for the full staff directory (teachers, counselors, support staff), "
@@ -133,6 +133,9 @@ class SchoolAgent:
                     "'counseling' for counselor names, emails, and office locations, "
                     "'attendance' for attendance policies and absence reporting, "
                     "'clubs' for student clubs and organizations, "
+                    "'athletics' for sports registration, physical/eligibility forms, PE exemptions, and booster groups, "
+                    "'family' for parent organizations (PFSO, School Site Council), enrollment/registration, and GATE, "
+                    "'technology' for Google accounts, WiFi, Infinite Campus, and other student tech, "
                     "'home' for general school info (default)."
                 ),
                 "input_schema": {
@@ -144,7 +147,10 @@ class SchoolAgent:
                         },
                         "page_group": {
                             "type": "string",
-                            "enum": ["home", "principal", "staff", "academics", "counseling", "attendance", "clubs"],
+                            "enum": [
+                                "home", "principal", "staff", "academics", "counseling", "attendance",
+                                "clubs", "athletics", "family", "technology",
+                            ],
                             "description": (
                                 "Which page group to scrape. "
                                 "'principal' for questions about the principal or assistant principals. "
@@ -153,6 +159,9 @@ class SchoolAgent:
                                 "'counseling' for counselor names, emails, office locations, or counseling services. "
                                 "'attendance' for attendance policies and how to report absences. "
                                 "'clubs' for student clubs, organizations, and activities. "
+                                "'athletics' for sports registration/eligibility, physical forms, PE exemptions, or booster clubs. "
+                                "'family' for parent organizations, enrollment/registration procedures, or GATE. "
+                                "'technology' for school Google accounts, WiFi, or other student tech questions. "
                                 "Defaults to 'home'."
                             )
                         }

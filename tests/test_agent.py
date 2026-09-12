@@ -93,6 +93,38 @@ def test_system_prompt_is_specific_to_school(agent, dhs_agent):
     assert agent._system_prompt != dhs_agent._system_prompt
 
 
+def test_get_school_information_page_group_enum_includes_new_groups(agent):
+    """Sitemap-discovery pass (#116) added athletics/family/technology as
+    real page groups DHS has content for — the shared tool schema (every
+    school uses the same get_school_information definition) must expose
+    them as valid page_group values even though Wells hasn't populated
+    them yet (falls back to 'home' at lookup time, same as any other
+    school missing a given group)."""
+    tool = next(t for t in agent.tools if t["name"] == "get_school_information")
+    enum = tool["input_schema"]["properties"]["page_group"]["enum"]
+    assert "athletics" in enum
+    assert "family" in enum
+    assert "technology" in enum
+
+
+def test_dhs_pages_has_new_page_groups_populated():
+    """Data-integrity check on data/schools/dhs/school.json: the new groups
+    must actually have URLs, not just exist as empty/placeholder keys."""
+    dhs = get_school("dhs")
+    assert len(dhs.pages["athletics"]) >= 1
+    assert len(dhs.pages["family"]) >= 1
+    assert len(dhs.pages["technology"]) >= 1
+
+
+def test_wells_missing_new_page_groups_falls_back_to_home():
+    """Wells hasn't had its own sitemap discovery pass — asking for a group
+    it doesn't have must silently fall back to its home page(s), not KeyError."""
+    wells = get_school("wells")
+    assert "athletics" not in wells.pages
+    fallback = wells.pages.get("athletics", wells.pages.get("home", []))
+    assert fallback == wells.pages["home"]
+
+
 def test_system_prompt_cites_bell_schedule_url_for_bell_schedule_questions(agent, dhs_agent):
     """Bell schedule questions must cite the school's actual bell-schedule
     page/document (school.bell_schedule_url), not the generic site root —
