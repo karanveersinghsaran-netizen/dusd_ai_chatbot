@@ -101,6 +101,36 @@ def _public_school_theme() -> dict:
     }
 
 
+ANNOUNCEMENTS_FILE = Path(__file__).parent / "data" / "announcements.json"
+
+
+def _public_announcements() -> dict:
+    """Per-school feature-announcement feed for the chatbox's "what's new"
+    button — a small, app-wide changelog (data/announcements.json), each
+    entry tagged with which school(s) it applies to. Newest-first order is
+    the source file's job, not this function's (so the file itself is the
+    readable changelog). Embedded into chatbox.html the same way as
+    _public_school_theme() — no extra round trip, and live-reactive if the
+    dev-only school picker switches schools.
+
+    A missing/unreadable file degrades to "no announcements for anyone"
+    rather than breaking /chatbox — this is a nice-to-have nudge, not
+    something that should ever block the chat widget from loading."""
+    try:
+        all_announcements = json.loads(ANNOUNCEMENTS_FILE.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        all_announcements = []
+
+    return {
+        school.id: [
+            {"id": a["id"], "date": a["date"], "title": a["title"], "text": a["text"]}
+            for a in all_announcements
+            if not a.get("schools") or school.id in a["schools"]
+        ]
+        for school in load_schools().values()
+    }
+
+
 class ChatRequest(BaseModel):
     message: str
     school_id: str | None = None
@@ -209,6 +239,12 @@ async def chatbox(
     html = html.replace(
         '<script id="school-theme-data" type="application/json">{}</script>',
         f'<script id="school-theme-data" type="application/json">{json.dumps(_public_school_theme())}</script>',
+    )
+    # Same embed-at-render-time pattern as school-theme-data above, for the
+    # chatbox's "what's new" button (#feature-announcements).
+    html = html.replace(
+        '<script id="announcements-data" type="application/json">{}</script>',
+        f'<script id="announcements-data" type="application/json">{json.dumps(_public_announcements())}</script>',
     )
     return HTMLResponse(html, headers={"cache-control": "no-store"})
 
