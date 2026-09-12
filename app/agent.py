@@ -238,10 +238,17 @@ class SchoolAgent:
                     "descriptions, prerequisites ('Essential Skills'), grade levels, and UC/CSU "
                     "college-prep designations for a department, OR (when 'department' is omitted) "
                     "the catalog's front matter — graduation credit requirements, UC/CSU A-G admission "
-                    "criteria, grading system, AP/Honors course limits, and schedule-change/withdrawal "
-                    "policies. Use this for any question about specific courses, what to take next, "
-                    "prerequisites, electives, how many credits are needed to graduate, or course "
-                    "withdrawal/change rules."
+                    "criteria, grading system, AP/Honors course limits, taking courses outside the "
+                    "district (non-district/outside courses, transfer credit, credit by exam), and "
+                    "schedule-change/withdrawal policies. Use this for any question about specific "
+                    "courses, what to take next, prerequisites, electives, how many credits are needed "
+                    "to graduate, outside/non-district coursework, or course withdrawal/change rules. "
+                    "IMPORTANT: call this tool again for every new course-catalog question, even ones "
+                    "later in the same conversation after you already called it for a different "
+                    "sub-topic — the front matter alone covers many distinct topics (credits, AP "
+                    "limits, outside courses, withdrawal rules, ...), so don't assume an earlier call "
+                    "already covered a new question; fetch fresh rather than answering from memory of "
+                    "a prior large result."
                 ),
                 "input_schema": {
                     "type": "object",
