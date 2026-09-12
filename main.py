@@ -103,15 +103,21 @@ def _public_school_theme() -> dict:
 
 ANNOUNCEMENTS_FILE = Path(__file__).parent / "data" / "announcements.json"
 
+# However long data/announcements.json grows over time, a returning user
+# should see a short "what's changed recently" list, not the app's entire
+# feature history — the popover isn't meant to be a scrollable archive.
+MAX_ANNOUNCEMENTS_SHOWN = 10
+
 
 def _public_announcements() -> dict:
     """Per-school feature-announcement feed for the chatbox's "what's new"
     button — a small, app-wide changelog (data/announcements.json), each
     entry tagged with which school(s) it applies to. Newest-first order is
     the source file's job, not this function's (so the file itself is the
-    readable changelog). Embedded into chatbox.html the same way as
-    _public_school_theme() — no extra round trip, and live-reactive if the
-    dev-only school picker switches schools.
+    readable changelog) — this only caps how many of those entries are sent.
+    Embedded into chatbox.html the same way as _public_school_theme() — no
+    extra round trip, and live-reactive if the dev-only school picker
+    switches schools.
 
     A missing/unreadable file degrades to "no announcements for anyone"
     rather than breaking /chatbox — this is a nice-to-have nudge, not
@@ -126,7 +132,7 @@ def _public_announcements() -> dict:
             {"id": a["id"], "date": a["date"], "title": a["title"], "text": a["text"]}
             for a in all_announcements
             if not a.get("schools") or school.id in a["schools"]
-        ]
+        ][:MAX_ANNOUNCEMENTS_SHOWN]
         for school in load_schools().values()
     }
 

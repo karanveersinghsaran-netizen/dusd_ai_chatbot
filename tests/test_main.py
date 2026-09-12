@@ -820,6 +820,30 @@ def test_public_announcements_missing_file_degrades_to_empty(client):
     assert announcements["wells"] == []
 
 
+def test_public_announcements_caps_at_ten_per_school(client, tmp_path):
+    """A returning user should see a short 'what's changed recently' list,
+    not the app's entire feature history — the popover isn't a scrollable
+    archive."""
+    fifteen_entries = [
+        {"id": f"2026-00-{i:02d}", "date": "2026-01-01", "title": f"Feature {i}", "text": "...", "schools": ["dhs"]}
+        for i in range(15)
+    ]
+    announcements_file = tmp_path / "announcements.json"
+    announcements_file.write_text(json.dumps(fifteen_entries))
+
+    with patch("main.ANNOUNCEMENTS_FILE", announcements_file):
+        token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+        resp = client.get(f"/chatbox?token={token}")
+
+    marker = '<script id="announcements-data" type="application/json">'
+    start = resp.text.index(marker) + len(marker)
+    end = resp.text.index("</script>", start)
+    announcements = json.loads(resp.text[start:end])
+    assert len(announcements["dhs"]) == 10
+    assert announcements["dhs"][0]["id"] == "2026-00-00"
+    assert announcements["dhs"][-1]["id"] == "2026-00-09"
+
+
 def test_chatbox_route_appends_school_to_manifest_link_when_pinned(client):
     token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
     resp = client.get(f"/chatbox?token={token}&school=wells")

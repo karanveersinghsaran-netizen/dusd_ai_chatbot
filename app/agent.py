@@ -665,13 +665,34 @@ CRITICAL RULES:
 
         # ── Priority 2: help command ───────────────────────────────────────
         if user_message.strip().lower() in {"help", "/help"}:
+            tool_names = {t["name"] for t in self.tools}
+            # Base capabilities every school has (get_school_information,
+            # get_calendar_events, get_no_school_days, and the hardcoded bell
+            # schedule are always registered/present — see __init__) plus
+            # whichever optional tools THIS school actually has, so DHS's
+            # /help mentions the course catalog and Wells's doesn't, instead
+            # of a generic blurb that's wrong for half the schools using it.
+            capabilities = [
+                "Staff, academics, counseling, and attendance info",
+                "Bell schedule",
+                "Upcoming events and the school calendar (holidays, breaks)",
+            ]
+            if "get_campus_directions" in tool_names:
+                capabilities.append("Campus directions")
+            if "get_club_list" in tool_names:
+                capabilities.append("Club schedules, meeting times, and advisors")
+            if "get_course_catalog" in tool_names:
+                capabilities.append("Course catalog: descriptions, prerequisites, credits, graduation requirements")
+
             return ChatReply(
                 "Here's what I can help with:\n\n"
-                f"Ask me anything about {self.school.name} — staff, events, schedules, clubs, attendance, and more.\n\n"
+                f"Ask me anything about {self.school.name}, including:\n"
+                + "\n".join(f"- {c}" for c in capabilities) + "\n\n"
                 "Commands:\n"
                 "- clear — start a fresh conversation\n"
                 + ("- donate — support the school\n" if self.school.donation_url else "")
                 + "- help — show this message\n\n"
+                "📣 Tap the announcements button (top right) for recent updates to what I can do.\n\n"
                 "Something not working, or an idea for the assistant? Tap the help button (?) above to report a problem or idea.\n\n"
                 "You can also reach the school directly:\n"
                 f"{self.school.phone} | {self.school.website}",

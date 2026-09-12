@@ -615,6 +615,31 @@ def test_clear_confirmation_names_the_pinned_school(dhs_agent):
     assert reply.text == "Context cleared for Dublin High School. What can I help you with?"
 
 
+# ── /help reflects each school's actual registered tools ────────────────────
+
+def test_help_command_lists_only_this_schools_actual_capabilities(agent):
+    """Wells has no clubs_sheet_url or has_course_catalog — /help must not
+    claim capabilities this school doesn't actually have."""
+    reply = agent.chat("help", user_id="u_help_wells")
+
+    assert "Bell schedule" in reply.text
+    assert "Course catalog" not in reply.text
+    assert "Club schedules" not in reply.text
+
+
+def test_help_command_lists_dhs_full_capabilities(dhs_agent):
+    reply = dhs_agent.chat("/help", user_id="u_help_dhs")
+
+    assert "Campus directions" in reply.text
+    assert "Club schedules" in reply.text
+    assert "Course catalog" in reply.text
+
+
+def test_help_command_mentions_announcements_button(agent):
+    reply = agent.chat("help", user_id="u_help_announce")
+    assert "announcements button" in reply.text
+
+
 # ── /report command redirects to the help-popover form ─────────────────────
 
 @pytest.mark.parametrize("trigger", ["report", "REPORT", "Report", "/report", "/REPORT", "  report  "])
