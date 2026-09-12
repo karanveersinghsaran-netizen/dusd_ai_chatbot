@@ -469,7 +469,15 @@ CRITICAL RULES:
             department = tool_input.get("department")
             section = get_course_catalog_section(self.school.district_id, department)
             source_url = self.school.course_catalog_url or self.school.website
-            return (f"SOURCE: {source_url}\n\n" + section, False)
+            result = f"SOURCE: {source_url}\n\n" + section
+            result += (
+                "\n\n[NOTE: Please include a brief reminder in your response that course "
+                "availability, prerequisites, and credit requirements can change, and the "
+                "student's counselor has the final say on their individual course plan and "
+                "eligibility — encourage them to confirm with their counselor before making "
+                "final course-selection decisions.]"
+            )
+            return (result, False)
         return ("Tool not found", False)
 
     def _is_feedback(self, message: str) -> str | None:
@@ -664,13 +672,33 @@ CRITICAL RULES:
                 "- clear — start a fresh conversation\n"
                 + ("- donate — support the school\n" if self.school.donation_url else "")
                 + "- help — show this message\n\n"
-                "Something not working? Tap the help button (?) above to report a problem.\n\n"
+                "Something not working, or an idea for the assistant? Tap the help button (?) above to report a problem or idea.\n\n"
                 "You can also reach the school directly:\n"
                 f"{self.school.phone} | {self.school.website}",
                 False,
             )
 
-        # ── Priority 3: donate command ─────────────────────────────────────
+        # ── Priority 3: report command ──────────────────────────────────────
+        # "/report" used to be a real in-chat command (see the git history for
+        # #cost-estimate's structured-report work) before it was replaced by
+        # the help-popover form — but it's exactly the kind of command a user
+        # would still guess exists (it mirrors /help, /clear), and without
+        # this the model has no way to know the popover form exists at all
+        # (it's UI-only, never mentioned in the system prompt), so it was
+        # deflecting straight to "call the school" instead of the actual,
+        # much better path.
+        if user_message.strip().lower() in {"report", "/report"}:
+            return ChatReply(
+                "There's no /report chat command anymore — to report a problem or share a "
+                "feature idea, tap the help button (?) above, then \"Report a problem or idea.\" "
+                "That goes directly to the people who can act on it, with your name and email so "
+                "they can follow up if needed.\n\n"
+                f"You can also reach {self.school.name} directly:\n"
+                f"{self.school.phone} | {self.school.website}",
+                False,
+            )
+
+        # ── Priority 4: donate command ─────────────────────────────────────
         if self.school.donation_url and re.search(
             r'\b(donate|donation|donations|support the school)\b', user_message.strip().lower()
         ):
@@ -682,7 +710,7 @@ CRITICAL RULES:
                 False,
             )
 
-        # ── Priority 4: collect passive feedback ───────────────────────────
+        # ── Priority 5: collect passive feedback ───────────────────────────
         if self.redis_store.is_feedback_pending(key):
             self.redis_store.clear_feedback_pending(key)
             sentiment = self._is_feedback(user_message)
@@ -692,11 +720,11 @@ CRITICAL RULES:
                     raw=user_message,
                 )
                 ack = "Thanks for the feedback! 🙏" if sentiment == "positive" \
-                    else "Sorry to hear that! 🙏 You can tap the help button (?) above to report a problem."
+                    else "Sorry to hear that! 🙏 You can tap the help button (?) above to report a problem or idea."
                 return ChatReply(ack + " How else can I help you?", False)
             # Not a feedback reply — fall through and treat as a new question
 
-        # ── Priority 5: content filter ─────────────────────────────────────
+        # ── Priority 6: content filter ─────────────────────────────────────
         for word in ['fuck', 'shit', 'bitch', 'bastard']:
             if re.search(r'\b' + re.escape(word) + r'\b', user_message.lower()):
                 return ChatReply(

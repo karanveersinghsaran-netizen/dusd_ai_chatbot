@@ -210,6 +210,17 @@ def test_get_course_catalog_with_department_passes_it_through(dhs_agent):
     assert "PLTW" in result
 
 
+def test_get_course_catalog_instructs_model_to_recommend_counselor_confirmation(dhs_agent):
+    """Course info (prerequisites, credits, availability) can change, and
+    only a counselor can confirm what applies to an individual student's
+    plan — every catalog answer should nudge toward that, same pattern as
+    get_school_information's staff-directory disclaimer."""
+    with patch("app.agent.get_course_catalog_section", return_value="..."):
+        result, _ = dhs_agent.process_tool_call("get_course_catalog", {})
+
+    assert "counselor" in result.lower()
+
+
 def test_get_no_school_days_cites_the_instructional_calendar_pdf_not_the_events_page(dhs_agent):
     """The no-school-days tool must cite the district's board-approved
     calendar PDF (data/calendars/dusd/2026_27.json's source_url) — not the
@@ -602,6 +613,29 @@ def test_clear_confirmation_names_the_pinned_school(dhs_agent):
     read as ambiguous when a browser has chatted with both."""
     reply = dhs_agent.chat("clear", user_id="u_clear_dhs")
     assert reply.text == "Context cleared for Dublin High School. What can I help you with?"
+
+
+# ── /report command redirects to the help-popover form ─────────────────────
+
+@pytest.mark.parametrize("trigger", ["report", "REPORT", "Report", "/report", "/REPORT", "  report  "])
+def test_report_command_points_to_the_help_popover(agent, trigger):
+    """/report used to be a real in-chat command before it was replaced by
+    the help-popover form (#cost-estimate) — without special-casing it, the
+    model has no way to know that popover exists (it's UI-only, never
+    mentioned in the system prompt) and would just deflect to 'call the
+    school' instead of the actual, better path."""
+    reply = agent.chat(trigger, user_id="u_report")
+
+    assert "Report a problem or idea" in reply.text
+    assert "help button" in reply.text
+    assert reply.attach_map is False
+
+
+def test_report_command_does_not_call_the_api(agent):
+    reply = agent.chat("/report", user_id="u_report2")
+
+    agent.client.beta.messages.create.assert_not_called()
+    assert "help button" in reply.text
 
 
 def test_clear_command_resets_feedback_state_too(agent):
