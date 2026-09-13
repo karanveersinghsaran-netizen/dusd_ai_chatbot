@@ -28,17 +28,24 @@
 
   "pages": {
     "home": [
-      "/"
+      "/",
+      "https://dhs.dublinusd.org/apps/pages/index.jsp?uREC_ID=448112&type=d",
+      "https://dhs.dublinusd.org/apps/pages/index.jsp?uREC_ID=622418&type=d",
+      "https://dhs.dublinusd.org/apps/pages/index.jsp?uREC_ID=448113&type=d"
     ],
     "principal": [
       "https://dhs.dublinusd.org/apps/pages/index.jsp?uREC_ID=448115&type=d"
     ],
     "staff": [
-      "https://dhs.dublinusd.org/apps/staff/"
+      "https://dhs.dublinusd.org/apps/staff/",
+      "https://dhs.dublinusd.org/apps/pages/index.jsp?uREC_ID=476802&type=d"
     ],
     "academics": [
       "https://dhs.dublinusd.org/apps/pages/index.jsp?uREC_ID=448124&type=d",
-      "https://dhs.dublinusd.org/apps/pages/index.jsp?uREC_ID=448125&type=d"
+      "https://dhs.dublinusd.org/apps/pages/index.jsp?uREC_ID=448125&type=d",
+      "https://dhs.dublinusd.org/apps/pages/index.jsp?uREC_ID=448121&type=d",
+      "https://dhs.dublinusd.org/apps/pages/index.jsp?uREC_ID=448122&type=d",
+      "https://dhs.dublinusd.org/apps/pages/index.jsp?uREC_ID=561799&type=d"
     ],
     "counseling": [
       "https://dhs.dublinusd.org/apps/pages/index.jsp?uREC_ID=448385&type=d"
@@ -49,6 +56,24 @@
     "clubs": [
       "https://dhs.dublinusd.org/apps/pages/index.jsp?uREC_ID=448129&type=d",
       "https://dhs.dublinusd.org/apps/pages/index.jsp?uREC_ID=448132&type=d"
+    ],
+    "athletics": [
+      "https://dhs.dublinusd.org/apps/pages/index.jsp?uREC_ID=448127&type=d",
+      "https://dhs.dublinusd.org/apps/pages/index.jsp?uREC_ID=448131&type=d",
+      "https://dhs.dublinusd.org/apps/pages/index.jsp?uREC_ID=448134&type=d",
+      "https://dhs.dublinusd.org/apps/pages/index.jsp?uREC_ID=448136&type=d",
+      "https://dhs.dublinusd.org/apps/pages/index.jsp?uREC_ID=448155&type=d"
+    ],
+    "family": [
+      "https://dhs.dublinusd.org/apps/pages/index.jsp?uREC_ID=448156&type=d",
+      "https://dhs.dublinusd.org/apps/pages/index.jsp?uREC_ID=448157&type=d"
+    ],
+    "enrollment": [
+      "https://dhs.dublinusd.org/apps/cross.jsp?wREC_ID=6040&crossPath=/apps/pages/index.jsp%3FuREC_ID%3D443732%26type%3Dd",
+      "https://dhs.dublinusd.org/apps/cross.jsp?wREC_ID=6040&crossPath=/apps/pages/index.jsp%3FuREC_ID%3D443955%26type%3Dd%26termREC_ID%3D%26pREC_ID%3D830979"
+    ],
+    "technology": [
+      "https://dhs.dublinusd.org/apps/pages/index.jsp?uREC_ID=448126&type=d"
     ]
   }
 }

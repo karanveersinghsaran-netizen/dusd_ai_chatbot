@@ -125,7 +125,7 @@ class SchoolAgent:
                 "description": (
                     f"Get information about {school.name} from the school website. "
                     "Use this to answer questions about the school such as: staff, programs, "
-                    "academics, clubs, contact info, and announcements. "
+                    "academics, clubs, athletics, contact info, and announcements. "
                     "Use the 'page_group' parameter to target specific sections: "
                     "'principal' for principal/assistant principal/admin info, "
                     "'staff' for the full staff directory (teachers, counselors, support staff), "
@@ -133,7 +133,15 @@ class SchoolAgent:
                     "'counseling' for counselor names, emails, and office locations, "
                     "'attendance' for attendance policies and absence reporting, "
                     "'clubs' for student clubs and organizations, "
-                    "'home' for general school info (default)."
+                    "'athletics' for sports registration, physical/eligibility forms, PE exemptions, and booster groups, "
+                    "'family' for parent organizations (PFSO, School Site Council), "
+                    "'enrollment' for enrollment/registration procedures and dates, and GATE, "
+                    "'technology' for Google accounts, WiFi, Infinite Campus, and other student tech, "
+                    "'home' for general school info (default). "
+                    "IMPORTANT: Call this tool again for every new question about the school, even one later "
+                    "in the same conversation and even if you already called it with the same page_group — "
+                    "a prior result covers multiple topics and may not have been fully read for this specific "
+                    "question. Never answer from a previous call's result alone."
                 ),
                 "input_schema": {
                     "type": "object",
@@ -144,7 +152,10 @@ class SchoolAgent:
                         },
                         "page_group": {
                             "type": "string",
-                            "enum": ["home", "principal", "staff", "academics", "counseling", "attendance", "clubs"],
+                            "enum": [
+                                "home", "principal", "staff", "academics", "counseling", "attendance",
+                                "clubs", "athletics", "family", "enrollment", "technology",
+                            ],
                             "description": (
                                 "Which page group to scrape. "
                                 "'principal' for questions about the principal or assistant principals. "
@@ -153,6 +164,10 @@ class SchoolAgent:
                                 "'counseling' for counselor names, emails, office locations, or counseling services. "
                                 "'attendance' for attendance policies and how to report absences. "
                                 "'clubs' for student clubs, organizations, and activities. "
+                                "'athletics' for sports registration/eligibility, physical forms, PE exemptions, or booster clubs. "
+                                "'family' for parent organizations like PFSO or School Site Council. "
+                                "'enrollment' for enrollment/registration procedures, registration dates, or the GATE program. "
+                                "'technology' for school Google accounts, WiFi, or other student tech questions. "
                                 "Defaults to 'home'."
                             )
                         }
@@ -690,6 +705,16 @@ CRITICAL RULES:
                 capabilities.append("Club schedules, meeting times, and advisors")
             if "get_course_catalog" in tool_names:
                 capabilities.append("Course catalog: descriptions, prerequisites, credits, graduation requirements")
+            # These are get_school_information page groups (#116/#117), not
+            # separate tools, so they're keyed off self.school.pages rather
+            # than tool_names — each school's sitemap-discovery pass
+            # populates only the groups it actually found real content for.
+            if self.school.pages.get("athletics"):
+                capabilities.append("Sports registration, physicals, and eligibility")
+            if self.school.pages.get("family") or self.school.pages.get("enrollment"):
+                capabilities.append("Parent organizations, enrollment, and registration dates")
+            if self.school.pages.get("technology"):
+                capabilities.append("Student Google account, WiFi, and tech setup help")
 
             return ChatReply(
                 "Here's what I can help with:\n\n"
