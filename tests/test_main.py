@@ -1,5 +1,6 @@
 """Unit tests for the FastAPI app in main.py: web /chat session-cookie flow."""
 import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -779,6 +780,68 @@ def test_chatbox_route_embeds_public_school_theme_data(client):
     # still NOT leak into the public payload sent to the browser.
     assert "phone" not in theme_data["wells"]
     assert "bell_schedule" not in theme_data["wells"]
+
+
+# ── /chatbox route: per-school "what's new" announcements ──────────────────
+
+def test_chatbox_route_embeds_announcements_scoped_per_school(client):
+    """Announcements are tagged with which school(s) they apply to
+    (data/announcements.json) — the DHS-only course-catalog entry must show
+    up for dhs and NOT for wells, which doesn't have that tool at all."""
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+    resp = client.get(f"/chatbox?token={token}")
+
+    assert resp.status_code == 200
+    marker = '<script id="announcements-data" type="application/json">'
+    assert marker in resp.text
+    start = resp.text.index(marker) + len(marker)
+    end = resp.text.index("</script>", start)
+    announcements = json.loads(resp.text[start:end])
+
+    dhs_ids = [a["id"] for a in announcements["dhs"]]
+    assert "2026-09-course-catalog" in dhs_ids
+    wells_ids = [a["id"] for a in announcements["wells"]]
+    assert "2026-09-course-catalog" not in wells_ids
+
+
+def test_public_announcements_missing_file_degrades_to_empty(client):
+    """A missing/corrupt announcements.json is a nice-to-have nudge, not
+    something that should ever break /chatbox from loading."""
+    with patch("main.ANNOUNCEMENTS_FILE", Path("/nonexistent/announcements.json")):
+        token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+        resp = client.get(f"/chatbox?token={token}")
+
+    assert resp.status_code == 200
+    marker = '<script id="announcements-data" type="application/json">'
+    start = resp.text.index(marker) + len(marker)
+    end = resp.text.index("</script>", start)
+    announcements = json.loads(resp.text[start:end])
+    assert announcements["dhs"] == []
+    assert announcements["wells"] == []
+
+
+def test_public_announcements_caps_at_ten_per_school(client, tmp_path):
+    """A returning user should see a short 'what's changed recently' list,
+    not the app's entire feature history — the popover isn't a scrollable
+    archive."""
+    fifteen_entries = [
+        {"id": f"2026-00-{i:02d}", "date": "2026-01-01", "title": f"Feature {i}", "text": "...", "schools": ["dhs"]}
+        for i in range(15)
+    ]
+    announcements_file = tmp_path / "announcements.json"
+    announcements_file.write_text(json.dumps(fifteen_entries))
+
+    with patch("main.ANNOUNCEMENTS_FILE", announcements_file):
+        token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+        resp = client.get(f"/chatbox?token={token}")
+
+    marker = '<script id="announcements-data" type="application/json">'
+    start = resp.text.index(marker) + len(marker)
+    end = resp.text.index("</script>", start)
+    announcements = json.loads(resp.text[start:end])
+    assert len(announcements["dhs"]) == 10
+    assert announcements["dhs"][0]["id"] == "2026-00-00"
+    assert announcements["dhs"][-1]["id"] == "2026-00-09"
 
 
 def test_chatbox_route_appends_school_to_manifest_link_when_pinned(client):
