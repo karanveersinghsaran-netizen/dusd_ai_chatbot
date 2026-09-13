@@ -32,3 +32,9 @@ variable "public_base_url" {
   type        = string
   default     = ""
 }
+
+variable "alert_email" {
+  description = "Email that receives alert notifications from the monitoring module. Optional — if empty, alerts fire silently until a notification channel is added via the console. The recipient must click Google's verification link before alerts actually deliver."
+  type        = string
+  default     = ""
+}

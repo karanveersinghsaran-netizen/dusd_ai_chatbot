@@ -47,3 +47,13 @@ output "vpc_network_name" {
   description = "Custom VPC network name."
   value       = module.network.network_name
 }
+
+output "monitoring_dashboard_url" {
+  description = "Direct URL to the Cloud Monitoring dashboard for the wms-chatbot service. Bookmark this — it's the single page for ops + adoption at a glance."
+  value       = module.monitoring.dashboard_url
+}
+
+output "monitoring_notification_note" {
+  description = "One-line reminder about verifying the alert notification channel."
+  value       = module.monitoring.notification_channel_verification_note
+}
