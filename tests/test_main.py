@@ -1239,6 +1239,40 @@ def test_font_route_rejects_non_woff2(client):
     assert resp.status_code == 404
 
 
+def test_version_endpoint_returns_the_app_version(client):
+    resp = client.get("/version")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"version": main.APP_VERSION}
+
+
+def test_chatbox_route_embeds_app_version(client):
+    """The version active when this page was rendered must be embedded so
+    the update-banner polling logic (wireUpdateBanner() in chatbox.html) has
+    something to compare a later /version response against."""
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+    resp = client.get(f"/chatbox?token={token}")
+
+    assert resp.status_code == 200
+    marker = '<script id="app-version-data" type="application/json">'
+    assert marker in resp.text
+    start = resp.text.index(marker) + len(marker)
+    end = resp.text.index("</script>", start)
+    assert json.loads(resp.text[start:end]) == {"version": main.APP_VERSION}
+
+
+def test_chatbox_html_has_update_banner(client):
+    """Guards against the "update available" banner (#update-banner) and its
+    /version-polling wiring silently disappearing from the served HTML."""
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+    resp = client.get(f"/chatbox?token={token}")
+
+    assert resp.status_code == 200
+    assert 'id="update-banner"' in resp.text
+    assert 'id="update-banner-btn"' in resp.text
+    assert "wireUpdateBanner" in resp.text
+
+
 def test_chatbox_html_links_to_manifest_and_apple_touch_icon(client):
     """The HTML must actually reference the PWA manifest + apple-touch-icon —
     without these tags, no browser will offer an "Install" prompt regardless

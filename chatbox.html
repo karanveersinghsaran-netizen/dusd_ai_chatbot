@@ -27,6 +27,11 @@
      (#feature-announcements) — see main.py's _public_announcements(). Same
      inline-data-island reasoning as school-theme-data above. -->
 <script id="announcements-data" type="application/json">{}</script>
+<!-- The app version active when this page was rendered (main.py's
+     APP_VERSION) — see wireUpdateBanner() below, which polls /version and
+     compares against this to detect a newer deploy. Same inline-data-island
+     reasoning as school-theme-data above. -->
+<script id="app-version-data" type="application/json">{}</script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 <script>
@@ -561,6 +566,45 @@
   }
   #install-banner-dismiss:active { opacity: 0.6; }
 
+  /* Update-available banner — visually identical to #install-banner (same
+     shared .install-banner-icon/.install-banner-text classes), own IDs for
+     its button/dismiss since it's a separate hidden-by-default strip that
+     can be visible at the same time as the install banner in principle. */
+  #update-banner {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  #update-banner.visible { display: flex; }
+  #update-banner-btn {
+    flex-shrink: 0;
+    padding: 7px 16px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--user-bubble-text);
+    background: var(--user-bubble-bg);
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  #update-banner-btn:active { opacity: 0.75; }
+  #update-banner-dismiss {
+    flex-shrink: 0;
+    width: 28px; height: 28px;
+    padding: 0;
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #update-banner-dismiss:active { opacity: 0.6; }
+
   #speak-toggle[aria-pressed="true"] .menu-row-icon { color: var(--user-bubble-bg); }
   #speak-toggle.speaking .menu-row-icon { animation: speak-pulse 1s infinite ease-in-out; }
   @keyframes speak-pulse {
@@ -884,6 +928,20 @@
       <span id="install-btn-label">Install</span>
     </button>
     <button id="install-banner-dismiss" type="button" aria-label="Dismiss">×</button>
+  </div>
+
+  <!-- Update-available banner — same "own explicit strip" treatment as
+       #install-banner above. Hidden by default; wireUpdateBanner() adds
+       .visible once a /version poll (see below) returns something other
+       than the version this page was rendered with. Never auto-reloads —
+       that could wipe out something the user is mid-typing — so the only
+       action is an explicit tap. Dismissing hides it for this tab only
+       (in-memory, no storage) since a real reload makes it moot anyway. -->
+  <div id="update-banner" role="region" aria-label="Update available">
+    <span class="install-banner-icon" aria-hidden="true">🔄</span>
+    <span class="install-banner-text">A new version is available.</span>
+    <button id="update-banner-btn" type="button" aria-label="Refresh">Refresh</button>
+    <button id="update-banner-dismiss" type="button" aria-label="Dismiss">×</button>
   </div>
 
   <div id="voice-status" aria-live="polite" role="status"></div>
@@ -1432,6 +1490,52 @@
       window.addEventListener("appinstalled", () => {
         hideBanner();
         deferredPrompt = null;
+      });
+    })();
+
+    // "Update available" banner: an already-open tab or installed PWA has no
+    // other way to learn that a new version was deployed — without this it
+    // just keeps running whatever code it loaded with until the user closes
+    // and reopens it themselves. Polls /version (main.py) on an interval and
+    // whenever the tab regains focus (the common "switched away and back"
+    // case, caught immediately instead of waiting for the next interval
+    // tick) and compares against the version this page was rendered with
+    // (#app-version-data). Deliberately never auto-reloads — that could
+    // silently discard a message the user is mid-typing — the only action
+    // is an explicit tap on Refresh.
+    (function wireUpdateBanner() {
+      const versionData = JSON.parse(document.getElementById("app-version-data").textContent || "{}");
+      const loadedVersion = versionData.version;
+      if (!loadedVersion) return; // e.g. chatbox.html opened directly, no /chatbox render pass
+
+      const banner = document.getElementById("update-banner");
+      const dismissBtn = document.getElementById("update-banner-dismiss");
+      let dismissed = false;
+
+      document.getElementById("update-banner-btn").addEventListener("click", () => location.reload());
+      dismissBtn.addEventListener("click", () => {
+        dismissed = true;
+        banner.classList.remove("visible");
+      });
+
+      const POLL_MS = 5 * 60 * 1000;
+      async function checkForUpdate() {
+        if (dismissed) return;
+        try {
+          const resp = await fetch("/version", { cache: "no-store" });
+          const data = await resp.json();
+          if (data.version && data.version !== loadedVersion) {
+            banner.classList.add("visible");
+          }
+        } catch (err) {
+          // Offline or a transient network blip — try again on the next
+          // interval/focus event rather than surfacing an error for this.
+        }
+      }
+
+      setInterval(checkForUpdate, POLL_MS);
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") checkForUpdate();
       });
     })();
 

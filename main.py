@@ -1,6 +1,8 @@
 import json
 import logging
+import os
 import re
+import uuid
 from pathlib import Path
 
 from fastapi import Cookie, Depends, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile
@@ -64,6 +66,16 @@ app.add_middleware(
     allow_methods=["POST"],
     allow_headers=["Content-Type"],
 )
+
+# Lets an already-open tab/installed PWA detect that a newer version has
+# been deployed and prompt the user to refresh, instead of silently running
+# stale code until they close and reopen the app themselves. K_REVISION is
+# set automatically by Cloud Run to the current revision name, so a real
+# deploy changes it with zero extra plumbing; local/other environments fall
+# back to a random value picked once at process start, which still works
+# for testing (restarting the dev server "deploys" a new version) even
+# though it isn't a meaningful version string outside Cloud Run.
+APP_VERSION = os.environ.get("K_REVISION") or str(uuid.uuid4())
 
 CHATBOX_HTML = Path(__file__).parent / "chatbox.html"
 EXPIRED_LINK_HTML = Path(__file__).parent / "static" / "expired-link.html"
@@ -252,7 +264,23 @@ async def chatbox(
         '<script id="announcements-data" type="application/json">{}</script>',
         f'<script id="announcements-data" type="application/json">{json.dumps(_public_announcements())}</script>',
     )
+    # Same pattern again, for the "update available" banner — the version
+    # active when this page was rendered, so the client can tell it apart
+    # from whatever /version reports on a later poll.
+    html = html.replace(
+        '<script id="app-version-data" type="application/json">{}</script>',
+        f'<script id="app-version-data" type="application/json">{json.dumps({"version": APP_VERSION})}</script>',
+    )
     return HTMLResponse(html, headers={"cache-control": "no-store"})
+
+
+@app.get("/version")
+async def version():
+    """Polled by the chatbox (wireUpdateBanner() in chatbox.html) to detect
+    that a newer version has been deployed since this tab/PWA loaded, so it
+    can prompt a manual refresh instead of silently running stale code until
+    the user closes and reopens the app themselves."""
+    return {"version": APP_VERSION}
 
 
 @app.get("/embed/wms-chatbot.js")
