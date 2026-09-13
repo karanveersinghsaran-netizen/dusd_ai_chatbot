@@ -1256,8 +1256,8 @@ def test_responses_carry_x_app_version_header(client):
 
 def test_chatbox_route_embeds_app_version(client):
     """The version active when this page was rendered must be embedded so
-    the update-banner polling logic (wireUpdateBanner() in chatbox.html) has
-    something to compare a later /version response against."""
+    the update-banner logic (checkAppVersion() in chatbox.html) has something
+    to compare a later response's X-App-Version header against."""
     token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
     resp = client.get(f"/chatbox?token={token}")
 
@@ -1271,7 +1271,7 @@ def test_chatbox_route_embeds_app_version(client):
 
 def test_chatbox_html_has_update_banner(client):
     """Guards against the "update available" banner (#update-banner) and its
-    /version-polling wiring silently disappearing from the served HTML."""
+    refresh/dismiss wiring silently disappearing from the served HTML."""
     token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
     resp = client.get(f"/chatbox?token={token}")
 
