@@ -283,7 +283,7 @@ async def chatbox(
     )
     # Same pattern again, for the "update available" banner — the version
     # active when this page was rendered, so the client can tell it apart
-    # from whatever /version reports on a later poll.
+    # from the X-App-Version header on a later /chat response.
     html = html.replace(
         '<script id="app-version-data" type="application/json">{}</script>',
         f'<script id="app-version-data" type="application/json">{json.dumps({"version": APP_VERSION})}</script>',
@@ -295,7 +295,7 @@ async def chatbox(
 async def version():
     """Manual/ops visibility into which revision is actually live (e.g.
     `curl .../version` after a deploy). The chatbox itself doesn't poll this
-    — see the X-App-Version response header (added by a middleware below)
+    — see the X-App-Version response header (added by a middleware above)
     for how it detects a new deploy during normal use instead."""
     return {"version": APP_VERSION}
 
