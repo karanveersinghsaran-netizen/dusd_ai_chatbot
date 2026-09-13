@@ -381,17 +381,17 @@ resource "google_monitoring_dashboard" "wms_chatbot" {
                 timeSeriesQuery = {
                   timeSeriesFilter = {
                     filter = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.chat_requests_by_ip.name}\""
+                    # Each remote_ip label value = one input series. Aligning
+                    # per series to 24h counts events per IP per day, then
+                    # crossSeriesReducer REDUCE_COUNT collapses everything
+                    # into a single output series counting how many input
+                    # series had data in each daily bucket — which is exactly
+                    # "unique IPs per day". No groupByFields on purpose: any
+                    # field preserved there re-splits the output back into
+                    # multiple series and silently defeats the distinct-count.
                     aggregation = {
                       alignmentPeriod    = "86400s"
                       perSeriesAligner   = "ALIGN_COUNT"
-                      crossSeriesReducer = "REDUCE_COUNT"
-                      groupByFields      = ["metric.label.remote_ip"]
-                    }
-                    # Post-aggregate the per-IP series into a scalar
-                    # distinct-IP count per day.
-                    secondaryAggregation = {
-                      alignmentPeriod    = "86400s"
-                      perSeriesAligner   = "ALIGN_SUM"
                       crossSeriesReducer = "REDUCE_COUNT"
                     }
                   }
