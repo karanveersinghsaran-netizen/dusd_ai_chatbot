@@ -443,11 +443,11 @@ resource "google_monitoring_dashboard" "wms_chatbot" {
                 plotType = "LINE"
               }]
               yAxis = { label = "utilization", scale = "LINEAR" }
-              # `color` is deliberately omitted — the Cloud Monitoring API
-              # rejects it on XyChart thresholds (accepted only on Scorecard).
-              # The threshold still renders as a horizontal line at 0.8 in the
-              # UI, using the default alert color.
-              thresholds = [{ value = 0.8, direction = "ABOVE", label = "alert" }]
+              # XyChart threshold blocks only accept `value` and `label` —
+              # `color`, `direction`, and `targetAxis` are Scorecard-only and
+              # rejected here (Cloud Monitoring API returns 400). The line
+              # still renders horizontally at the value using default styling.
+              thresholds = [{ value = 0.8, label = "alert" }]
             }
           }
         },
@@ -469,11 +469,11 @@ resource "google_monitoring_dashboard" "wms_chatbot" {
                 plotType = "LINE"
               }]
               yAxis = { label = "utilization", scale = "LINEAR" }
-              # `color` is deliberately omitted — the Cloud Monitoring API
-              # rejects it on XyChart thresholds (accepted only on Scorecard).
-              # The threshold still renders as a horizontal line at 0.8 in the
-              # UI, using the default alert color.
-              thresholds = [{ value = 0.8, direction = "ABOVE", label = "alert" }]
+              # XyChart threshold blocks only accept `value` and `label` —
+              # `color`, `direction`, and `targetAxis` are Scorecard-only and
+              # rejected here (Cloud Monitoring API returns 400). The line
+              # still renders horizontally at the value using default styling.
+              thresholds = [{ value = 0.8, label = "alert" }]
             }
           }
         },
