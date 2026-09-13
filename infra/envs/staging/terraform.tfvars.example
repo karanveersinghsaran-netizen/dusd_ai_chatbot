@@ -5,3 +5,11 @@ allowed_origins = "https://wms.dublinusd.org,https://staging.wms.dublinusd.org"
 # Set this once you know the deployed Cloud Run URL (or custom domain) — a
 # chicken-and-egg value, since Cloud Run assigns the URL on first deploy.
 public_base_url = "https://wms-chatbot-xxxxxxxxxx-uw.a.run.app"
+
+# Email that receives alert notifications from the monitoring module
+# (5xx spikes, /chat latency, DB/Redis pressure). Optional — leave empty
+# and alerts still fire but do not notify anyone. If set, Google emails a
+# verification link on first apply; the recipient must click it before any
+# alert actually delivers. Consider a plus-alias so alerts are inbox-
+# filterable, e.g. you+dusdchat@gmail.com.
+# alert_email = "you+dusdchat@gmail.com"
