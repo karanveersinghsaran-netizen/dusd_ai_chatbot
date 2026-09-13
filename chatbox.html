@@ -460,7 +460,9 @@
     font-weight: 500;
     color: var(--text);
     text-align: left;
+    text-decoration: none;
     cursor: pointer;
+    box-sizing: border-box;
   }
   .menu-panel .menu-row + .menu-row { border-top: 1px solid var(--border); }
   .menu-panel .menu-row:active { opacity: 0.6; }
@@ -899,6 +901,12 @@
       <span class="menu-row-icon" aria-hidden="true">🧹</span>
       <span class="menu-row-label" id="clear-btn-label">Clear conversation</span>
     </button>
+
+    <a href="https://www.instagram.com/dusdchat/" target="_blank" rel="noopener noreferrer"
+       class="menu-row" aria-label="Follow us on Instagram">
+      <span class="menu-row-icon" aria-hidden="true">📷</span>
+      <span class="menu-row-label">Follow us on Instagram</span>
+    </a>
 
     <div class="menu-panel-credit">Developed by a DHS Freshman</div>
   </div>
