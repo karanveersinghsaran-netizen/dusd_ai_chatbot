@@ -368,6 +368,22 @@
   @media (hover: hover) {
     #announcements-btn:hover { background: var(--border); }
   }
+  /* Unread state (class toggled in wireAnnouncements() alongside the badge
+     dot): a soft pulsing ring, not just the small corner dot, since the dot
+     alone was easy to miss next to the other header icons. Motion draws the
+     eye without recoloring the whole button into something that reads as an
+     error/alert rather than "something's new". */
+  @keyframes announcements-pulse-ring {
+    0% { box-shadow: 0 0 0 0 rgba(224, 85, 63, 0.55); }
+    70% { box-shadow: 0 0 0 8px rgba(224, 85, 63, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(224, 85, 63, 0); }
+  }
+  #announcements-btn.has-unread {
+    animation: announcements-pulse-ring 2s ease-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #announcements-btn.has-unread { animation: none; }
+  }
   .badge-dot {
     position: absolute;
     top: 4px; right: 4px;
@@ -1603,7 +1619,9 @@
 
       let lastSeenId = null;
       try { lastSeenId = localStorage.getItem(`wms-last-seen-announcement:${id}`); } catch (err) {}
-      announcementsBadge.hidden = lastSeenId === announcements[0].id;
+      const isUnread = lastSeenId !== announcements[0].id;
+      announcementsBadge.hidden = !isUnread;
+      announcementsBtn.classList.toggle("has-unread", isUnread);
     }
 
     announcementsBtn.addEventListener("click", () => {
@@ -1612,6 +1630,7 @@
       if (announcements.length > 0) {
         try { localStorage.setItem(`wms-last-seen-announcement:${schoolId}`, announcements[0].id); } catch (err) {}
         announcementsBadge.hidden = true;
+        announcementsBtn.classList.remove("has-unread");
       }
     });
     announcementsCloseBtn.addEventListener("click", () => announcementsPopover.classList.remove("visible"));
