@@ -94,12 +94,10 @@ def test_system_prompt_is_specific_to_school(agent, dhs_agent):
 
 
 def test_get_school_information_page_group_enum_includes_new_groups(agent):
-    """Sitemap-discovery pass (#116) added athletics/family/technology as
-    real page groups DHS has content for — the shared tool schema (every
-    school uses the same get_school_information definition) must expose
-    them as valid page_group values even though Wells hasn't populated
-    them yet (falls back to 'home' at lookup time, same as any other
-    school missing a given group)."""
+    """Sitemap-discovery passes (#116, #117) added athletics/family/enrollment/
+    technology as real page groups both DHS and Wells have content for — the
+    shared tool schema (every school uses the same get_school_information
+    definition) must expose them as valid page_group values."""
     tool = next(t for t in agent.tools if t["name"] == "get_school_information")
     enum = tool["input_schema"]["properties"]["page_group"]["enum"]
     assert "athletics" in enum
@@ -118,12 +116,23 @@ def test_dhs_pages_has_new_page_groups_populated():
     assert len(dhs.pages["technology"]) >= 1
 
 
-def test_wells_missing_new_page_groups_falls_back_to_home():
-    """Wells hasn't had its own sitemap discovery pass — asking for a group
-    it doesn't have must silently fall back to its home page(s), not KeyError."""
+def test_wells_pages_has_new_page_groups_populated():
+    """Data-integrity check on data/schools/wells/school.json: the new groups
+    added by Wells' own sitemap-discovery pass (#117) must actually have
+    URLs, not just exist as empty/placeholder keys."""
     wells = get_school("wells")
-    assert "athletics" not in wells.pages
-    fallback = wells.pages.get("athletics", wells.pages.get("home", []))
+    assert len(wells.pages["athletics"]) >= 1
+    assert len(wells.pages["family"]) >= 1
+    assert len(wells.pages["enrollment"]) >= 1
+    assert len(wells.pages["technology"]) >= 1
+
+
+def test_missing_page_group_falls_back_to_home():
+    """A page_group with no populated URLs must silently fall back to the
+    school's home page(s), not KeyError — the tool schema's enum can grow
+    ahead of any single school's sitemap-discovery pass."""
+    wells = get_school("wells")
+    fallback = wells.pages.get("nonexistent_group", wells.pages.get("home", []))
     assert fallback == wells.pages["home"]
 
 
@@ -652,17 +661,18 @@ def test_clear_confirmation_names_the_pinned_school(dhs_agent):
 # ── /help reflects each school's actual registered tools ────────────────────
 
 def test_help_command_lists_only_this_schools_actual_capabilities(agent):
-    """Wells has no clubs_sheet_url, has_course_catalog, or (as of this
-    branch) athletics/family/enrollment/technology pages — /help must not
-    claim capabilities this school doesn't actually have."""
+    """Wells has no clubs_sheet_url or has_course_catalog — /help must not
+    claim capabilities this school doesn't actually have. Wells' own
+    sitemap-discovery pass (#117) DID populate athletics/family/enrollment/
+    technology, so those are asserted present, not absent."""
     reply = agent.chat("help", user_id="u_help_wells")
 
     assert "Bell schedule" in reply.text
     assert "Course catalog" not in reply.text
     assert "Club schedules" not in reply.text
-    assert "Sports registration" not in reply.text
-    assert "enrollment" not in reply.text
-    assert "Student Google account" not in reply.text
+    assert "Sports registration" in reply.text
+    assert "enrollment" in reply.text
+    assert "Student Google account" in reply.text
 
 
 def test_help_command_lists_dhs_full_capabilities(dhs_agent):
