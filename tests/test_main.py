@@ -1249,8 +1249,13 @@ def test_version_endpoint_returns_the_app_version(client):
 def test_responses_carry_x_app_version_header(client):
     """The chatbox detects a new deploy via this header on ordinary /chat
     responses (checkAppVersion() in chatbox.html), not by polling /version —
-    any response missing it silently breaks that detection."""
-    resp = client.get("/version")
+    any response missing it silently breaks that detection. Asserted against
+    a route with nothing to do with versioning, so this fails if the header
+    stops being applied globally by the middleware — hitting /version here
+    would still pass if only that one route set it."""
+    resp = client.get("/")
+
+    assert resp.status_code == 200
     assert resp.headers["X-App-Version"] == main.APP_VERSION
 
 
