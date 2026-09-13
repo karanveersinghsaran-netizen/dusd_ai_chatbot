@@ -10,6 +10,7 @@ from typing import Any, Dict, NamedTuple, Optional
 from app import config
 from app.schools import SchoolConfig, get_school
 from app.services.clubs import get_club_list
+from app.services.course_catalog import get_course_catalog_section, get_department_names
 from app.services.scraper import WebsiteScraper
 from app.services.calendar import (
     get_upcoming_events,
@@ -215,6 +216,44 @@ class SchoolAgent:
                     "get_school_information's general 'clubs' page for that kind of detail."
                 ),
                 "input_schema": {"type": "object", "properties": {}},
+            })
+
+        if school.has_course_catalog:
+            departments = get_department_names(school.district_id)
+            department_property = {
+                "type": "string",
+                "description": (
+                    "Which department's course listing to fetch — e.g. a specific class, its "
+                    "prerequisites, or what's offered in a subject area. Omit entirely for "
+                    "graduation requirements, UC/CSU admission criteria, the grading system, "
+                    "AP/Honors course limits, or schedule-change/withdrawal policy questions instead."
+                ),
+            }
+            if departments:
+                department_property["enum"] = departments
+            self.tools.append({
+                "name": "get_course_catalog",
+                "description": (
+                    f"Get information from the {school.district} Grades 9-12 Course Catalog: course "
+                    "descriptions, prerequisites ('Essential Skills'), grade levels, and UC/CSU "
+                    "college-prep designations for a department, OR (when 'department' is omitted) "
+                    "the catalog's front matter — graduation credit requirements, UC/CSU A-G admission "
+                    "criteria, grading system, AP/Honors course limits, taking courses outside the "
+                    "district (non-district/outside courses, transfer credit, credit by exam), and "
+                    "schedule-change/withdrawal policies. Use this for any question about specific "
+                    "courses, what to take next, prerequisites, electives, how many credits are needed "
+                    "to graduate, outside/non-district coursework, or course withdrawal/change rules. "
+                    "IMPORTANT: call this tool again for every new course-catalog question, even ones "
+                    "later in the same conversation after you already called it for a different "
+                    "sub-topic — the front matter alone covers many distinct topics (credits, AP "
+                    "limits, outside courses, withdrawal rules, ...), so don't assume an earlier call "
+                    "already covered a new question; fetch fresh rather than answering from memory of "
+                    "a prior large result."
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"department": department_property},
+                },
             })
 
         # Whichever tool ends up last carries the cache_control breakpoint —
@@ -433,6 +472,19 @@ CRITICAL RULES:
             # actually fetched — clicking a CSV download link isn't useful.
             sheet_url = self.school.clubs_sheet_url.replace("export?format=csv&gid=", "edit?gid=")
             return (f"SOURCE: {sheet_url}\n\n" + get_club_list(self.school.clubs_sheet_url), False)
+        if tool_name == "get_course_catalog":
+            department = tool_input.get("department")
+            section = get_course_catalog_section(self.school.district_id, department)
+            source_url = self.school.course_catalog_url or self.school.website
+            result = f"SOURCE: {source_url}\n\n" + section
+            result += (
+                "\n\n[NOTE: Please include a brief reminder in your response that course "
+                "availability, prerequisites, and credit requirements can change, and the "
+                "student's counselor has the final say on their individual course plan and "
+                "eligibility — encourage them to confirm with their counselor before making "
+                "final course-selection decisions.]"
+            )
+            return (result, False)
         return ("Tool not found", False)
 
     def _is_feedback(self, message: str) -> str | None:
@@ -620,20 +672,61 @@ CRITICAL RULES:
 
         # ── Priority 2: help command ───────────────────────────────────────
         if user_message.strip().lower() in {"help", "/help"}:
+            tool_names = {t["name"] for t in self.tools}
+            # Base capabilities every school has (get_school_information,
+            # get_calendar_events, get_no_school_days, and the hardcoded bell
+            # schedule are always registered/present — see __init__) plus
+            # whichever optional tools THIS school actually has, so DHS's
+            # /help mentions the course catalog and Wells's doesn't, instead
+            # of a generic blurb that's wrong for half the schools using it.
+            capabilities = [
+                "Staff, academics, counseling, and attendance info",
+                "Bell schedule",
+                "Upcoming events and the school calendar (holidays, breaks)",
+            ]
+            if "get_campus_directions" in tool_names:
+                capabilities.append("Campus directions")
+            if "get_club_list" in tool_names:
+                capabilities.append("Club schedules, meeting times, and advisors")
+            if "get_course_catalog" in tool_names:
+                capabilities.append("Course catalog: descriptions, prerequisites, credits, graduation requirements")
+
             return ChatReply(
                 "Here's what I can help with:\n\n"
-                f"Ask me anything about {self.school.name} — staff, events, schedules, clubs, attendance, and more.\n\n"
+                f"Ask me anything about {self.school.name}, including:\n"
+                + "\n".join(f"- {c}" for c in capabilities) + "\n\n"
                 "Commands:\n"
                 "- clear — start a fresh conversation\n"
                 + ("- donate — support the school\n" if self.school.donation_url else "")
                 + "- help — show this message\n\n"
-                "Something not working? Tap the help button (?) above to report a problem.\n\n"
+                "📣 Tap the announcements button (top right) for recent updates to what I can do.\n\n"
+                "Something not working, or an idea for the assistant? Tap the help button (?) above to report a problem or idea.\n\n"
                 "You can also reach the school directly:\n"
                 f"{self.school.phone} | {self.school.website}",
                 False,
             )
 
-        # ── Priority 3: donate command ─────────────────────────────────────
+        # ── Priority 3: report command ──────────────────────────────────────
+        # "/report" used to be a real in-chat command (see the git history for
+        # #cost-estimate's structured-report work) before it was replaced by
+        # the help-popover form — but it's exactly the kind of command a user
+        # would still guess exists (it mirrors /help, /clear), and without
+        # this the model has no way to know the popover form exists at all
+        # (it's UI-only, never mentioned in the system prompt), so it was
+        # deflecting straight to "call the school" instead of the actual,
+        # much better path.
+        if user_message.strip().lower() in {"report", "/report"}:
+            return ChatReply(
+                "There's no /report chat command anymore — to report a problem or share a "
+                "feature idea, tap the help button (?) above, then \"Report a problem or idea.\" "
+                "That goes directly to the people who can act on it, with your name and email so "
+                "they can follow up if needed.\n\n"
+                f"You can also reach {self.school.name} directly:\n"
+                f"{self.school.phone} | {self.school.website}",
+                False,
+            )
+
+        # ── Priority 4: donate command ─────────────────────────────────────
         if self.school.donation_url and re.search(
             r'\b(donate|donation|donations|support the school)\b', user_message.strip().lower()
         ):
@@ -645,7 +738,7 @@ CRITICAL RULES:
                 False,
             )
 
-        # ── Priority 4: collect passive feedback ───────────────────────────
+        # ── Priority 5: collect passive feedback ───────────────────────────
         if self.redis_store.is_feedback_pending(key):
             self.redis_store.clear_feedback_pending(key)
             sentiment = self._is_feedback(user_message)
@@ -655,11 +748,11 @@ CRITICAL RULES:
                     raw=user_message,
                 )
                 ack = "Thanks for the feedback! 🙏" if sentiment == "positive" \
-                    else "Sorry to hear that! 🙏 You can tap the help button (?) above to report a problem."
+                    else "Sorry to hear that! 🙏 You can tap the help button (?) above to report a problem or idea."
                 return ChatReply(ack + " How else can I help you?", False)
             # Not a feedback reply — fall through and treat as a new question
 
-        # ── Priority 5: content filter ─────────────────────────────────────
+        # ── Priority 6: content filter ─────────────────────────────────────
         for word in ['fuck', 'shit', 'bitch', 'bastard']:
             if re.search(r'\b' + re.escape(word) + r'\b', user_message.lower()):
                 return ChatReply(
