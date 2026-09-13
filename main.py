@@ -38,6 +38,16 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="DUSD School Chatbot")
 
+# Lets an already-open tab/installed PWA detect that a newer version has
+# been deployed and prompt the user to refresh, instead of silently running
+# stale code until they close and reopen the app themselves. K_REVISION is
+# set automatically by Cloud Run to the current revision name, so a real
+# deploy changes it with zero extra plumbing; local/other environments fall
+# back to a random value picked once at process start, which still works
+# for testing (restarting the dev server "deploys" a new version) even
+# though it isn't a meaningful version string outside Cloud Run.
+APP_VERSION = os.environ.get("K_REVISION") or str(uuid.uuid4())
+
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
@@ -65,17 +75,24 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["POST"],
     allow_headers=["Content-Type"],
+    # Without this, a browser's fetch() can't read X-App-Version off a
+    # cross-origin response (the CORS default only exposes a small header
+    # safelist) — matters if /chat is ever called cross-origin rather than
+    # from the same-origin /chatbox iframe embed/wms-chatbot.js sets up.
+    expose_headers=["X-App-Version"],
 )
 
-# Lets an already-open tab/installed PWA detect that a newer version has
-# been deployed and prompt the user to refresh, instead of silently running
-# stale code until they close and reopen the app themselves. K_REVISION is
-# set automatically by Cloud Run to the current revision name, so a real
-# deploy changes it with zero extra plumbing; local/other environments fall
-# back to a random value picked once at process start, which still works
-# for testing (restarting the dev server "deploys" a new version) even
-# though it isn't a meaningful version string outside Cloud Run.
-APP_VERSION = os.environ.get("K_REVISION") or str(uuid.uuid4())
+
+@app.middleware("http")
+async def _add_app_version_header(request: Request, call_next):
+    """Stamps every response with the running version, so the chatbox can
+    detect a new deploy from a response it already gets back during normal
+    use (see checkAppVersion() in chatbox.html) instead of polling a
+    separate endpoint."""
+    response = await call_next(request)
+    response.headers["X-App-Version"] = APP_VERSION
+    return response
+
 
 CHATBOX_HTML = Path(__file__).parent / "chatbox.html"
 EXPIRED_LINK_HTML = Path(__file__).parent / "static" / "expired-link.html"
@@ -276,10 +293,10 @@ async def chatbox(
 
 @app.get("/version")
 async def version():
-    """Polled by the chatbox (wireUpdateBanner() in chatbox.html) to detect
-    that a newer version has been deployed since this tab/PWA loaded, so it
-    can prompt a manual refresh instead of silently running stale code until
-    the user closes and reopens the app themselves."""
+    """Manual/ops visibility into which revision is actually live (e.g.
+    `curl .../version` after a deploy). The chatbox itself doesn't poll this
+    — see the X-App-Version response header (added by a middleware below)
+    for how it detects a new deploy during normal use instead."""
     return {"version": APP_VERSION}
 
 

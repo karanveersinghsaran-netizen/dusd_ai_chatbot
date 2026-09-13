@@ -1246,6 +1246,14 @@ def test_version_endpoint_returns_the_app_version(client):
     assert resp.json() == {"version": main.APP_VERSION}
 
 
+def test_responses_carry_x_app_version_header(client):
+    """The chatbox detects a new deploy via this header on ordinary /chat
+    responses (checkAppVersion() in chatbox.html), not by polling /version —
+    any response missing it silently breaks that detection."""
+    resp = client.get("/version")
+    assert resp.headers["X-App-Version"] == main.APP_VERSION
+
+
 def test_chatbox_route_embeds_app_version(client):
     """The version active when this page was rendered must be embedded so
     the update-banner polling logic (wireUpdateBanner() in chatbox.html) has
