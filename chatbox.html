@@ -336,6 +336,28 @@
     #bell-schedule-link:hover { background: var(--border); }
   }
 
+  /* Instagram link — same "give it its own explicit control" exception as
+     #bell-schedule-link above, made deliberately rather than buried in
+     #menu-panel with everything else. Same circle-icon treatment; the icon
+     itself is an inline SVG (not an emoji) so it renders consistently
+     instead of varying by platform emoji font. */
+  #instagram-link {
+    width: 38px; height: 38px;
+    color: var(--text);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    text-decoration: none;
+  }
+  #instagram-link svg { width: 20px; height: 20px; }
+  #instagram-link:active { opacity: 0.6; }
+  @media (hover: hover) {
+    #instagram-link:hover { background: var(--border); }
+  }
+
   /* "What's new" button — hidden by default (only shown once the pinned
      school actually has an announcement, wired in wireAnnouncements()
      below), same circle-icon treatment as #bell-schedule-link/#menu-btn.
@@ -826,6 +848,15 @@
     <div class="title"><span id="school-logo" class="school-logo" aria-hidden="true"></span><span id="title-text">School Chat</span></div>
     <a id="bell-schedule-link" href="#" target="_blank" rel="noopener noreferrer"
        aria-label="Bell schedule" title="Bell schedule">🔔</a>
+    <a id="instagram-link" href="https://www.instagram.com/dusdchat/" target="_blank" rel="noopener noreferrer"
+       aria-label="Follow us on Instagram" title="Follow us on Instagram">
+      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="5"/>
+        <circle cx="12" cy="12" r="4"/>
+        <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/>
+      </svg>
+    </a>
     <button id="announcements-btn" type="button" aria-haspopup="dialog" aria-controls="announcements-popover"
             aria-label="What's new" title="What's new">
       <span aria-hidden="true">📣</span>

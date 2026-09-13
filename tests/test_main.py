@@ -803,6 +803,11 @@ def test_chatbox_route_embeds_announcements_scoped_per_school(client):
     wells_ids = [a["id"] for a in announcements["wells"]]
     assert "2026-09-course-catalog" not in wells_ids
 
+    # An entry with no "schools" key at all (e.g. the Instagram announcement)
+    # applies to every school, not just the ones with school-specific news.
+    assert "2026-09-instagram" in dhs_ids
+    assert "2026-09-instagram" in wells_ids
+
 
 def test_public_announcements_missing_file_degrades_to_empty(client):
     """A missing/corrupt announcements.json is a nice-to-have nudge, not
@@ -1259,6 +1264,16 @@ def test_chatbox_html_has_theme_toggle_and_help_button(client):
     assert 'id="report-open-btn"' in resp.text
     assert 'id="thanks-btn"' in resp.text
     assert 'id="clear-btn"' in resp.text
+
+
+def test_chatbox_html_has_instagram_link(client):
+    """Guards against the "Follow us on Instagram" menu row silently
+    disappearing from the served HTML."""
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+    resp = client.get(f"/chatbox?token={token}")
+
+    assert resp.status_code == 200
+    assert 'href="https://www.instagram.com/dusdchat/"' in resp.text
 
 
 def test_chatbox_html_has_accessibility_settings_panel(client):
