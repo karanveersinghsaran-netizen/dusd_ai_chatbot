@@ -1249,15 +1249,20 @@ def test_version_endpoint_returns_the_app_version(client):
 def test_responses_carry_x_app_version_header(client):
     """The chatbox detects a new deploy via this header on ordinary /chat
     responses (checkAppVersion() in chatbox.html), not by polling /version —
-    any response missing it silently breaks that detection."""
-    resp = client.get("/version")
+    any response missing it silently breaks that detection. Asserted against
+    a route with nothing to do with versioning, so this fails if the header
+    stops being applied globally by the middleware — hitting /version here
+    would still pass if only that one route set it."""
+    resp = client.get("/")
+
+    assert resp.status_code == 200
     assert resp.headers["X-App-Version"] == main.APP_VERSION
 
 
 def test_chatbox_route_embeds_app_version(client):
     """The version active when this page was rendered must be embedded so
-    the update-banner polling logic (wireUpdateBanner() in chatbox.html) has
-    something to compare a later /version response against."""
+    the update-banner logic (checkAppVersion() in chatbox.html) has something
+    to compare a later response's X-App-Version header against."""
     token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
     resp = client.get(f"/chatbox?token={token}")
 
@@ -1271,7 +1276,7 @@ def test_chatbox_route_embeds_app_version(client):
 
 def test_chatbox_html_has_update_banner(client):
     """Guards against the "update available" banner (#update-banner) and its
-    /version-polling wiring silently disappearing from the served HTML."""
+    refresh/dismiss wiring silently disappearing from the served HTML."""
     token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
     resp = client.get(f"/chatbox?token={token}")
 
