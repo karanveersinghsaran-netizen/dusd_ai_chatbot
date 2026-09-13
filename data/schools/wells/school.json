@@ -51,6 +51,18 @@
     "clubs": [
       "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=449324&type=d",
       "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=449323&type=d"
+    ],
+    "athletics": [
+      "https://sites.google.com/dublinusd.org/wmsathletics/home"
+    ],
+    "family": [
+      "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=554769&type=d"
+    ],
+    "enrollment": [
+      "https://wms.dublinusd.org/apps/cross.jsp?wREC_ID=6040&crossPath=/apps/pages/index.jsp%3FuREC_ID%3D443732%26type%3Dd"
+    ],
+    "technology": [
+      "https://wms.dublinusd.org/apps/pages/index.jsp?uREC_ID=500057&type=d"
     ]
   }
 }
