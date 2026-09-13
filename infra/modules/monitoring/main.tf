@@ -349,18 +349,119 @@ resource "google_monitoring_dashboard" "wms_chatbot" {
           }
         },
 
-        # ── Row 2: Adoption ───────────────────────────────────────────────
+        # ── Row 2: Adoption scorecards (at-a-glance D/W/M) ────────────────
+        # Four compact cards showing the "how many people used this
+        # today / this week / this month" numbers without needing to
+        # eyeball the trend charts below. Sparklines under each show a
+        # short trend so week-over-week direction is visible even without
+        # a formal comparison widget (Cloud Monitoring's scorecards don't
+        # do %-change comparisons out of the box).
         {
-          xPos = 0, yPos = 4, width = 4, height = 4,
+          xPos = 0, yPos = 4, width = 3, height = 3,
           widget = {
-            title = "Chat requests (from log-based metric)"
+            title = "Unique users — today"
+            scorecard = {
+              timeSeriesQuery = {
+                timeSeriesFilter = {
+                  filter = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.chat_requests_by_ip.name}\""
+                  aggregation = {
+                    # Same distinct-IP-per-day math as the trend chart —
+                    # scorecard shows the latest bucket's value.
+                    alignmentPeriod    = "86400s"
+                    perSeriesAligner   = "ALIGN_COUNT"
+                    crossSeriesReducer = "REDUCE_COUNT"
+                  }
+                }
+              }
+              sparkChartView = {
+                sparkChartType = "SPARK_BAR"
+              }
+            }
+          }
+        },
+        {
+          xPos = 3, yPos = 4, width = 3, height = 3,
+          widget = {
+            title = "Unique users — last 7 days"
+            scorecard = {
+              timeSeriesQuery = {
+                timeSeriesFilter = {
+                  filter = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.chat_requests_by_ip.name}\""
+                  aggregation = {
+                    # 7-day bucket = weekly unique-IP count. Sparkline
+                    # below shows previous weeks' buckets, so w/w change
+                    # is visible without a formal percent widget.
+                    alignmentPeriod    = "604800s"
+                    perSeriesAligner   = "ALIGN_COUNT"
+                    crossSeriesReducer = "REDUCE_COUNT"
+                  }
+                }
+              }
+              sparkChartView = {
+                sparkChartType = "SPARK_BAR"
+              }
+            }
+          }
+        },
+        {
+          xPos = 6, yPos = 4, width = 3, height = 3,
+          widget = {
+            title = "Unique users — last 30 days"
+            scorecard = {
+              timeSeriesQuery = {
+                timeSeriesFilter = {
+                  filter = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.chat_requests_by_ip.name}\""
+                  aggregation = {
+                    alignmentPeriod    = "2592000s"
+                    perSeriesAligner   = "ALIGN_COUNT"
+                    crossSeriesReducer = "REDUCE_COUNT"
+                  }
+                }
+              }
+              sparkChartView = {
+                sparkChartType = "SPARK_BAR"
+              }
+            }
+          }
+        },
+        {
+          xPos = 9, yPos = 4, width = 3, height = 3,
+          widget = {
+            title = "Thanks — last 7 days"
+            scorecard = {
+              timeSeriesQuery = {
+                timeSeriesFilter = {
+                  # Filter on the endpoint label so this scorecard sums only
+                  # "thanks" clicks, not report submissions. The Row 3
+                  # stacked-bar tile still shows the full thanks-vs-report
+                  # split if the breakdown matters.
+                  filter = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.feedback_submissions.name}\" metric.label.endpoint=\"thanks\""
+                  aggregation = {
+                    alignmentPeriod    = "604800s"
+                    perSeriesAligner   = "ALIGN_SUM"
+                    crossSeriesReducer = "REDUCE_SUM"
+                  }
+                }
+              }
+              sparkChartView = {
+                sparkChartType = "SPARK_BAR"
+              }
+            }
+          }
+        },
+
+        # ── Row 3: Adoption trends (daily bars, all history) ─────────────
+        {
+          xPos = 0, yPos = 7, width = 4, height = 4,
+          widget = {
+            title = "Chat requests per day"
             xyChart = {
               dataSets = [{
                 timeSeriesQuery = {
                   timeSeriesFilter = {
                     filter = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.chat_requests_by_ip.name}\""
                     aggregation = {
-                      alignmentPeriod    = "3600s"
+                      alignmentPeriod    = "86400s"
                       perSeriesAligner   = "ALIGN_SUM"
                       crossSeriesReducer = "REDUCE_SUM"
                     }
@@ -368,12 +469,12 @@ resource "google_monitoring_dashboard" "wms_chatbot" {
                 }
                 plotType = "STACKED_BAR"
               }]
-              yAxis = { label = "chats/hour", scale = "LINEAR" }
+              yAxis = { label = "chats/day", scale = "LINEAR" }
             }
           }
         },
         {
-          xPos = 4, yPos = 4, width = 4, height = 4,
+          xPos = 4, yPos = 7, width = 4, height = 4,
           widget = {
             title = "Unique users per day (distinct IPs)"
             xyChart = {
@@ -403,9 +504,9 @@ resource "google_monitoring_dashboard" "wms_chatbot" {
           }
         },
         {
-          xPos = 8, yPos = 4, width = 4, height = 4,
+          xPos = 8, yPos = 7, width = 4, height = 4,
           widget = {
-            title = "Feedback submissions"
+            title = "Feedback submissions per day (stacked by endpoint)"
             xyChart = {
               dataSets = [{
                 timeSeriesQuery = {
@@ -426,9 +527,9 @@ resource "google_monitoring_dashboard" "wms_chatbot" {
           }
         },
 
-        # ── Row 3: Resource utilization ───────────────────────────────────
+        # ── Row 4: Resource utilization ───────────────────────────────────
         {
-          xPos = 0, yPos = 8, width = 4, height = 4,
+          xPos = 0, yPos = 11, width = 4, height = 4,
           widget = {
             title = "Cloud SQL CPU %"
             xyChart = {
@@ -454,7 +555,7 @@ resource "google_monitoring_dashboard" "wms_chatbot" {
           }
         },
         {
-          xPos = 4, yPos = 8, width = 4, height = 4,
+          xPos = 4, yPos = 11, width = 4, height = 4,
           widget = {
             title = "Redis memory used %"
             xyChart = {
@@ -480,7 +581,7 @@ resource "google_monitoring_dashboard" "wms_chatbot" {
           }
         },
         {
-          xPos = 8, yPos = 8, width = 4, height = 4,
+          xPos = 8, yPos = 11, width = 4, height = 4,
           widget = {
             title = "Redis key count"
             xyChart = {
