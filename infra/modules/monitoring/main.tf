@@ -1,0 +1,497 @@
+# Cloud Monitoring dashboard, log-based metrics, and alert policies for the
+# wms-chatbot service. Replaces ad-hoc `gcloud logging read` queries with a
+# bookmarkable Cloud Console dashboard, and pages on the three failure modes
+# most likely to actually matter (server errors, elevated latency, database
+# and cache pressure). PR#5 / Sprint 1.7 completion.
+
+# ── Log-based metrics ──────────────────────────────────────────────────────
+# Cloud Run's built-in request metrics can chart request volume + latency +
+# status codes filtered by URL, but NOT distinct-user counts — that needs a
+# log-based metric with the remote IP kept as a label so the dashboard can
+# `count_distinct` it over a day.
+
+resource "google_logging_metric" "chat_requests_by_ip" {
+  name        = "wms_chatbot/chat_requests_by_ip"
+  description = "Counter of successful /chat responses, labeled by remote IP, so the dashboard can compute distinct users per time window. Excludes /chat/history (a read-only endpoint that would double-count active users)."
+  project     = var.project_id
+
+  filter = <<-EOT
+    resource.type="cloud_run_revision"
+    resource.labels.service_name="${var.service_name}"
+    httpRequest.requestUrl:"/chat"
+    NOT httpRequest.requestUrl:"/chat/history"
+    httpRequest.status=200
+  EOT
+
+  metric_descriptor {
+    metric_kind  = "DELTA"
+    value_type   = "INT64"
+    unit         = "1"
+    display_name = "Chat requests (labeled by IP)"
+
+    labels {
+      key         = "remote_ip"
+      value_type  = "STRING"
+      description = "Client IP the request came from. Aggregate as count_distinct for unique-user counts."
+    }
+  }
+
+  label_extractors = {
+    "remote_ip" = "EXTRACT(httpRequest.remoteIp)"
+  }
+}
+
+resource "google_logging_metric" "feedback_submissions" {
+  name        = "wms_chatbot/feedback_submissions"
+  description = "Counter of successful /feedback/{thanks,report} POSTs, labeled by which endpoint, so the dashboard can show how the feedback loop is actually being used."
+  project     = var.project_id
+
+  filter = <<-EOT
+    resource.type="cloud_run_revision"
+    resource.labels.service_name="${var.service_name}"
+    (httpRequest.requestUrl:"/feedback/thanks" OR httpRequest.requestUrl:"/feedback/report")
+    httpRequest.status=200
+  EOT
+
+  metric_descriptor {
+    metric_kind  = "DELTA"
+    value_type   = "INT64"
+    unit         = "1"
+    display_name = "Feedback submissions"
+
+    labels {
+      key         = "endpoint"
+      value_type  = "STRING"
+      description = "'thanks' or 'report' — extracted from the URL path."
+    }
+  }
+
+  label_extractors = {
+    "endpoint" = "REGEXP_EXTRACT(httpRequest.requestUrl, \"/feedback/(thanks|report)\")"
+  }
+}
+
+# ── Notification channel ────────────────────────────────────────────────────
+# Optional — only created when the operator provides an email. Alert policies
+# reference it via a `for_each = var.alert_email != "" ? { ... } : {}` idiom
+# so the alerts still exist (visible in the console) even if no email is set.
+# The recipient must click the verification link in the first email Google
+# sends; unverified channels stay in state as "unverified" and don't deliver.
+
+resource "google_monitoring_notification_channel" "email" {
+  count        = var.alert_email != "" ? 1 : 0
+  project      = var.project_id
+  display_name = "wms-chatbot alerts"
+  type         = "email"
+  description  = "Ops alerts for the wms-chatbot Cloud Run service. Managed by Terraform."
+
+  labels = {
+    email_address = var.alert_email
+  }
+}
+
+locals {
+  notification_channels = google_monitoring_notification_channel.email[*].id
+}
+
+# ── Alert policies ─────────────────────────────────────────────────────────
+# Four alerts, calibrated to fire only on real problems (not every minor spike).
+
+resource "google_monitoring_alert_policy" "cloud_run_5xx_rate" {
+  project      = var.project_id
+  display_name = "wms-chatbot: elevated 5xx rate"
+  combiner     = "OR"
+
+  documentation {
+    content   = "Server-error rate on wms-chatbot exceeded 5% over 5 minutes. Check Cloud Run logs for the failing route and recent deploys."
+    mime_type = "text/markdown"
+  }
+
+  conditions {
+    display_name = "5xx > 5% over 5m"
+    condition_threshold {
+      # request_count filtered to 5xx, ratio'd against total request_count.
+      filter          = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${var.service_name}\" AND metric.type=\"run.googleapis.com/request_count\" AND metric.labels.response_code_class=\"5xx\""
+      duration        = "300s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0.05
+
+      aggregations {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_RATE"
+        cross_series_reducer = "REDUCE_SUM"
+      }
+
+      denominator_filter = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${var.service_name}\" AND metric.type=\"run.googleapis.com/request_count\""
+
+      denominator_aggregations {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_RATE"
+        cross_series_reducer = "REDUCE_SUM"
+      }
+    }
+  }
+
+  notification_channels = local.notification_channels
+  alert_strategy {
+    auto_close = "1800s"
+  }
+}
+
+resource "google_monitoring_alert_policy" "chat_latency_p95" {
+  project      = var.project_id
+  display_name = "wms-chatbot: /chat p95 latency > 30s"
+  combiner     = "OR"
+
+  documentation {
+    content   = "The 95th-percentile latency on /chat has been above 30 seconds for 5+ minutes. Usually indicates the Claude API is slow or unreachable. Verify status.anthropic.com and check for retry storms in the app logs."
+    mime_type = "text/markdown"
+  }
+
+  conditions {
+    display_name = "p95 latency > 30s"
+    condition_threshold {
+      filter          = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${var.service_name}\" AND metric.type=\"run.googleapis.com/request_latencies\""
+      duration        = "300s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 30000 # ms
+
+      aggregations {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_PERCENTILE_95"
+        cross_series_reducer = "REDUCE_MAX"
+      }
+    }
+  }
+
+  notification_channels = local.notification_channels
+  alert_strategy {
+    auto_close = "1800s"
+  }
+}
+
+resource "google_monitoring_alert_policy" "cloud_sql_cpu" {
+  project      = var.project_id
+  display_name = "wms-chatbot db: CPU > 80%"
+  combiner     = "OR"
+
+  documentation {
+    content   = "Cloud SQL CPU utilization stayed above 80% for 15 minutes. On db-f1-micro this is easy to trip transiently; only genuinely-sustained load is worth attention. Consider a larger tier if this fires repeatedly."
+    mime_type = "text/markdown"
+  }
+
+  conditions {
+    display_name = "CPU > 80% over 15m"
+    condition_threshold {
+      filter          = "resource.type=\"cloudsql_database\" AND resource.labels.database_id=\"${var.project_id}:${var.cloud_sql_instance_id}\" AND metric.type=\"cloudsql.googleapis.com/database/cpu/utilization\""
+      duration        = "900s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0.8
+
+      aggregations {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_MEAN"
+      }
+    }
+  }
+
+  notification_channels = local.notification_channels
+  alert_strategy {
+    auto_close = "1800s"
+  }
+}
+
+resource "google_monitoring_alert_policy" "redis_memory" {
+  project      = var.project_id
+  display_name = "wms-chatbot redis: memory > 80%"
+  combiner     = "OR"
+
+  documentation {
+    content   = "Redis memory usage crossed 80% of the configured 1 GB. At current usage (~5 MB) this would represent 200× growth and warrants investigation — likely a leaked key without TTL, or a runaway loop writing to Redis. Look at `commands/calls` by cmd to find the writer."
+    mime_type = "text/markdown"
+  }
+
+  conditions {
+    display_name = "memory used > 80%"
+    condition_threshold {
+      filter          = "resource.type=\"redis_instance\" AND resource.labels.instance_id=\"projects/${var.project_id}/locations/${var.region}/instances/${var.redis_instance_id}\" AND metric.type=\"redis.googleapis.com/stats/memory/usage_ratio\""
+      duration        = "300s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0.8
+
+      aggregations {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_MEAN"
+      }
+    }
+  }
+
+  notification_channels = local.notification_channels
+  alert_strategy {
+    auto_close = "1800s"
+  }
+}
+
+# ── Dashboard ──────────────────────────────────────────────────────────────
+# Three rows × 3 tiles each in a 12-col mosaic grid. Ops on top, adoption in
+# the middle, resource utilization at the bottom — reading top-to-bottom
+# roughly matches the "is the site up? is anyone using it? are we OK on
+# capacity?" triage sequence.
+
+resource "google_monitoring_dashboard" "wms_chatbot" {
+  project = var.project_id
+  dashboard_json = jsonencode({
+    displayName = "WMS Chatbot — ops + adoption"
+    mosaicLayout = {
+      columns = 12
+      tiles = [
+        # ── Row 1: Ops ────────────────────────────────────────────────────
+        {
+          xPos = 0, yPos = 0, width = 4, height = 4,
+          widget = {
+            title = "Request rate by status class"
+            xyChart = {
+              dataSets = [{
+                timeSeriesQuery = {
+                  timeSeriesFilter = {
+                    filter = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${var.service_name}\" AND metric.type=\"run.googleapis.com/request_count\""
+                    aggregation = {
+                      alignmentPeriod    = "60s"
+                      perSeriesAligner   = "ALIGN_RATE"
+                      crossSeriesReducer = "REDUCE_SUM"
+                      groupByFields      = ["metric.label.response_code_class"]
+                    }
+                  }
+                }
+                plotType = "STACKED_AREA"
+              }]
+              timeshiftDuration = "0s"
+              yAxis             = { label = "req/s", scale = "LINEAR" }
+            }
+          }
+        },
+        {
+          xPos = 4, yPos = 0, width = 4, height = 4,
+          widget = {
+            title = "Latency p50/p95/p99"
+            xyChart = {
+              dataSets = [
+                {
+                  timeSeriesQuery = {
+                    timeSeriesFilter = {
+                      filter = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${var.service_name}\" AND metric.type=\"run.googleapis.com/request_latencies\""
+                      aggregation = {
+                        alignmentPeriod    = "60s"
+                        perSeriesAligner   = "ALIGN_PERCENTILE_50"
+                        crossSeriesReducer = "REDUCE_MEAN"
+                      }
+                    }
+                  }
+                  plotType       = "LINE"
+                  legendTemplate = "p50"
+                },
+                {
+                  timeSeriesQuery = {
+                    timeSeriesFilter = {
+                      filter = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${var.service_name}\" AND metric.type=\"run.googleapis.com/request_latencies\""
+                      aggregation = {
+                        alignmentPeriod    = "60s"
+                        perSeriesAligner   = "ALIGN_PERCENTILE_95"
+                        crossSeriesReducer = "REDUCE_MEAN"
+                      }
+                    }
+                  }
+                  plotType       = "LINE"
+                  legendTemplate = "p95"
+                },
+                {
+                  timeSeriesQuery = {
+                    timeSeriesFilter = {
+                      filter = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${var.service_name}\" AND metric.type=\"run.googleapis.com/request_latencies\""
+                      aggregation = {
+                        alignmentPeriod    = "60s"
+                        perSeriesAligner   = "ALIGN_PERCENTILE_99"
+                        crossSeriesReducer = "REDUCE_MEAN"
+                      }
+                    }
+                  }
+                  plotType       = "LINE"
+                  legendTemplate = "p99"
+                }
+              ]
+              yAxis = { label = "ms", scale = "LINEAR" }
+            }
+          }
+        },
+        {
+          xPos = 8, yPos = 0, width = 4, height = 4,
+          widget = {
+            title = "Cloud Run instance count"
+            xyChart = {
+              dataSets = [{
+                timeSeriesQuery = {
+                  timeSeriesFilter = {
+                    filter = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${var.service_name}\" AND metric.type=\"run.googleapis.com/container/instance_count\""
+                    aggregation = {
+                      alignmentPeriod    = "60s"
+                      perSeriesAligner   = "ALIGN_MEAN"
+                      crossSeriesReducer = "REDUCE_SUM"
+                      groupByFields      = ["metric.label.state"]
+                    }
+                  }
+                }
+                plotType = "STACKED_AREA"
+              }]
+              yAxis = { label = "instances", scale = "LINEAR" }
+            }
+          }
+        },
+
+        # ── Row 2: Adoption ───────────────────────────────────────────────
+        {
+          xPos = 0, yPos = 4, width = 4, height = 4,
+          widget = {
+            title = "Chat requests (from log-based metric)"
+            xyChart = {
+              dataSets = [{
+                timeSeriesQuery = {
+                  timeSeriesFilter = {
+                    filter = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.chat_requests_by_ip.name}\""
+                    aggregation = {
+                      alignmentPeriod    = "3600s"
+                      perSeriesAligner   = "ALIGN_SUM"
+                      crossSeriesReducer = "REDUCE_SUM"
+                    }
+                  }
+                }
+                plotType = "STACKED_BAR"
+              }]
+              yAxis = { label = "chats/hour", scale = "LINEAR" }
+            }
+          }
+        },
+        {
+          xPos = 4, yPos = 4, width = 4, height = 4,
+          widget = {
+            title = "Unique users per day (distinct IPs)"
+            xyChart = {
+              dataSets = [{
+                timeSeriesQuery = {
+                  timeSeriesFilter = {
+                    filter = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.chat_requests_by_ip.name}\""
+                    aggregation = {
+                      alignmentPeriod    = "86400s"
+                      perSeriesAligner   = "ALIGN_COUNT"
+                      crossSeriesReducer = "REDUCE_COUNT"
+                      groupByFields      = ["metric.label.remote_ip"]
+                    }
+                    # Post-aggregate the per-IP series into a scalar
+                    # distinct-IP count per day.
+                    secondaryAggregation = {
+                      alignmentPeriod    = "86400s"
+                      perSeriesAligner   = "ALIGN_SUM"
+                      crossSeriesReducer = "REDUCE_COUNT"
+                    }
+                  }
+                }
+                plotType = "STACKED_BAR"
+              }]
+              yAxis = { label = "unique IPs/day", scale = "LINEAR" }
+            }
+          }
+        },
+        {
+          xPos = 8, yPos = 4, width = 4, height = 4,
+          widget = {
+            title = "Feedback submissions"
+            xyChart = {
+              dataSets = [{
+                timeSeriesQuery = {
+                  timeSeriesFilter = {
+                    filter = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.feedback_submissions.name}\""
+                    aggregation = {
+                      alignmentPeriod    = "86400s"
+                      perSeriesAligner   = "ALIGN_SUM"
+                      crossSeriesReducer = "REDUCE_SUM"
+                      groupByFields      = ["metric.label.endpoint"]
+                    }
+                  }
+                }
+                plotType = "STACKED_BAR"
+              }]
+              yAxis = { label = "submissions/day", scale = "LINEAR" }
+            }
+          }
+        },
+
+        # ── Row 3: Resource utilization ───────────────────────────────────
+        {
+          xPos = 0, yPos = 8, width = 4, height = 4,
+          widget = {
+            title = "Cloud SQL CPU %"
+            xyChart = {
+              dataSets = [{
+                timeSeriesQuery = {
+                  timeSeriesFilter = {
+                    filter = "resource.type=\"cloudsql_database\" AND resource.labels.database_id=\"${var.project_id}:${var.cloud_sql_instance_id}\" AND metric.type=\"cloudsql.googleapis.com/database/cpu/utilization\""
+                    aggregation = {
+                      alignmentPeriod  = "60s"
+                      perSeriesAligner = "ALIGN_MEAN"
+                    }
+                  }
+                }
+                plotType = "LINE"
+              }]
+              yAxis      = { label = "utilization", scale = "LINEAR" }
+              thresholds = [{ value = 0.8, color = "RED", direction = "ABOVE", label = "alert" }]
+            }
+          }
+        },
+        {
+          xPos = 4, yPos = 8, width = 4, height = 4,
+          widget = {
+            title = "Redis memory used %"
+            xyChart = {
+              dataSets = [{
+                timeSeriesQuery = {
+                  timeSeriesFilter = {
+                    filter = "resource.type=\"redis_instance\" AND resource.labels.instance_id=\"projects/${var.project_id}/locations/${var.region}/instances/${var.redis_instance_id}\" AND metric.type=\"redis.googleapis.com/stats/memory/usage_ratio\""
+                    aggregation = {
+                      alignmentPeriod  = "60s"
+                      perSeriesAligner = "ALIGN_MEAN"
+                    }
+                  }
+                }
+                plotType = "LINE"
+              }]
+              yAxis      = { label = "utilization", scale = "LINEAR" }
+              thresholds = [{ value = 0.8, color = "RED", direction = "ABOVE", label = "alert" }]
+            }
+          }
+        },
+        {
+          xPos = 8, yPos = 8, width = 4, height = 4,
+          widget = {
+            title = "Redis key count"
+            xyChart = {
+              dataSets = [{
+                timeSeriesQuery = {
+                  timeSeriesFilter = {
+                    filter = "resource.type=\"redis_instance\" AND resource.labels.instance_id=\"projects/${var.project_id}/locations/${var.region}/instances/${var.redis_instance_id}\" AND metric.type=\"redis.googleapis.com/keyspace/keys\""
+                    aggregation = {
+                      alignmentPeriod    = "60s"
+                      perSeriesAligner   = "ALIGN_MEAN"
+                      crossSeriesReducer = "REDUCE_SUM"
+                    }
+                  }
+                }
+                plotType = "LINE"
+              }]
+              yAxis = { label = "keys", scale = "LINEAR" }
+            }
+          }
+        }
+      ]
+    }
+  })
+}

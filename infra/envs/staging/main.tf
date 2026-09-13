@@ -17,6 +17,8 @@ resource "google_project_service" "required" {
     "vpcaccess.googleapis.com",
     "sqladmin.googleapis.com",
     "redis.googleapis.com",
+    "monitoring.googleapis.com",
+    "logging.googleapis.com",
   ])
   project            = var.project_id
   service            = each.value
@@ -120,6 +122,28 @@ module "secrets" {
   ]
 
   depends_on = [google_project_service.required]
+}
+
+module "monitoring" {
+  source = "../../modules/monitoring"
+
+  project_id            = var.project_id
+  region                = var.region
+  service_name          = var.service_name
+  cloud_sql_instance_id = module.cloud_sql.instance_name
+  redis_instance_id     = module.redis.instance_name
+  alert_email           = var.alert_email
+
+  # Monitoring depends on the resources it's monitoring, otherwise a fresh
+  # apply can create alert policies before Cloud SQL / Redis exist — the
+  # console shows them as "no data" until the resources come up, which is
+  # harmless but confusing.
+  depends_on = [
+    google_project_service.required,
+    module.cloud_run,
+    module.cloud_sql,
+    module.redis,
+  ]
 }
 
 # IAM binding lives OUTSIDE modules/secrets so `make destroy` can target it
