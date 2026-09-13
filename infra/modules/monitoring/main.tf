@@ -12,12 +12,13 @@
 
 resource "google_logging_metric" "chat_requests_by_ip" {
   name        = "wms_chatbot/chat_requests_by_ip"
-  description = "Counter of successful /chat responses, labeled by remote IP, so the dashboard can compute distinct users per time window. Excludes /chat/history (a read-only endpoint that would double-count active users)."
+  description = "Counter of successful POST /chat responses, labeled by remote IP, so the dashboard can compute distinct users per time window. POST filter is required because httpRequest.requestUrl:\"/chat\" is a substring match that would otherwise catch GET /chatbox and GET /chat/history too, inflating the count with page loads and history-restores instead of tracking real messages sent."
   project     = var.project_id
 
   filter = <<-EOT
     resource.type="cloud_run_revision"
     resource.labels.service_name="${var.service_name}"
+    httpRequest.requestMethod="POST"
     httpRequest.requestUrl:"/chat"
     NOT httpRequest.requestUrl:"/chat/history"
     httpRequest.status=200
@@ -49,6 +50,7 @@ resource "google_logging_metric" "feedback_submissions" {
   filter = <<-EOT
     resource.type="cloud_run_revision"
     resource.labels.service_name="${var.service_name}"
+    httpRequest.requestMethod="POST"
     (httpRequest.requestUrl:"/feedback/thanks" OR httpRequest.requestUrl:"/feedback/report")
     httpRequest.status=200
   EOT
