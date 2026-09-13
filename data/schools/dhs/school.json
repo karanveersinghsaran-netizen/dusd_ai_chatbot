@@ -12,6 +12,8 @@
   "clubs_sheet_url": "https://docs.google.com/spreadsheets/d/1AYbld-z3m-lUDLbyriB0cSI45BS2yZLZmqx61ZB3YrY/export?format=csv&gid=1039277270",
   "campus_map_file": "campus_map.json",
   "bell_schedule_url": "https://dhs.dublinusd.org/apps/bell_schedules/",
+  "has_course_catalog": true,
+  "course_catalog_url": "https://docs.google.com/document/d/1DxIYs_qW9sHB3rNxSrdz8QDy3Vp_lSKUbBSIYrFjigU/edit",
 
   "theme_color": "#0a2472",
   "primary_bubble_color": "#0a2472",
