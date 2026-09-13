@@ -652,13 +652,17 @@ def test_clear_confirmation_names_the_pinned_school(dhs_agent):
 # ── /help reflects each school's actual registered tools ────────────────────
 
 def test_help_command_lists_only_this_schools_actual_capabilities(agent):
-    """Wells has no clubs_sheet_url or has_course_catalog — /help must not
+    """Wells has no clubs_sheet_url, has_course_catalog, or (as of this
+    branch) athletics/family/enrollment/technology pages — /help must not
     claim capabilities this school doesn't actually have."""
     reply = agent.chat("help", user_id="u_help_wells")
 
     assert "Bell schedule" in reply.text
     assert "Course catalog" not in reply.text
     assert "Club schedules" not in reply.text
+    assert "Sports registration" not in reply.text
+    assert "enrollment" not in reply.text
+    assert "Student Google account" not in reply.text
 
 
 def test_help_command_lists_dhs_full_capabilities(dhs_agent):
@@ -667,6 +671,9 @@ def test_help_command_lists_dhs_full_capabilities(dhs_agent):
     assert "Campus directions" in reply.text
     assert "Club schedules" in reply.text
     assert "Course catalog" in reply.text
+    assert "Sports registration" in reply.text
+    assert "enrollment" in reply.text
+    assert "Student Google account" in reply.text
 
 
 def test_help_command_mentions_announcements_button(agent):

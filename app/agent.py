@@ -705,6 +705,16 @@ CRITICAL RULES:
                 capabilities.append("Club schedules, meeting times, and advisors")
             if "get_course_catalog" in tool_names:
                 capabilities.append("Course catalog: descriptions, prerequisites, credits, graduation requirements")
+            # These are get_school_information page groups (#116/#117), not
+            # separate tools, so they're keyed off self.school.pages rather
+            # than tool_names — each school's sitemap-discovery pass
+            # populates only the groups it actually found real content for.
+            if self.school.pages.get("athletics"):
+                capabilities.append("Sports registration, physicals, and eligibility")
+            if self.school.pages.get("family") or self.school.pages.get("enrollment"):
+                capabilities.append("Parent organizations, enrollment, and registration dates")
+            if self.school.pages.get("technology"):
+                capabilities.append("Student Google account, WiFi, and tech setup help")
 
             return ChatReply(
                 "Here's what I can help with:\n\n"

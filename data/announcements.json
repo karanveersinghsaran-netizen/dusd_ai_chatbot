@@ -1,5 +1,12 @@
 [
   {
+    "id": "2026-09-athletics-family-enrollment-tech",
+    "date": "2026-09-13",
+    "title": "More to ask about at DHS",
+    "text": "I can now help with sports registration and physicals, parent organizations, enrollment/registration dates, the GATE program, and student Google account/WiFi setup.",
+    "schools": ["dhs"]
+  },
+  {
     "id": "2026-09-course-catalog",
     "date": "2026-09-12",
     "title": "Ask about DHS courses",
