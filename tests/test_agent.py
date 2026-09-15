@@ -245,6 +245,38 @@ def test_get_course_catalog_source_falls_back_to_website_when_unset():
     assert f"SOURCE: {school.website}" in result
 
 
+def test_get_course_catalog_result_tells_model_to_preserve_notes(dhs_agent):
+    """Course catalog department sections have italicized *NOTE:...* callouts
+    that carry the most decision-relevant guidance (e.g. "non-AP Precalculus,
+    not AP Precalculus, is the course designed to prepare students for AP
+    Calc AB/BC"). Without an explicit instruction, the model tends to
+    summarize the section and drop the NOTE, giving a technically-correct
+    but critically-incomplete answer. This test guards the instruction that
+    keeps it in the reply."""
+    fake_section = (
+        "**AP Precalculus**\n"
+        "Course Number: 797174\n"
+        "...\n"
+        "*NOTE: It is recommended that students with an interest in taking "
+        "AP Calc AB/BC in their mathematics pathway enroll in Precalculus "
+        "(non-AP Precalculus) as that is the course designed to prepare "
+        "students for success in AP Calc AB/BC.*\n"
+    )
+    with patch("app.agent.get_course_catalog_section", return_value=fake_section):
+        result, _ = dhs_agent.process_tool_call("get_course_catalog", {"department": "Mathematics"})
+
+    # The catalog text itself passes through untouched.
+    assert "*NOTE:" in result
+    # The appended instruction block tells the model to preserve NOTE callouts
+    # and gives it the AP Calc pathway example so the guidance is concrete,
+    # not just abstract.
+    assert "NOTE" in result and "*NOTE:" in result
+    assert "INSTRUCTIONS FOR YOUR RESPONSE" in result
+    assert "non-AP Precalculus" in result
+    # Counselor-final-say reminder is still there.
+    assert "counselor" in result.lower()
+
+
 def test_get_course_catalog_with_department_passes_it_through(dhs_agent):
     with patch("app.agent.get_course_catalog_section", return_value="PLTW Introduction to Engineering Design...") as mock_fn:
         result, _ = dhs_agent.process_tool_call("get_course_catalog", {"department": "Engineering"})
