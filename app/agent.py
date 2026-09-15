@@ -493,11 +493,22 @@ CRITICAL RULES:
             source_url = self.school.course_catalog_url or self.school.website
             result = f"SOURCE: {source_url}\n\n" + section
             result += (
-                "\n\n[NOTE: Please include a brief reminder in your response that course "
-                "availability, prerequisites, and credit requirements can change, and the "
-                "student's counselor has the final say on their individual course plan and "
-                "eligibility — encourage them to confirm with their counselor before making "
-                "final course-selection decisions.]"
+                "\n\n[INSTRUCTIONS FOR YOUR RESPONSE:"
+                " (1) The catalog uses italicized *NOTE:...* callouts, plain 'Note:' lines,"
+                " and similar advisories to flag pathway recommendations, prerequisite"
+                " caveats, and 'this course is not intended to prepare for X' warnings."
+                " These callouts often contain the most decision-relevant guidance in the"
+                " section and are easy to miss when the department text is long. If any"
+                " such callout is relevant to what the user asked, INCLUDE it in your"
+                " response — quote or paraphrase it faithfully, do not summarize it away."
+                " Example: a student asking about a course that qualifies for AP Calc"
+                " should see the note that non-AP Precalculus (not AP Precalculus) is"
+                " the course designed to prepare students for AP Calc AB/BC."
+                " (2) Include a brief reminder in your response that course availability,"
+                " prerequisites, and credit requirements can change, and the student's"
+                " counselor has the final say on their individual course plan and"
+                " eligibility — encourage them to confirm with their counselor before"
+                " making final course-selection decisions.]"
             )
             return (result, False)
         return ("Tool not found", False)
