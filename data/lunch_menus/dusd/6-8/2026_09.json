@@ -1,0 +1,124 @@
+{
+  "days": {
+    "Monday": [
+      {
+        "name": "Cheeseburger with Crispy Potatoes Wedges",
+        "allergens": [
+          "milk"
+        ]
+      },
+      {
+        "name": "Cheesy Breaded Ravioli with Marinara Sauce",
+        "allergens": [
+          "milk",
+          "wheat"
+        ]
+      }
+    ],
+    "Tuesday": [
+      {
+        "name": "Orange Chicken Rice Bowl with Spring Roll",
+        "allergens": [
+          "egg",
+          "milk",
+          "sesame",
+          "soy",
+          "wheat"
+        ]
+      },
+      {
+        "name": "Butter Paneer with basmati and naan bread",
+        "allergens": [
+          "milk",
+          "soy",
+          "wheat"
+        ]
+      }
+    ],
+    "Wednesday": [
+      {
+        "name": "Chicken Nuggets and WG Cookie",
+        "allergens": [
+          "egg",
+          "milk",
+          "soy",
+          "wheat"
+        ]
+      },
+      {
+        "name": "Vegan Nuggets and WG Cookie",
+        "allergens": [
+          "egg",
+          "milk",
+          "soy",
+          "wheat"
+        ]
+      }
+    ],
+    "Thursday": [
+      {
+        "name": "Tortellini Pasta with Beef Bolognese",
+        "allergens": [
+          "egg",
+          "milk",
+          "soy",
+          "wheat"
+        ]
+      },
+      {
+        "name": "Fruit & Yogurt Partfait",
+        "allergens": [
+          "milk",
+          "wheat"
+        ]
+      }
+    ],
+    "Friday": [
+      {
+        "name": "Beef Pepperoni Pizza Slice",
+        "allergens": [
+          "milk",
+          "soy",
+          "wheat"
+        ]
+      },
+      {
+        "name": "Cheese Pizza Slice",
+        "allergens": [
+          "milk",
+          "soy",
+          "wheat"
+        ]
+      }
+    ]
+  },
+  "daily_options": [
+    {
+      "name": "Spicy Chicken Sandwich",
+      "allergens": [
+        "sesame",
+        "soy",
+        "wheat"
+      ]
+    },
+    {
+      "name": "Grilled Cheese with Tomato Soup",
+      "allergens": [
+        "milk",
+        "soy",
+        "wheat"
+      ]
+    },
+    {
+      "name": "Sidekick",
+      "allergens": [
+        "milk",
+        "sesame",
+        "soy",
+        "wheat"
+      ]
+    }
+  ],
+  "period_label": "September 2026",
+  "peanut_tree_nut_free": true
+}

@@ -1,0 +1,12 @@
+{
+  "Monday": ["Spicy miso drumstick chicken (& Korean corn cheese)", "Black Bean Burger with Crispy Potatoes Wedges"],
+  "Tuesday": ["Warm Chicken wrap southwest flavor", "Tortellini with alfredo sauce, parmesan cheese and garlic bread"],
+  "Wednesday": ["Buffalo Bites with Crispy Potatoes Wedges", "Vegan Nuggets with Crispy Potatoes"],
+  "Thursday": ["Chicken Shawarma Wrap", "Cheesy Breaded Ravioli with Marinara Sauce"],
+  "Friday": ["Teriyaki Rice Bowl with Chicken", "Bean Cheese Quesadilla"],
+  "daily_options": ["Turkey Sandwich", "Garden Salad", "Caesar Salad", "Salad, Spicy Chicken", "Protein Box"],
+  "overrides": {
+    "Teriyaki Rice Bowl with Chicken": ["soy"],
+    "Cheesy Breaded Ravioli with Marinara Sauce": ["milk", "wheat"]
+  }
+}

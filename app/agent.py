@@ -11,6 +11,7 @@ from app import config
 from app.schools import SchoolConfig, get_school
 from app.services.clubs import get_club_list
 from app.services.course_catalog import get_course_catalog_section, get_department_names
+from app.services.lunch_menu import get_lunch_menu_text
 from app.services.scraper import WebsiteScraper
 from app.services.calendar import (
     get_upcoming_events,
@@ -271,6 +272,21 @@ class SchoolAgent:
                 },
             })
 
+        if school.lunch_menu_grade_band:
+            self.tools.append({
+                "name": "get_lunch_menu",
+                "description": (
+                    f"Get this month's {school.name} lunch menu, including every dish's listed "
+                    "allergens (from the standard 9: wheat, egg, soy, milk, sesame, fish, tree nut, "
+                    "peanut, shellfish). Use this for ANY question about what's for lunch, whether a "
+                    "specific dish or day is safe for an allergy, or what options avoid a given "
+                    "allergen. The menu repeats the same Monday-Friday pattern every week this month "
+                    "— 'today's lunch' and 'this Friday's lunch' both come from this same data, "
+                    "matched by weekday name, not a specific date."
+                ),
+                "input_schema": {"type": "object", "properties": {}},
+            })
+
         # Whichever tool ends up last carries the cache_control breakpoint —
         # Anthropic caches everything up to and including it, so the tools
         # block itself is cached regardless of which optional tools a given
@@ -511,6 +527,21 @@ CRITICAL RULES:
                 " making final course-selection decisions.]"
             )
             return (result, False)
+        if tool_name == "get_lunch_menu":
+            text = get_lunch_menu_text(self.school.district_id, self.school.lunch_menu_grade_band)
+            source_url = self.school.lunch_menu_url or self.school.website
+            result = f"SOURCE: {source_url}\n\n" + text
+            result += (
+                "\n\n[NOTE: When answering, re-check each dish's own parenthetical allergen list "
+                "above word-for-word before including or excluding it — do not rely on memory of "
+                "a dish's allergens from earlier in this response; a dish's status can be easy to "
+                "mix up with a similarly-named one when listing several at once. Always include a "
+                "reminder that menu info comes from the district, allergen lists may not be "
+                "complete or fully up to date, and cross-contamination is possible — for a severe "
+                "allergy, confirm directly with cafeteria/nutrition staff. Never state a dish is "
+                "\"safe\" — state only that a specific allergen isn't listed for it.]"
+            )
+            return (result, False)
         return ("Tool not found", False)
 
     def _is_feedback(self, message: str) -> str | None:
@@ -716,6 +747,8 @@ CRITICAL RULES:
                 capabilities.append("Club schedules, meeting times, and advisors")
             if "get_course_catalog" in tool_names:
                 capabilities.append("Course catalog: descriptions, prerequisites, credits, graduation requirements")
+            if "get_lunch_menu" in tool_names:
+                capabilities.append("Lunch menu and allergens")
             # These are get_school_information page groups (#116/#117), not
             # separate tools, so they're keyed off self.school.pages rather
             # than tool_names — each school's sitemap-discovery pass
