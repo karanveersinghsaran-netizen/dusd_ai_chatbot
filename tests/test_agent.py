@@ -309,6 +309,94 @@ def test_get_course_catalog_instructs_model_to_recommend_counselor_confirmation(
     assert "counselor" in result.lower()
 
 
+# ── get_lunch_menu (#68) ────────────────────────────────────────────────────
+
+def test_get_lunch_menu_tool_present_when_school_has_grade_band(dhs_agent):
+    assert "get_lunch_menu" in [t["name"] for t in dhs_agent.tools]
+
+
+def test_get_lunch_menu_tool_present_for_wells_too(agent):
+    """Unlike get_course_catalog (high-school only), the lunch menu tool
+    applies to both schools — each has its own grade-band data."""
+    assert "get_lunch_menu" in [t["name"] for t in agent.tools]
+
+
+def test_get_lunch_menu_tool_omitted_when_no_grade_band():
+    school = replace(get_school("wells"), lunch_menu_grade_band=None)
+    with patch("app.agent.anthropic.Anthropic"):
+        agent = SchoolAgent(
+            school=school,
+            redis_store=RedisStore(client=FakeRedisClient()),
+            postgres_store=MagicMock(),
+        )
+    assert "get_lunch_menu" not in [t["name"] for t in agent.tools]
+
+
+def test_get_lunch_menu_takes_no_parameters(dhs_agent):
+    """The whole week is compact enough to return in full every time —
+    no sub-topic param for the model to pick wrong and miss info with,
+    the failure class hit (and fixed) twice already this session for
+    get_school_information and get_course_catalog."""
+    tool = next(t for t in dhs_agent.tools if t["name"] == "get_lunch_menu")
+    assert tool["input_schema"]["properties"] == {}
+
+
+def test_get_lunch_menu_calls_service_with_district_and_grade_band(dhs_agent):
+    with patch("app.agent.get_lunch_menu_text", return_value="Monday: ...") as mock_fn:
+        result, attach_map = dhs_agent.process_tool_call("get_lunch_menu", {})
+
+    mock_fn.assert_called_once_with("dusd", "9-12")
+    assert "Monday: ..." in result
+    assert attach_map is False
+
+
+def test_get_lunch_menu_cites_lunch_menu_url(dhs_agent):
+    with patch("app.agent.get_lunch_menu_text", return_value="..."):
+        result, _ = dhs_agent.process_tool_call("get_lunch_menu", {})
+
+    assert "SOURCE: https://www.schoolnutritionandfitness.com/schools/dusd_2203112030183753/menus/HS_Menu_Sept_2026__.pdf" in result
+
+
+def test_get_lunch_menu_mentions_nutrition_url_when_set(dhs_agent):
+    """The nutrition PDF (per-ingredient allergen detail) isn't the formal
+    SOURCE line — the system prompt only allows one — but should still be
+    surfaced as an optional mention for a user who wants to verify allergen
+    info themselves."""
+    with patch("app.agent.get_lunch_menu_text", return_value="..."):
+        result, _ = dhs_agent.process_tool_call("get_lunch_menu", {})
+
+    assert "https://www.schoolnutritionandfitness.com/schools/dusd_2203112030183753/nutriinfo/9-12_Sept_2026_Nutrition.pdf.pdf" in result
+
+
+def test_get_lunch_menu_source_falls_back_to_website_when_unset():
+    """A school with lunch_menu_grade_band set but no lunch_menu_url must
+    still cite something usable, not crash or cite 'None'."""
+    school = replace(get_school("dhs"), lunch_menu_url=None)
+    with patch("app.agent.anthropic.Anthropic"):
+        agent = SchoolAgent(
+            school=school,
+            redis_store=RedisStore(client=FakeRedisClient()),
+            postgres_store=MagicMock(),
+        )
+
+    with patch("app.agent.get_lunch_menu_text", return_value="..."):
+        result, _ = agent.process_tool_call("get_lunch_menu", {})
+
+    assert f"SOURCE: {school.website}" in result
+
+
+def test_get_lunch_menu_instructs_model_to_add_safety_disclaimer(dhs_agent):
+    """Never let the model imply a dish is unconditionally "safe" — only
+    that a specific allergen isn't listed, with a reminder to confirm
+    severe allergies with cafeteria/nutrition staff directly (#68)."""
+    with patch("app.agent.get_lunch_menu_text", return_value="..."):
+        result, _ = dhs_agent.process_tool_call("get_lunch_menu", {})
+
+    assert "cross-contamination" in result.lower()
+    assert "safe" in result.lower()
+    assert "cafeteria" in result.lower() or "nutrition staff" in result.lower()
+
+
 def test_get_no_school_days_cites_the_instructional_calendar_pdf_not_the_events_page(dhs_agent):
     """The no-school-days tool must cite the district's board-approved
     calendar PDF (data/calendars/dusd/2026_27.json's source_url) — not the
@@ -546,17 +634,17 @@ def test_non_last_tools_have_no_cache_control(agent):
 
 def test_last_tool_has_cache_control_for_dhs(dhs_agent):
     """The cache_control breakpoint must land on whichever tool ends up last
-    (get_course_catalog, for DHS), regardless of which optional tools —
-    campus directions, club roster, course catalog — a given school has
-    registered."""
+    (get_lunch_menu, for DHS), regardless of which optional tools —
+    campus directions, club roster, course catalog, lunch menu — a given
+    school has registered."""
     last_tool = dhs_agent.tools[-1]
-    assert last_tool["name"] == "get_course_catalog"
+    assert last_tool["name"] == "get_lunch_menu"
     assert last_tool.get("cache_control") == {"type": "ephemeral", "ttl": "5m"}
 
 
 def test_last_tool_has_cache_control_without_campus_map(agent_without_campus_map):
     last_tool = agent_without_campus_map.tools[-1]
-    assert last_tool["name"] == "get_course_catalog"
+    assert last_tool["name"] == "get_lunch_menu"
     assert last_tool.get("cache_control") == {"type": "ephemeral", "ttl": "5m"}
 
 
@@ -709,7 +797,8 @@ def test_help_command_lists_only_this_schools_actual_capabilities(agent):
     """Wells has no clubs_sheet_url or has_course_catalog — /help must not
     claim capabilities this school doesn't actually have. Wells' own
     sitemap-discovery pass (#117) DID populate athletics/family/enrollment/
-    technology, so those are asserted present, not absent."""
+    technology, and its own lunch-menu grade band (#68), so those are
+    asserted present, not absent."""
     reply = agent.chat("help", user_id="u_help_wells")
 
     assert "Bell schedule" in reply.text
@@ -718,6 +807,7 @@ def test_help_command_lists_only_this_schools_actual_capabilities(agent):
     assert "Sports registration" in reply.text
     assert "enrollment" in reply.text
     assert "Student Google account" in reply.text
+    assert "Lunch menu" in reply.text
 
 
 def test_help_command_lists_dhs_full_capabilities(dhs_agent):
@@ -729,6 +819,7 @@ def test_help_command_lists_dhs_full_capabilities(dhs_agent):
     assert "Sports registration" in reply.text
     assert "enrollment" in reply.text
     assert "Student Google account" in reply.text
+    assert "Lunch menu" in reply.text
 
 
 def test_help_command_mentions_announcements_button(agent):
