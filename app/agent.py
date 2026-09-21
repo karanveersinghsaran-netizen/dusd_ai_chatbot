@@ -552,14 +552,19 @@ CRITICAL RULES:
                     "this is just an optional mention in your response text, not a second source line."
                 )
             result += (
-                "\n\n[NOTE: When answering, re-check each dish's own parenthetical allergen list "
-                "above word-for-word before including or excluding it — do not rely on memory of "
-                "a dish's allergens from earlier in this response; a dish's status can be easy to "
-                "mix up with a similarly-named one when listing several at once. Always include a "
-                "reminder that menu info comes from the district, allergen lists may not be "
-                "complete or fully up to date, and cross-contamination is possible — for a severe "
-                "allergy, confirm directly with cafeteria/nutrition staff. Never state a dish is "
-                "\"safe\" — state only that a specific allergen isn't listed for it."
+                "\n\n[NOTE: For ANY question that involves judging multiple dishes against an "
+                "allergen (e.g. 'what's dairy-free', 'does X have nuts'), you MUST show each dish's "
+                "full allergens list verbatim from above (e.g. '(allergens: egg, milk, soy, wheat)') "
+                "next to your verdict for it — do not just state a bare yes/no/✓/✗ conclusion without "
+                "the list, and do not summarize or abbreviate the list. A bare verdict with no quoted "
+                "list is exactly how a dish gets mismatched with the wrong verdict; showing the raw "
+                "list is what makes each verdict checkable and forces you to actually re-read it "
+                "rather than answer from a summary judgment. This applies to every dish you mention, "
+                "including ones you're excluding. Always include a reminder that menu info comes from "
+                "the district, allergen lists may not be complete or fully up to date, and "
+                "cross-contamination is possible — for a severe allergy, confirm directly with "
+                "cafeteria/nutrition staff. Never state a dish is \"safe\" — state only that a "
+                "specific allergen isn't listed for it."
                 f"{nutrition_note}]"
             )
             return (result, False)
