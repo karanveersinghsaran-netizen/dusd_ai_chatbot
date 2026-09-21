@@ -200,6 +200,19 @@ def test_get_club_list_cites_the_human_viewable_sheet_not_the_csv_export(dhs_age
     assert attach_map is False
 
 
+def test_get_club_list_instructs_model_not_to_claim_current_year(dhs_agent):
+    """The club roster is a spreadsheet the club coordinator updates by
+    hand, not something tied to the current school year automatically — a
+    real case found the sheet was still last year's with no current-year
+    tab published yet. The model must not assert/imply the roster is
+    confirmed current."""
+    with patch("app.agent.get_club_list", return_value="Student Clubs:\n- Chess Club"):
+        result, _ = dhs_agent.process_tool_call("get_club_list", {})
+
+    assert "confirmed current" in result.lower()
+    assert "previous year" in result.lower()
+
+
 def test_get_course_catalog_tool_present_when_school_has_catalog(dhs_agent):
     assert "get_course_catalog" in [t["name"] for t in dhs_agent.tools]
 
