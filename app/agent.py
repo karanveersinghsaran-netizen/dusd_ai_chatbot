@@ -225,10 +225,13 @@ class SchoolAgent:
             self.tools.append({
                 "name": "get_club_list",
                 "description": (
-                    f"Get the live roster of student clubs at {school.name}, including each club's "
+                    f"Get the roster of student clubs at {school.name}, including each club's "
                     "meeting day, time, room, and advisor. Use this for questions about a specific "
                     "club's schedule, meeting location, or advisor — more precise than "
-                    "get_school_information's general 'clubs' page for that kind of detail."
+                    "get_school_information's general 'clubs' page for that kind of detail. Kept in "
+                    "a spreadsheet the club coordinator updates directly, so it may lag behind the "
+                    "current school year if a new roster hasn't been published yet — flag that "
+                    "possibility rather than presenting it as certainly current."
                 ),
                 "input_schema": {"type": "object", "properties": {}},
             })
@@ -356,7 +359,7 @@ CRITICAL RULES:
 - ALWAYS call a tool before answering any factual question about the school — including follow-up questions. Do not rely on prior tool results already in the conversation; call the tool again.
 - Bell schedule and useful links above are hardcoded facts — you may answer those directly without calling a tool.
 - For ANY question about where a class, subject, or room is on campus, ALWAYS call get_campus_directions if it's available to you — never guess building names. If it isn't available, say you don't have campus map information for this school.
-- For ANY question about a specific club's meeting day, time, room, or advisor, ALWAYS call get_club_list if it's available to you instead of get_school_information — it has the current, precise roster; get_school_information's 'clubs' page group is only for general "what clubs exist" browsing. If get_club_list isn't available, fall back to get_school_information with page_group='clubs'.
+- For ANY question about a specific club's meeting day, time, room, or advisor, ALWAYS call get_club_list if it's available to you instead of get_school_information — it has the more precise roster; get_school_information's 'clubs' page group is only for general "what clubs exist" browsing. If get_club_list isn't available, fall back to get_school_information with page_group='clubs'.
 - If you cannot find an answer from the tools, say so clearly and suggest contacting the school directly
 - Be friendly, concise, and helpful
 - Always be respectful, kind, and supportive — many users are middle school or high school students. Never use sarcasm, dismissive language, or anything that could feel discouraging or embarrassing to a young student
@@ -487,7 +490,15 @@ CRITICAL RULES:
             # Cite the human-viewable sheet, not the raw CSV export endpoint
             # actually fetched — clicking a CSV download link isn't useful.
             sheet_url = self.school.clubs_sheet_url.replace("export?format=csv&gid=", "edit?gid=")
-            return (f"SOURCE: {sheet_url}\n\n" + get_club_list(self.school.clubs_sheet_url), False)
+            result = f"SOURCE: {sheet_url}\n\n" + get_club_list(self.school.clubs_sheet_url)
+            result += (
+                "\n\n[NOTE: This roster is a spreadsheet the club coordinator updates directly, not "
+                "something tied to the current school year automatically — it may reflect a previous "
+                "year's clubs/advisors if a new roster hasn't been published yet. Don't state or imply "
+                "this list is confirmed current for this school year; if the user needs certainty, "
+                "suggest confirming with the club or front office.]"
+            )
+            return (result, False)
         if tool_name == "get_course_catalog":
             department = tool_input.get("department")
             section = get_course_catalog_section(self.school.district_id, department)
