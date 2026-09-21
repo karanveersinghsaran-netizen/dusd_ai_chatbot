@@ -53,10 +53,20 @@ class SchoolConfig:
     # the data (same "presence gates it" shape as campus_map_file/
     # clubs_sheet_url) since the grade-band value itself is what's needed.
     lunch_menu_grade_band: Optional[str] = None
-    # Where the district's lunch menu portal is published — cited as the
-    # SOURCE for lunch-menu questions, same reasoning as bell_schedule_url/
-    # course_catalog_url. Falls back to school.website if unset.
+    # The specific PDF the current month's data/lunch_menus/*/*.json entry
+    # was parsed from — cited as the SOURCE for lunch-menu questions (a
+    # direct link to the actual document, not just the district's generic
+    # menus portal), same reasoning as bell_schedule_url/course_catalog_url.
+    # Falls back to school.website if unset. Points at a specific month's
+    # filename, so update it alongside re-running
+    # scripts/parse_lunch_menu.py each month — same maintenance cadence as
+    # the data refresh itself, not extra work.
     lunch_menu_url: Optional[str] = None
+    # The nutrition PDF (per-ingredient allergen detail) that
+    # lunch_menu_url's calendar PDF doesn't itself show — offered as a
+    # secondary, more detailed source when a user wants to verify allergen
+    # info themselves. Same monthly-update cadence as lunch_menu_url.
+    lunch_menu_nutrition_url: Optional[str] = None
     # Per-school branding (#52). All optional so a school.json that predates
     # theming still loads — callers fall back to the neutral blue theme when
     # these are absent. logo_url is None for both current schools (no real
@@ -105,6 +115,7 @@ def _load_school(school_dir: Path) -> SchoolConfig:
         course_catalog_url=raw.get("course_catalog_url"),
         lunch_menu_grade_band=raw.get("lunch_menu_grade_band"),
         lunch_menu_url=raw.get("lunch_menu_url"),
+        lunch_menu_nutrition_url=raw.get("lunch_menu_nutrition_url"),
         theme_color=raw.get("theme_color"),
         primary_bubble_color=raw.get("primary_bubble_color"),
         background_tint=raw.get("background_tint"),

@@ -72,7 +72,7 @@ def _extract_dish_allergens(pdf_path: Path) -> Dict[str, Set[str]]:
     implausibly small/empty allergen set, or a neighboring dish with
     allergens that don't match its own ingredients, is the tell. Verified
     and hand-corrected for the initial September 2026 data; see
-    scripts/lunch_menu_day_maps/ for the specific corrections."""
+    scripts/lunch_menu_day_maps/README.md for the specific corrections."""
     segments: List[List[list]] = []
     for page in fitz.open(pdf_path):
         for table in page.find_tables().tables:

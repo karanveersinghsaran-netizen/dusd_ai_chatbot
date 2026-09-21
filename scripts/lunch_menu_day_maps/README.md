@@ -4,6 +4,14 @@ month's calendar PDF (schoolnutritionandfitness.com) when the district
 publishes a new one — a few minutes of work, same shape as
 `scripts/parse_course_catalog.py`'s `DEPARTMENT_HEADINGS`.
 
+**Not committed** (`.gitignore`'d) — everything durable from a given
+month's day-map already lives in the parser's output
+(`data/lunch_menus/<district_id>/<grade_band>/<YYYY_MM>.json`), including
+the day->dish structure itself. The one thing a day-map captures that
+isn't reconstructable from that output — *why* a manual override was
+needed — is written up below instead, so nothing is lost by not keeping
+the day-map file itself around past the run that used it.
+
 ## September 2026 manual overrides
 
 Both files' `"overrides"` keys correct the same underlying issue: at a page

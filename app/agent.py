@@ -531,6 +531,14 @@ CRITICAL RULES:
             text = get_lunch_menu_text(self.school.district_id, self.school.lunch_menu_grade_band)
             source_url = self.school.lunch_menu_url or self.school.website
             result = f"SOURCE: {source_url}\n\n" + text
+            nutrition_note = ""
+            if self.school.lunch_menu_nutrition_url:
+                nutrition_note = (
+                    " If the user wants to verify allergen/ingredient detail themselves, you may "
+                    f"also mention the full nutrition document: {self.school.lunch_menu_nutrition_url} "
+                    "— but the SOURCE line above stays the one 📍 Source link per the formatting rule; "
+                    "this is just an optional mention in your response text, not a second source line."
+                )
             result += (
                 "\n\n[NOTE: When answering, re-check each dish's own parenthetical allergen list "
                 "above word-for-word before including or excluding it — do not rely on memory of "
@@ -539,7 +547,8 @@ CRITICAL RULES:
                 "reminder that menu info comes from the district, allergen lists may not be "
                 "complete or fully up to date, and cross-contamination is possible — for a severe "
                 "allergy, confirm directly with cafeteria/nutrition staff. Never state a dish is "
-                "\"safe\" — state only that a specific allergen isn't listed for it.]"
+                "\"safe\" — state only that a specific allergen isn't listed for it."
+                f"{nutrition_note}]"
             )
             return (result, False)
         return ("Tool not found", False)

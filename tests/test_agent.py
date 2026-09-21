@@ -341,7 +341,18 @@ def test_get_lunch_menu_cites_lunch_menu_url(dhs_agent):
     with patch("app.agent.get_lunch_menu_text", return_value="..."):
         result, _ = dhs_agent.process_tool_call("get_lunch_menu", {})
 
-    assert "SOURCE: https://www.schoolnutritionandfitness.com/index.php?sid=2203112030183753&page=menus" in result
+    assert "SOURCE: https://www.schoolnutritionandfitness.com/schools/dusd_2203112030183753/menus/HS_Menu_Sept_2026__.pdf" in result
+
+
+def test_get_lunch_menu_mentions_nutrition_url_when_set(dhs_agent):
+    """The nutrition PDF (per-ingredient allergen detail) isn't the formal
+    SOURCE line — the system prompt only allows one — but should still be
+    surfaced as an optional mention for a user who wants to verify allergen
+    info themselves."""
+    with patch("app.agent.get_lunch_menu_text", return_value="..."):
+        result, _ = dhs_agent.process_tool_call("get_lunch_menu", {})
+
+    assert "https://www.schoolnutritionandfitness.com/schools/dusd_2203112030183753/nutriinfo/9-12_Sept_2026_Nutrition.pdf.pdf" in result
 
 
 def test_get_lunch_menu_source_falls_back_to_website_when_unset():
