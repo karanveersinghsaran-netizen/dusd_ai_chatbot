@@ -67,3 +67,10 @@ infra/**/*.auto.tfvars
 # Modules get their own ephemeral lock files during CI validate runs; only
 # root modules (envs/*) carry the canonical lock we all init against.
 infra/modules/**/.terraform.lock.hcl
+
+# Lunch-menu day-maps (scripts/parse_lunch_menu.py --day-map input) are
+# hand-written scratch files a human recreates fresh each month from that
+# month's calendar PDF — the final parsed output in data/lunch_menus/
+# already carries everything durable (including manual overrides, which
+# are documented in scripts/lunch_menu_day_maps/README.md instead).
+scripts/lunch_menu_day_maps/*.json

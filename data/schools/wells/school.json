@@ -12,6 +12,9 @@
   "donation_url": "https://www.paypal.com/donate/?hosted_button_id=A7XCLC68BRATW",
   "campus_map_file": "campus_map.json",
   "bell_schedule_url": "https://drive.google.com/file/d/1ylPRVuaMTKY0Y9_iyOqpC0nkVpmH6ZWN/view",
+  "lunch_menu_grade_band": "6-8",
+  "lunch_menu_url": "https://www.schoolnutritionandfitness.com/schools/dusd_2203112030183753/menus/6-8_Menu_Sept_2026.pdf",
+  "lunch_menu_nutrition_url": "https://www.schoolnutritionandfitness.com/schools/dusd_2203112030183753/nutriinfo/6-8_Sept_2026_Nutrition.pdf.pdf",
 
   "theme_color": "#00695c",
   "primary_bubble_color": "#00695c",
