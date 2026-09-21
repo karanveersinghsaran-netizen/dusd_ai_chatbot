@@ -1,0 +1,145 @@
+{
+  "days": {
+    "Monday": [
+      {
+        "name": "Spicy miso drumstick chicken (& Korean corn cheese)",
+        "allergens": [
+          "egg",
+          "milk",
+          "soy",
+          "wheat"
+        ]
+      },
+      {
+        "name": "Black Bean Burger with Crispy Potatoes Wedges",
+        "allergens": [
+          "egg",
+          "milk",
+          "sesame",
+          "soy",
+          "wheat"
+        ]
+      }
+    ],
+    "Tuesday": [
+      {
+        "name": "Warm Chicken wrap southwest flavor",
+        "allergens": [
+          "egg",
+          "milk",
+          "soy",
+          "wheat"
+        ]
+      },
+      {
+        "name": "Tortellini with alfredo sauce, parmesan cheese and garlic bread",
+        "allergens": [
+          "egg",
+          "milk",
+          "wheat"
+        ]
+      }
+    ],
+    "Wednesday": [
+      {
+        "name": "Buffalo Bites with Crispy Potatoes Wedges",
+        "allergens": [
+          "milk",
+          "soy",
+          "wheat"
+        ]
+      },
+      {
+        "name": "Vegan Nuggets with Crispy Potatoes",
+        "allergens": [
+          "milk",
+          "soy",
+          "wheat"
+        ]
+      }
+    ],
+    "Thursday": [
+      {
+        "name": "Chicken Shawarma Wrap",
+        "allergens": [
+          "milk",
+          "sesame",
+          "soy",
+          "wheat"
+        ]
+      },
+      {
+        "name": "Cheesy Breaded Ravioli with Marinara Sauce",
+        "allergens": [
+          "milk",
+          "wheat"
+        ]
+      }
+    ],
+    "Friday": [
+      {
+        "name": "Teriyaki Rice Bowl with Chicken",
+        "allergens": [
+          "soy"
+        ]
+      },
+      {
+        "name": "Bean Cheese Quesadilla",
+        "allergens": [
+          "milk",
+          "soy",
+          "wheat"
+        ]
+      }
+    ]
+  },
+  "daily_options": [
+    {
+      "name": "Turkey Sandwich",
+      "allergens": [
+        "egg",
+        "milk",
+        "wheat"
+      ]
+    },
+    {
+      "name": "Garden Salad",
+      "allergens": [
+        "egg",
+        "fish",
+        "milk",
+        "wheat"
+      ]
+    },
+    {
+      "name": "Caesar Salad",
+      "allergens": [
+        "egg",
+        "fish",
+        "milk",
+        "wheat"
+      ]
+    },
+    {
+      "name": "Salad, Spicy Chicken",
+      "allergens": [
+        "egg",
+        "fish",
+        "milk",
+        "wheat"
+      ]
+    },
+    {
+      "name": "Protein Box",
+      "allergens": [
+        "egg",
+        "milk",
+        "sesame",
+        "soy",
+        "wheat"
+      ]
+    }
+  ],
+  "period_label": "September 2026",
+  "peanut_tree_nut_free": true
+}
