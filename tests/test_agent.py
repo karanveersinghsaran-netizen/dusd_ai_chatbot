@@ -72,6 +72,32 @@ def test_system_prompt_allows_markdown(agent):
     assert "**bold**" in agent._system_prompt
 
 
+def test_system_prompt_guards_yesno_contradiction_beyond_just_school_day(agent):
+    """PR #132 added a rule against opening with 'Yes/No' before checking
+    tool data, but scoped it to 'is there school on a given day' — leaving
+    the same failure pattern open for other day-shaped yes/no questions
+    like 'is tomorrow a Grady day?', 'is Friday a minimum day?', etc.
+    A real production reply was seen with 'No, tomorrow is not a Grady
+    Day. Tomorrow is Wednesday, September 23, 2026, which is a Grady Day'
+    — an outright self-contradiction. This test guards the generalized
+    rule so a future refactor doesn't narrow the scope back to school-day
+    only."""
+    prompt = agent._system_prompt
+    # Original school-day case is still called out (not removed).
+    assert "is there school tomorrow" in prompt
+    # Grady day is named explicitly so anyone reading the rule sees the
+    # broader intent, not just school days.
+    assert "Grady day" in prompt
+    # The rule explicitly generalizes to "ANY yes/no question" not "a
+    # yes/no question" — that word matters, it's the load-bearing scope
+    # widener.
+    assert "ANY yes/no question" in prompt
+    # The exact real-production string that triggered this fix is quoted
+    # in the rule so a future maintainer knows what the wording is
+    # defending against — deleting the quote should require a good reason.
+    assert "which IS a Grady Day" in prompt
+
+
 def test_chat_uses_system_prompt(agent):
     agent.client.beta.messages.create.return_value = _text_response("Answer")
 
