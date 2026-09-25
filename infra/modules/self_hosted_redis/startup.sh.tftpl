@@ -1,0 +1,123 @@
+#!/bin/bash
+set -euo pipefail
+
+# ── Idempotency: this script runs on every boot, but we only want the
+# heavy install work to happen the first time.
+if [ -f /var/lib/wms-chatbot-redis-installed ]; then
+  systemctl restart redis-server
+  systemctl restart redis-snapshot.timer || true
+  exit 0
+fi
+
+export DEBIAN_FRONTEND=noninteractive
+
+# ── Base packages ──────────────────────────────────────────────────────────
+apt-get update
+apt-get install -y redis-server google-cloud-cli
+
+# ── Redis configuration ────────────────────────────────────────────────────
+# - bind 0.0.0.0 is safe here: the only IPs that can reach us are the VPC
+#   connector's /28, enforced by the firewall rule. Redis is unreachable from
+#   the public internet.
+# - protected-mode off is required alongside bind 0.0.0.0 with no AUTH; the
+#   firewall is the real access control.
+# - RDB (save 300 1) + AOF (appendonly yes) both on: RDB gives cheap point-in-
+#   time snapshots for the GCS backup path, AOF gives durability between
+#   snapshots so a VM crash loses at most a second of writes.
+# - maxmemory + allkeys-lru: on a 1 GB VM we cap Redis at ${redis_maxmemory}
+#   and evict the oldest keys under memory pressure. Given actual usage is
+#   ~5 MB, this is defense-in-depth against a runaway leak, not a
+#   day-to-day limit.
+mkdir -p /var/redis
+chown redis:redis /var/redis
+
+cat >/etc/redis/redis.conf <<EOF
+bind 0.0.0.0 -::*
+protected-mode no
+port 6379
+maxmemory ${redis_maxmemory}
+maxmemory-policy allkeys-lru
+dir /var/redis
+dbfilename dump.rdb
+save 300 1
+save 60 100
+appendonly yes
+appendfilename appendonly.aof
+supervised systemd
+loglevel notice
+logfile /var/log/redis/redis-server.log
+EOF
+
+systemctl enable redis-server
+systemctl restart redis-server
+
+# ── GCS snapshot timer ─────────────────────────────────────────────────────
+# Every ${snapshot_interval}: BGSAVE inside Redis (non-blocking snapshot),
+# wait for it to finish, copy /var/redis/dump.rdb to GCS with a timestamp,
+# then prune to the ${snapshot_retention_count} most recent.
+cat >/usr/local/bin/wms-redis-snapshot.sh <<'SNAPSHOT_EOF'
+#!/bin/bash
+set -euo pipefail
+BUCKET="${gcs_bucket}"
+RETENTION=${snapshot_retention_count}
+
+redis-cli BGSAVE >/dev/null
+# Wait for the background save to finish (rdb_bgsave_in_progress:0 in INFO).
+for _ in $(seq 1 30); do
+  if [ "$(redis-cli INFO persistence | tr -d '\r' | awk -F: '/rdb_bgsave_in_progress/ {print $2}')" = "0" ]; then
+    break
+  fi
+  sleep 1
+done
+
+DATE=$(date -u +%Y-%m-%d-%H%M%S)
+gsutil -q cp /var/redis/dump.rdb "gs://$${BUCKET}/dump-$${DATE}.rdb"
+
+# Retention: list, sort by name (timestamp-embedded), keep the newest N.
+mapfile -t OLD < <(gsutil ls "gs://$${BUCKET}/dump-*.rdb" 2>/dev/null | sort | head -n -"$${RETENTION}")
+if [ "$${#OLD[@]}" -gt 0 ]; then
+  gsutil -q rm "$${OLD[@]}"
+fi
+SNAPSHOT_EOF
+
+# Substitute Terraform variables into the snapshot script, then make it
+# executable. `sed` here because the bash heredoc above uses 'SNAPSHOT_EOF'
+# (quoted) to prevent bash expansion, so Terraform placeholders survive.
+sed -i "s|\$${BUCKET}|${gcs_bucket}|g; s|\$${RETENTION}|${snapshot_retention_count}|g" /usr/local/bin/wms-redis-snapshot.sh
+chmod +x /usr/local/bin/wms-redis-snapshot.sh
+
+cat >/etc/systemd/system/wms-redis-snapshot.service <<EOF
+[Unit]
+Description=Snapshot Redis dump.rdb to GCS
+Wants=redis-server.service
+After=redis-server.service network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/wms-redis-snapshot.sh
+EOF
+
+cat >/etc/systemd/system/wms-redis-snapshot.timer <<EOF
+[Unit]
+Description=Run wms-redis-snapshot every ${snapshot_interval}
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=${snapshot_interval}
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now wms-redis-snapshot.timer
+
+# ── Google Cloud Ops Agent ─────────────────────────────────────────────────
+# Ships VM metrics (CPU, memory, disk, uptime) + system logs to Cloud
+# Monitoring / Logging so the existing monitoring module can chart them and
+# alert on them.
+curl -sSO https://dl.google.com/cloudagents/add-google-cloud-ops-agent-repo.sh
+bash add-google-cloud-ops-agent-repo.sh --also-install --version=latest
+
+touch /var/lib/wms-chatbot-redis-installed

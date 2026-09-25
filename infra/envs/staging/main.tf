@@ -19,6 +19,9 @@ resource "google_project_service" "required" {
     "redis.googleapis.com",
     "monitoring.googleapis.com",
     "logging.googleapis.com",
+    # storage.googleapis.com powers the GCS bucket that receives the
+    # self-hosted Redis VM's periodic RDB snapshots.
+    "storage.googleapis.com",
   ])
   project            = var.project_id
   service            = each.value
@@ -72,6 +75,27 @@ module "redis" {
 
   # MemoryStore PRIVATE_SERVICE_ACCESS reuses the same VPC peering Cloud SQL
   # relies on — depend on module.network so the peering is up first.
+  depends_on = [
+    google_project_service.required,
+    module.network,
+  ]
+}
+
+# Self-hosted Redis on a Compute Engine e2-micro VM. Stands up ALONGSIDE the
+# managed MemoryStore instance above for now — nothing consumes its
+# redis_url yet. Cutover happens in a follow-up PR (dump MemoryStore RDB,
+# import to VM, rotate REDIS_URL secret, redeploy). After the cutover
+# stabilizes, module.redis (MemoryStore) is removed to actually drop the
+# ~$30/mo bill.
+module "self_hosted_redis" {
+  source = "../../modules/self_hosted_redis"
+
+  project_id     = var.project_id
+  region         = var.region
+  network_id     = module.network.network_id
+  subnetwork_id  = module.network.primary_subnet_id
+  connector_cidr = module.network.connector_cidr
+
   depends_on = [
     google_project_service.required,
     module.network,
