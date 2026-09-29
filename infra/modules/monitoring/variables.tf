@@ -23,6 +23,12 @@ variable "redis_instance_id" {
   type        = string
 }
 
+variable "self_hosted_redis_vm_name" {
+  description = "Compute Engine VM name running self-hosted Redis. Empty string skips creating the VM-uptime alert (module still works standalone). When set, an alert fires if the VM's uptime metric stops reporting for 5 min — covers VM crash, GCE maintenance reboot, and Ops Agent failure."
+  type        = string
+  default     = ""
+}
+
 variable "alert_email" {
   description = "Email address that receives alert notifications. If empty, alert policies are still created but no notification channel is attached, so alerts silently fire until an operator adds a channel via the console. Set to an operator's email to get 5xx/latency/DB pages."
   type        = string

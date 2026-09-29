@@ -203,6 +203,42 @@ resource "google_monitoring_alert_policy" "cloud_sql_cpu" {
   }
 }
 
+resource "google_monitoring_alert_policy" "self_hosted_redis_vm_up" {
+  # Only created when the self-hosted VM is deployed — module stays usable
+  # without it. Uses metric-absence rather than a Cloud Monitoring uptime
+  # check because the VM has no public IP; external uptime checkers can't
+  # reach it. Ops Agent (installed by the VM's startup script) reports the
+  # instance-uptime metric every ~60s, so a 5-minute gap is a real signal:
+  # either the VM crashed, GCE rebooted it for maintenance, or the Ops
+  # Agent itself stopped shipping metrics.
+  count        = var.self_hosted_redis_vm_name != "" ? 1 : 0
+  project      = var.project_id
+  display_name = "wms-chatbot redis VM: unreachable / down"
+  combiner     = "OR"
+
+  documentation {
+    content   = "The self-hosted Redis VM (${var.self_hosted_redis_vm_name}) hasn't reported its uptime metric for 5 minutes. Most likely cause: the VM rebooted, crashed, or the Google Cloud Ops Agent stopped shipping data. `gcloud compute instances describe ${var.self_hosted_redis_vm_name} --zone=<zone>` will show whether the VM is RUNNING. If it is, SSH via IAP and check `sudo systemctl status redis-server google-cloud-ops-agent`."
+    mime_type = "text/markdown"
+  }
+
+  conditions {
+    display_name = "VM uptime metric absent > 5m"
+    condition_absent {
+      filter   = "resource.type=\"gce_instance\" AND metric.type=\"compute.googleapis.com/instance/uptime\" AND metric.labels.instance_name=\"${var.self_hosted_redis_vm_name}\""
+      duration = "300s"
+      aggregations {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_MEAN"
+      }
+    }
+  }
+
+  notification_channels = local.notification_channels
+  alert_strategy {
+    auto_close = "1800s"
+  }
+}
+
 resource "google_monitoring_alert_policy" "redis_memory" {
   project      = var.project_id
   display_name = "wms-chatbot redis: memory > 80%"

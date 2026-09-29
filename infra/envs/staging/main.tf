@@ -151,12 +151,13 @@ module "secrets" {
 module "monitoring" {
   source = "../../modules/monitoring"
 
-  project_id            = var.project_id
-  region                = var.region
-  service_name          = var.service_name
-  cloud_sql_instance_id = module.cloud_sql.instance_name
-  redis_instance_id     = module.redis.instance_name
-  alert_email           = var.alert_email
+  project_id                = var.project_id
+  region                    = var.region
+  service_name              = var.service_name
+  cloud_sql_instance_id     = module.cloud_sql.instance_name
+  redis_instance_id         = module.redis.instance_name
+  self_hosted_redis_vm_name = module.self_hosted_redis.instance_name
+  alert_email               = var.alert_email
 
   # Monitoring depends on the resources it's monitoring, otherwise a fresh
   # apply can create alert policies before Cloud SQL / Redis exist — the
