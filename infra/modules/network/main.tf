@@ -58,6 +58,35 @@ resource "google_project_iam_member" "cloud_run_vpc_user" {
   member  = "serviceAccount:service-${data.google_project.current.number}@serverless-robot-prod.iam.gserviceaccount.com"
 }
 
+# Cloud Router + Cloud NAT — gives private VMs (self-hosted Redis) internet
+# egress without assigning them public IPs, so `apt-get install` and other
+# outbound calls work even though the VM has no external IP. Cost: ~$1-2/mo
+# (NAT gateway per-hour + processed bytes; our egress is tiny).
+#
+# Google APIs (Secret Manager, GCS, Cloud Monitoring, Logging) still go
+# through Private Google Access on the subnet — NAT is only used for
+# non-Google destinations like deb.debian.org, dl.google.com/cloudagents, etc.
+resource "google_compute_router" "nat" {
+  project = var.project_id
+  name    = "${var.network_name}-router"
+  region  = var.region
+  network = google_compute_network.vpc.id
+}
+
+resource "google_compute_router_nat" "nat" {
+  project                            = var.project_id
+  name                               = "${var.network_name}-nat"
+  router                             = google_compute_router.nat.name
+  region                             = var.region
+  nat_ip_allocate_option             = "AUTO_ONLY"
+  source_subnetwork_ip_ranges_to_nat = "ALL_SUBNETWORKS_ALL_IP_RANGES"
+
+  log_config {
+    enable = false
+    filter = "ERRORS_ONLY"
+  }
+}
+
 # Serverless VPC Access connector — the bridge that lets Cloud Run reach
 # resources on the VPC (Cloud SQL private IP, MemoryStore).
 resource "google_vpc_access_connector" "connector" {
