@@ -130,6 +130,29 @@ resource "google_compute_firewall" "redis_from_connector" {
   }
 }
 
+# IAP TCP tunnel SSH — Cloud Identity-Aware Proxy relays SSH connections
+# through this range (documented at cloud.google.com/iap/docs/using-tcp-forwarding).
+# Without this rule our custom VPC's implicit deny blocks SSH via IAP, and
+# since the VM has no public IP there's no other way to reach :22 for
+# operational tasks (checking systemd status, restoring from a snapshot,
+# rotating passwords). Access is still IAM-gated on Google's side — the
+# person SSHing needs roles/iap.tunnelResourceAccessor + compute.instanceAdmin
+# regardless of this network rule.
+resource "google_compute_firewall" "iap_ssh" {
+  project = var.project_id
+  name    = "${var.instance_name}-iap-ssh"
+  network = var.network_id
+
+  direction     = "INGRESS"
+  source_ranges = ["35.235.240.0/20"]
+  target_tags   = ["${var.instance_name}-redis"]
+
+  allow {
+    protocol = "tcp"
+    ports    = ["22"]
+  }
+}
+
 # ── The VM itself ──────────────────────────────────────────────────────────
 resource "google_compute_instance" "redis" {
   project      = var.project_id
