@@ -8,6 +8,16 @@ output "network_name" {
   value       = google_compute_network.vpc.name
 }
 
+output "primary_subnet_id" {
+  description = "Full resource ID of the primary subnet — used by Compute Engine VMs (self-hosted Redis) that need a subnet to attach a NIC to."
+  value       = google_compute_subnetwork.primary.id
+}
+
+output "connector_cidr" {
+  description = "CIDR of the Serverless VPC access connector. Firewall rules that need to accept Cloud Run traffic (self-hosted Redis) source-match on this range."
+  value       = var.connector_cidr
+}
+
 output "vpc_connector_id" {
   description = "ID of the Serverless VPC Access connector — consumed by Cloud Run."
   value       = google_vpc_access_connector.connector.id

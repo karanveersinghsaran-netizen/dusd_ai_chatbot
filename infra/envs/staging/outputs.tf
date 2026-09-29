@@ -43,6 +43,17 @@ output "redis_host" {
   value       = module.redis.host
 }
 
+output "self_hosted_redis_url" {
+  description = "REDIS_URL for the self-hosted VM. Present alongside the MemoryStore output during migration; consumers still read redis_host until cutover. Sensitive because it embeds the AUTH password."
+  value       = module.self_hosted_redis.redis_url
+  sensitive   = true
+}
+
+output "self_hosted_redis_snapshot_bucket" {
+  description = "GCS bucket that receives RDB snapshots from the self-hosted Redis VM."
+  value       = module.self_hosted_redis.snapshot_bucket
+}
+
 output "vpc_network_name" {
   description = "Custom VPC network name."
   value       = module.network.network_name
