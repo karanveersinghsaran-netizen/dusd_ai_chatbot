@@ -44,8 +44,9 @@ output "redis_host" {
 }
 
 output "self_hosted_redis_url" {
-  description = "REDIS_URL for the self-hosted VM. Present alongside the MemoryStore output during migration; consumers still read redis_host until cutover."
+  description = "REDIS_URL for the self-hosted VM. Present alongside the MemoryStore output during migration; consumers still read redis_host until cutover. Sensitive because it embeds the AUTH password."
   value       = module.self_hosted_redis.redis_url
+  sensitive   = true
 }
 
 output "self_hosted_redis_snapshot_bucket" {
