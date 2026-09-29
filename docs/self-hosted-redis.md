@@ -34,8 +34,26 @@ for durability. Motivation: our actual Redis usage is <5 MB of ~63 keys with
 ```
 
 Only the Cloud Run VPC access connector's `/28` can reach the VM on `:6379`
-(firewall rule). The VM has no external IP. Redis has no AUTH — the
-firewall + private VPC + no-public-IP combination is the security perimeter.
+(firewall rule). The VM has no external IP. Redis also has a randomly
+generated AUTH password (stored in Secret Manager as
+`wms-chatbot-redis-password`, fetched by the VM on every boot) so
+network-level ACL failures don't hand out unauthenticated access.
+
+### Rotating the password
+
+```bash
+# Generate a new 32-char password and add it as a new secret version:
+PROJECT=wms-chatbot-staging
+NEW=$(python3 -c "import secrets, string; print(''.join(secrets.choice(string.ascii_letters+string.digits) for _ in range(32)))")
+echo -n "$NEW" | gcloud secrets versions add wms-chatbot-redis-password --data-file=- --project=$PROJECT
+
+# Reboot the VM so its startup script re-fetches the new password:
+gcloud compute instances reset wms-chatbot-redis --zone=us-west1-a --project=$PROJECT
+
+# Update REDIS_URL wherever consumers store it (Cloud Run secret) — this
+# module's redis_url output includes the password, so `make deploy` after
+# `make apply` propagates it end-to-end.
+```
 
 ## Managing the VM
 
@@ -65,11 +83,14 @@ gcloud compute ssh wms-chatbot-redis \
 Once in:
 
 ```bash
-# Check Redis
+# Fetch the password (VM's SA can read the secret):
+PASS=$(gcloud secrets versions access latest --secret=wms-chatbot-redis-password --project=wms-chatbot-staging)
+
+# Check Redis (all redis-cli calls need -a "$PASS")
 sudo systemctl status redis-server
-redis-cli INFO server | head
-redis-cli DBSIZE
-redis-cli MEMORY STATS | head -20
+redis-cli -a "$PASS" --no-auth-warning INFO server | head
+redis-cli -a "$PASS" --no-auth-warning DBSIZE
+redis-cli -a "$PASS" --no-auth-warning MEMORY STATS | head -20
 
 # Check snapshot timer
 sudo systemctl status wms-redis-snapshot.timer

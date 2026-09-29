@@ -10,6 +10,38 @@
 # consumer wires REDIS_URL from this module's `redis_url` output the same
 # way it did before.
 
+# ── Redis AUTH password ────────────────────────────────────────────────────
+# Defense-in-depth on top of the VPC + firewall. Randomly generated once,
+# lives in Secret Manager; the VM fetches it at every boot so a password
+# rotation is "add new secret version, reboot VM, rotate REDIS_URL secret,
+# make deploy". Never in metadata (invisible to compute.instances.get) and
+# never in the startup script text (invisible to instance-view).
+resource "random_password" "redis" {
+  length  = 32
+  special = false # Redis handles it fine, but URL-encoding + shell-escaping trip on ! $ etc — alphanumeric is safer for the redis://:pass@host URL form.
+}
+
+resource "google_secret_manager_secret" "redis_password" {
+  project   = var.project_id
+  secret_id = "${var.instance_name}-password"
+
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "redis_password" {
+  secret      = google_secret_manager_secret.redis_password.id
+  secret_data = random_password.redis.result
+}
+
+resource "google_secret_manager_secret_iam_member" "vm_reads_password" {
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.redis_password.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.vm.email}"
+}
+
 # ── GCS bucket for periodic RDB snapshots ──────────────────────────────────
 # Random suffix so a make destroy-all + reapply doesn't collide with a
 # still-being-deleted bucket (GCS bucket names have a soft delete window).
@@ -132,6 +164,8 @@ resource "google_compute_instance" "redis" {
     gcs_bucket               = google_storage_bucket.snapshots.name
     snapshot_interval        = var.snapshot_interval
     snapshot_retention_count = var.snapshot_retention_count
+    project_id               = var.project_id
+    password_secret_id       = google_secret_manager_secret.redis_password.secret_id
   })
 
   # If we ever want to swap machine types, the disk (and its data) should
@@ -155,5 +189,7 @@ resource "google_compute_instance" "redis" {
     google_storage_bucket_iam_member.vm_snapshot_writer,
     google_project_iam_member.vm_metrics_writer,
     google_project_iam_member.vm_logs_writer,
+    google_secret_manager_secret_iam_member.vm_reads_password,
+    google_secret_manager_secret_version.redis_password,
   ]
 }

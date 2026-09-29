@@ -9,8 +9,14 @@ output "port" {
 }
 
 output "redis_url" {
-  description = "Assembled redis:// URL for REDIS_URL env var. Same shape as the MemoryStore module's output so the Cloud Run wiring is a one-line swap."
-  value       = "redis://${google_compute_address.redis.address}:6379/0"
+  description = "Assembled redis:// URL for REDIS_URL env var, including the AUTH password. Same shape as the MemoryStore module's output so the Cloud Run wiring is a one-line swap. Sensitive because it embeds the password — Cloud Run env vars carry it, same pattern as DATABASE_URL."
+  value       = "redis://:${random_password.redis.result}@${google_compute_address.redis.address}:6379/0"
+  sensitive   = true
+}
+
+output "password_secret_id" {
+  description = "Secret Manager ID storing the Redis AUTH password. Useful for consumers that want to read the password directly (secret_env_vars) rather than through the pre-assembled redis_url."
+  value       = google_secret_manager_secret.redis_password.secret_id
 }
 
 output "instance_name" {
