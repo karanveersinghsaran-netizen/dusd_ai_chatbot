@@ -14,9 +14,13 @@ MARKER=/var/lib/wms-chatbot-redis-installed
 export DEBIAN_FRONTEND=noninteractive
 
 # ── First-boot install (idempotent, gated by marker) ───────────────────────
+# Debian GCE images ship with google-cloud-cli pre-installed, so we
+# deliberately DO NOT list it in apt install: including it triggers an
+# upgrade + Python-bytecode recompile that takes 10-20 minutes on e2-micro's
+# 0.25 shared vCPU. Only redis-server is a genuine addition.
 if [ ! -f "$MARKER" ]; then
   apt-get update
-  apt-get install -y redis-server google-cloud-cli
+  apt-get install -y redis-server
   mkdir -p /var/redis
   chown redis:redis /var/redis
 fi
