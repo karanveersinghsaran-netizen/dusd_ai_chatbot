@@ -69,7 +69,7 @@ DESTROY_TARGETS := \
 	-target=module.network.google_vpc_access_connector.connector \
 	-target=google_secret_manager_secret_iam_member.cloud_run_access
 
-.PHONY: help init fmt validate plan apply destroy destroy-all output console deploy chatbox-token _refresh
+.PHONY: help init fmt validate plan apply destroy destroy-all output console deploy chatbox-token nat-on nat-off _refresh
 
 help:
 	@echo "Targets (ENV=$(ENV)):"
@@ -80,6 +80,8 @@ help:
 	@echo "  apply         terraform apply -var-file=$(TFVARS) — provision infra"
 	@echo "  deploy        docker build + push + gcloud run deploy (TAG=$(TAG))"
 	@echo "  chatbox-token mint a /chatbox access link, valid DAYS=$(DAYS) days (GENERIC=1 for a mass-distribution link with no personal identity)"
+	@echo "  nat-on        provision Cloud NAT (VM regains outbound internet — needed for apt-get)"
+	@echo "  nat-off       destroy Cloud NAT (~\$$1-2/mo saved; VM keeps Google APIs via Private Google Access)"
 	@echo "  destroy       terraform destroy -target=<ephemeral modules> — zero the bill,"
 	@echo "                preserves Secret Manager containers + real values"
 	@echo "  destroy-all   terraform destroy (no targets) — nuke EVERYTHING, secrets included"
@@ -122,6 +124,22 @@ output:
 
 console:
 	terraform -chdir=$(ENV_DIR) console
+
+# Cloud NAT toggle — private VMs (self-hosted Redis) need outbound internet
+# for apt-get installs and OS/Ops-Agent updates, but not for day-to-day
+# Redis serving (Google APIs go via Private Google Access). Toggling saves
+# ~$1-2/mo when NAT isn't needed. `nat-off` is TEMPORARY unless you also set
+# `enable_nat = false` in $(TFVARS) — a regular `make apply` after
+# `make nat-off` will bring NAT back because the variable defaults to true.
+nat-on:
+	@echo "Bringing Cloud NAT UP — VM will regain outbound internet access."
+	terraform -chdir=$(ENV_DIR) apply $(TF_ARGS) -var enable_nat=true
+
+nat-off:
+	@echo "Taking Cloud NAT DOWN — VM will lose outbound internet access."
+	@echo "  (Google APIs still work via Private Google Access.)"
+	@echo "  Bring back with: make nat-on"
+	terraform -chdir=$(ENV_DIR) apply $(TF_ARGS) -var enable_nat=false
 
 # Refresh state + outputs without touching any real resources. Used as a
 # prereq for `deploy` so newly-added `output` blocks land in state without

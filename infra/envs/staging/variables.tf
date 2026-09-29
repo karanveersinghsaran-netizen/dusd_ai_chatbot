@@ -38,3 +38,9 @@ variable "alert_email" {
   type        = string
   default     = ""
 }
+
+variable "enable_nat" {
+  description = "Whether Cloud NAT is provisioned on the VPC. Needed only when a private VM must reach the public internet (apt-get, dl.google.com/cloudagents, etc.). Default true keeps `make apply` behavior stable — toggle temporarily with `make nat-off` / `make nat-on`, or set to false in terraform.tfvars for persistent off."
+  type        = bool
+  default     = true
+}

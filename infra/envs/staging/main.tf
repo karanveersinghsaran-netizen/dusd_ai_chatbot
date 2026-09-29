@@ -33,6 +33,7 @@ module "network" {
 
   project_id = var.project_id
   region     = var.region
+  enable_nat = var.enable_nat
 
   depends_on = [google_project_service.required]
 }

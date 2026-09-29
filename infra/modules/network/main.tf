@@ -67,6 +67,7 @@ resource "google_project_iam_member" "cloud_run_vpc_user" {
 # through Private Google Access on the subnet — NAT is only used for
 # non-Google destinations like deb.debian.org, dl.google.com/cloudagents, etc.
 resource "google_compute_router" "nat" {
+  count   = var.enable_nat ? 1 : 0
   project = var.project_id
   name    = "${var.network_name}-router"
   region  = var.region
@@ -74,9 +75,10 @@ resource "google_compute_router" "nat" {
 }
 
 resource "google_compute_router_nat" "nat" {
+  count                              = var.enable_nat ? 1 : 0
   project                            = var.project_id
   name                               = "${var.network_name}-nat"
-  router                             = google_compute_router.nat.name
+  router                             = google_compute_router.nat[0].name
   region                             = var.region
   nat_ip_allocate_option             = "AUTO_ONLY"
   source_subnetwork_ip_ranges_to_nat = "ALL_SUBNETWORKS_ALL_IP_RANGES"
