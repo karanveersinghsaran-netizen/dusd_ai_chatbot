@@ -118,17 +118,116 @@ sudo systemctl start redis-server
 redis-cli DBSIZE   # should match the snapshot's key count
 ```
 
-## Migration from MemoryStore (PR 2 will automate)
+## Migration from MemoryStore — one-time cutover runbook
 
-MemoryStore supports RDB export directly to a GCS bucket:
+Order matters. Read once end-to-end before starting.
+
+### 0. Preconditions
+
+- PR merging the `plain_env_vars.REDIS_URL = module.self_hosted_redis.redis_url` change is already merged to master (Cloud Run will pick it up on the next `make deploy`, NOT before). Verify with:
+  ```bash
+  git -C .. log --oneline -3 | grep -i "self-hosted-redis-cutover"
+  ```
+- Self-hosted Redis VM is running with the container up (see the SSH + PING check above).
+- You know the MemoryStore instance name (`wms-chatbot-redis`) and region (`us-west1`).
+
+### 1. Grant MemoryStore's service agent write access to the snapshot bucket
+
+MemoryStore exports via a Google-managed service agent. It needs write access to the target bucket. One-time IAM grant:
 
 ```bash
-gcloud redis instances export gs://<bucket>/memorystore-dump.rdb \
-  wms-chatbot-redis --region=us-west1
+PROJECT_NUMBER=$(gcloud projects describe wms-chatbot-staging --format='value(projectNumber)')
+BUCKET=$(terraform -chdir=envs/staging output -raw self_hosted_redis_snapshot_bucket)
+gsutil iam ch \
+  "serviceAccount:service-${PROJECT_NUMBER}@cloud-redis.iam.gserviceaccount.com:objectAdmin" \
+  "gs://${BUCKET}"
 ```
 
-Then copy that RDB onto the VM's `/var/redis/dump.rdb` and restart Redis
-(see restore steps above).
+### 2. Export MemoryStore to the snapshot bucket
+
+```bash
+gcloud redis instances export "gs://${BUCKET}/memorystore-dump-$(date -u +%Y-%m-%d).rdb" \
+  wms-chatbot-redis --region=us-west1 --project=wms-chatbot-staging
+```
+
+Takes ~30 seconds for our data size (~5 MB). Wait for the command to return before continuing.
+
+### 3. Copy the RDB onto the VM and reload Redis
+
+SSH in via IAP:
+
+```bash
+gcloud compute ssh wms-chatbot-redis --zone=us-west1-a --tunnel-through-iap \
+  --project=wms-chatbot-staging
+```
+
+Then on the VM:
+
+```bash
+# 1. Fetch the exported RDB from GCS
+BUCKET=$(sudo journalctl -u google-startup-scripts.service | grep -oE 'gs://[^"]*snapshots-[a-f0-9]+' | head -1 | sed 's|gs://||' | awk -F/ '{print $1}')
+# Or set manually: BUCKET=wms-chatbot-redis-snapshots-xxxxxxxx
+
+# List available exports:
+sudo gsutil ls "gs://${BUCKET}/memorystore-*.rdb"
+
+# Download the newest export to the container's data dir:
+DUMP=$(sudo gsutil ls "gs://${BUCKET}/memorystore-*.rdb" | sort | tail -1)
+sudo gsutil cp "${DUMP}" /var/lib/redis-data/dump.rdb
+
+# 2. Stop Redis so we can replace its data files cleanly
+sudo systemctl stop wms-redis-container
+
+# 3. Redis 7 prefers AOF over RDB when both are present. Delete the AOF so
+#    Redis loads the newly-copied RDB on next start.
+sudo rm -rf /var/lib/redis-data/appendonly.aof /var/lib/redis-data/appendonlydir
+
+# 4. Ensure the redis user (uid 999 inside the container) owns dump.rdb
+sudo chown 999:999 /var/lib/redis-data/dump.rdb
+
+# 5. Start Redis — it'll read dump.rdb on load
+sudo systemctl start wms-redis-container
+
+# 6. Verify data loaded: DBSIZE should match MemoryStore's key count
+sudo docker exec wms-redis \
+  redis-cli -a "$(sudo cat /etc/redis/password.env | cut -d= -f2)" --no-auth-warning DBSIZE
+```
+
+Expected `DBSIZE`: matches what MemoryStore had (`gcloud redis instances describe wms-chatbot-redis --region=us-west1 --format='value(currentLocationId)'` doesn't give key count, but if you SSH'd MemoryStore separately or checked the `redis.googleapis.com/keyspace/keys` metric, you know the number).
+
+### 4. Cut Cloud Run over
+
+At this point Cloud Run is still talking to MemoryStore. The Terraform change is applied but Cloud Run's env vars don't refresh until a new revision is deployed:
+
+```bash
+cd infra
+make apply    # confirms the env-var change is reflected in the service definition
+make deploy   # builds + pushes + deploys a fresh revision that reads REDIS_URL = self-hosted VM
+```
+
+The new revision starts, drains the old one. Chats now hit the VM.
+
+### 5. Verify /chat works end-to-end
+
+Open the chatbox in a browser (or via `chatbox?token=...`) and send a real message. Then on the VM:
+
+```bash
+sudo docker exec wms-redis \
+  redis-cli -a "$(sudo cat /etc/redis/password.env | cut -d= -f2)" --no-auth-warning DBSIZE
+# ↑ should increment after each chat (conversation history keys)
+```
+
+Also check the monitoring dashboard — the "Chat requests" tile should keep populating and the Redis metrics from the VM's Ops Agent should show non-zero activity.
+
+### 6. Delete the migration RDB (optional)
+
+Once you've confirmed the cutover held for a day, the intermediate `memorystore-dump-*.rdb` in the snapshot bucket can go:
+
+```bash
+sudo gsutil rm "gs://${BUCKET}/memorystore-dump-*.rdb"
+```
+
+MemoryStore itself stays alive for PR 3 to destroy — that's the bill-dropping apply.
 
 ## Failure modes to know about
 

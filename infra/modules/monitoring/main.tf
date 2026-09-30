@@ -278,6 +278,20 @@ resource "google_monitoring_alert_policy" "redis_memory" {
 
 resource "google_monitoring_dashboard" "wms_chatbot" {
   project = var.project_id
+
+  # Google's dashboards API massages our JSON on write: injects
+  # `targetAxis = "Y1"` defaults on every xyChart dataSet, drops
+  # zero-valued xPos/yPos on tiles, etc. Terraform then reads it back and
+  # sees permanent drift, showing "1 to change" on every `make apply`. The
+  # drift is purely cosmetic — the dashboard renders identically either
+  # way — so ignore dashboard_json changes and treat this resource as
+  # write-once. When you DO intentionally want to update the dashboard,
+  # force a re-apply with:
+  #   terraform apply -replace=module.monitoring.google_monitoring_dashboard.wms_chatbot
+  lifecycle {
+    ignore_changes = [dashboard_json]
+  }
+
   dashboard_json = jsonencode({
     displayName = "WMS Chatbot — ops + adoption"
     mosaicLayout = {
