@@ -761,18 +761,22 @@ resource "google_monitoring_dashboard" "wms_chatbot" {
         {
           xPos = 8, yPos = 15, width = 4, height = 4,
           widget = {
-            title = "VM Redis: uptime (s)"
+            title = "VM Redis: uptime since last boot (s)"
             xyChart = {
               dataSets = [{
                 timeSeriesQuery = {
                   timeSeriesFilter = {
-                    # A drop to 0 = VM rebooted (planned maintenance or
-                    # crash). Cross-references the VM-down alert policy.
-                    filter = var.self_hosted_redis_vm_name != "" ? "resource.type=\"gce_instance\" AND metric.type=\"compute.googleapis.com/instance/uptime\" AND metric.labels.instance_name=\"${var.self_hosted_redis_vm_name}\"" : ""
+                    # uptime_total is cumulative seconds since VM boot —
+                    # grows ~+60s per minute while VM is up, resets to 0
+                    # when the VM is recreated (destroy + create). Much
+                    # more intuitive than the delta `uptime` metric,
+                    # which reads "60" every minute of healthy uptime
+                    # and 0 during downtime.
+                    filter = var.self_hosted_redis_vm_name != "" ? "resource.type=\"gce_instance\" AND metric.type=\"compute.googleapis.com/instance/uptime_total\" AND metric.labels.instance_name=\"${var.self_hosted_redis_vm_name}\"" : ""
                     aggregation = {
                       alignmentPeriod    = "60s"
-                      perSeriesAligner   = "ALIGN_MEAN"
-                      crossSeriesReducer = "REDUCE_MEAN"
+                      perSeriesAligner   = "ALIGN_MAX"
+                      crossSeriesReducer = "REDUCE_MAX"
                     }
                   }
                 }
