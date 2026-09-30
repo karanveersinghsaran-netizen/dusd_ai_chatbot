@@ -67,9 +67,19 @@ resource "google_logging_metric" "self_hosted_redis_dbsize" {
     display_name = "Redis DBSIZE (self-hosted)"
   }
 
-  # Grab the number after "dbsize=" as the metric value. Distribution
-  # metrics with one sample per 60s window let us chart ALIGN_MEAN as
-  # "current key count" since each window has exactly one data point.
+  # DISTRIBUTION metrics require bucket_options — exponential covers
+  # 1 -> ~4 million keys (2^22) with 22 buckets, plenty for anything
+  # this chatbot will realistically hold.
+  bucket_options {
+    exponential_buckets {
+      num_finite_buckets = 22
+      growth_factor      = 2
+      scale              = 1
+    }
+  }
+
+  # Grab the number after "dbsize=" as the metric value. With one sample
+  # per 60s window, ALIGN_MEAN on the chart gives "current key count".
   value_extractor = "REGEXP_EXTRACT(jsonPayload.MESSAGE, \"dbsize=([0-9]+)\")"
 }
 

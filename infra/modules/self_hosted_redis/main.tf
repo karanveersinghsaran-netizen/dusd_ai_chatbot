@@ -197,6 +197,20 @@ resource "google_compute_instance" "redis" {
   lifecycle {
     ignore_changes = [
       boot_disk[0].initialize_params[0].image,
+      # ────────────────────────────────────────────────────────────────────
+      # CRITICAL: metadata_startup_script changes force VM REPLACEMENT in
+      # the google provider, which destroys the boot disk and every byte
+      # of Redis data on it (learned this the hard way — a routine make
+      # apply after startup-script edits blew away 22 keys of migrated
+      # MemoryStore data). We refresh the startup script content in
+      # metadata via terraform apply, but the currently-booted VM never
+      # sees the change (it only runs at boot). To actually pick up new
+      # startup logic, do `gcloud compute instances reset` — a soft
+      # reboot that re-runs the script without wiping the disk. Trade-off:
+      # you have to manually reset when you want new startup behavior;
+      # gain: no more accidental data-wiping applies.
+      # ────────────────────────────────────────────────────────────────────
+      metadata_startup_script,
     ]
   }
 
