@@ -57,7 +57,7 @@ umask 022
 #     changes propagate cleanly) ─────────────────────────────────────────
 cat >/etc/systemd/system/wms-redis-container.service <<EOF
 [Unit]
-Description=Redis (official ${REDIS_IMAGE} container)
+Description=Redis (official $${REDIS_IMAGE} container)
 Requires=docker.service
 After=docker.service network-online.target
 
@@ -73,7 +73,7 @@ TimeoutStartSec=120
 ExecStartPre=-/usr/bin/docker rm -f wms-redis
 ExecStart=/usr/bin/docker run --rm --name wms-redis --network=host \\
   -v $${DATA_DIR}:/data \\
-  ${REDIS_IMAGE} \\
+  $${REDIS_IMAGE} \\
   redis-server \\
     --requirepass \$${REDIS_PASSWORD} \\
     --bind 0.0.0.0 \\
