@@ -42,6 +42,37 @@ resource "google_logging_metric" "chat_requests_by_ip" {
   }
 }
 
+resource "google_logging_metric" "self_hosted_redis_dbsize" {
+  # Extracts Redis DBSIZE from syslog lines emitted by the systemd timer
+  # wms-redis-dbsize.timer on the VM (see startup.sh.tftpl). Cloud Monitoring
+  # can't scrape Redis directly (no exporter, no agent metric), and Ops
+  # Agent's own metric pipeline hasn't proven reliable in this project, so
+  # we ride the syslog -> Cloud Logging path (which IS reliably shipping)
+  # and extract the value on the ingest side.
+  count       = var.self_hosted_redis_vm_name != "" ? 1 : 0
+  name        = "wms_chatbot/self_hosted_redis_dbsize"
+  description = "Redis DBSIZE on the self-hosted VM, sampled every 60s by wms-redis-dbsize.timer and shipped via syslog."
+  project     = var.project_id
+
+  filter = <<-EOT
+    resource.type="gce_instance"
+    logName=~"projects/.+/logs/syslog"
+    jsonPayload.MESSAGE=~"wms-redis-metrics.*dbsize="
+  EOT
+
+  metric_descriptor {
+    metric_kind  = "DELTA"
+    value_type   = "DISTRIBUTION"
+    unit         = "1"
+    display_name = "Redis DBSIZE (self-hosted)"
+  }
+
+  # Grab the number after "dbsize=" as the metric value. Distribution
+  # metrics with one sample per 60s window let us chart ALIGN_MEAN as
+  # "current key count" since each window has exactly one data point.
+  value_extractor = "REGEXP_EXTRACT(jsonPayload.MESSAGE, \"dbsize=([0-9]+)\")"
+}
+
 resource "google_logging_metric" "feedback_submissions" {
   name        = "wms_chatbot/feedback_submissions"
   description = "Counter of successful /feedback/{thanks,report} POSTs, labeled by which endpoint, so the dashboard can show how the feedback loop is actually being used."
@@ -696,27 +727,24 @@ resource "google_monitoring_dashboard" "wms_chatbot" {
         {
           xPos = 4, yPos = 15, width = 4, height = 4,
           widget = {
-            title = "VM Redis: network egress bytes/s"
+            title = "VM Redis: DBSIZE (key count)"
             xyChart = {
               dataSets = [{
                 timeSeriesQuery = {
                   timeSeriesFilter = {
-                    # Redis traffic to Cloud Run rides the VPC — a proxy
-                    # for "is anyone talking to Redis". Non-zero = the
-                    # container is actively serving replies. Zero for a
-                    # sustained period = Cloud Run cutover isn't working
-                    # OR nobody's chatting.
-                    filter = var.self_hosted_redis_vm_name != "" ? "resource.type=\"gce_instance\" AND metric.type=\"compute.googleapis.com/instance/network/sent_bytes_count\" AND metric.labels.instance_name=\"${var.self_hosted_redis_vm_name}\"" : ""
+                    # Populated by the wms-redis-dbsize.timer on the VM +
+                    # the self_hosted_redis_dbsize log-based metric above.
+                    filter = "metric.type=\"logging.googleapis.com/user/wms_chatbot/self_hosted_redis_dbsize\""
                     aggregation = {
                       alignmentPeriod    = "60s"
-                      perSeriesAligner   = "ALIGN_RATE"
-                      crossSeriesReducer = "REDUCE_SUM"
+                      perSeriesAligner   = "ALIGN_MEAN"
+                      crossSeriesReducer = "REDUCE_MEAN"
                     }
                   }
                 }
                 plotType = "LINE"
               }]
-              yAxis = { label = "bytes/s", scale = "LINEAR" }
+              yAxis = { label = "keys", scale = "LINEAR" }
             }
           }
         },

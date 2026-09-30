@@ -161,6 +161,48 @@ EOF
 systemctl daemon-reload
 systemctl enable --now wms-redis-snapshot.timer
 
+# ── DBSIZE reporter (feeds the self_hosted_redis_dbsize log-based metric) ──
+# Runs redis-cli DBSIZE every 60s, writes "dbsize=<N>" to syslog via
+# `logger`. Cloud Logging picks up syslog (Ops Agent's log pipeline is
+# reliable in this project even when its metric pipeline isn't), and the
+# monitoring module extracts the number as a distribution metric that a
+# dashboard tile plots as "current key count".
+cat >/usr/local/bin/wms-redis-dbsize.sh <<'DBSIZE_EOF'
+#!/bin/bash
+set -euo pipefail
+PASSWORD=$(cat /etc/redis/password.env | cut -d= -f2)
+DBSIZE=$(docker exec wms-redis redis-cli -a "$PASSWORD" --no-auth-warning DBSIZE 2>/dev/null || echo -1)
+logger -t wms-redis-metrics "dbsize=$DBSIZE"
+DBSIZE_EOF
+chmod +x /usr/local/bin/wms-redis-dbsize.sh
+
+cat >/etc/systemd/system/wms-redis-dbsize.service <<EOF
+[Unit]
+Description=Report Redis DBSIZE to syslog (feeds the wms_chatbot/self_hosted_redis_dbsize log-based metric)
+Wants=wms-redis-container.service
+After=wms-redis-container.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/wms-redis-dbsize.sh
+EOF
+
+cat >/etc/systemd/system/wms-redis-dbsize.timer <<EOF
+[Unit]
+Description=Run wms-redis-dbsize every 60s
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=60s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now wms-redis-dbsize.timer
+
 # ── Google Cloud Ops Agent ─────────────────────────────────────────────────
 # Ships VM metrics (CPU, memory, disk, uptime) + system logs to Cloud
 # Monitoring / Logging.
