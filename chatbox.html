@@ -452,6 +452,17 @@
     #menu-panel { left: auto; width: 280px; }
   }
   .popover.visible { display: block; }
+  /* The announcement list can hold up to MAX_ANNOUNCEMENTS_SHOWN=10 entries
+     from main.py — enough to overflow a phone viewport. Cap the list at the
+     available height (viewport minus the popover's top offset and a bit of
+     padding for the close button + border) and let it scroll internally.
+     Scoped to #announcements-list, not .popover itself, so the title + close
+     button stay pinned at the top even when the list is scrolled. */
+  #announcements-list {
+    max-height: calc(100dvh - env(safe-area-inset-top) - 140px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
   .popover .close {
     float: right;
     background: none;
