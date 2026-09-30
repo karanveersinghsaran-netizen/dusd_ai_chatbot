@@ -153,6 +153,32 @@ resource "google_compute_firewall" "iap_ssh" {
   }
 }
 
+# ── Persistent data disk ───────────────────────────────────────────────────
+# Separate from the boot disk. Lives independently of the VM in Terraform,
+# so when the VM is destroyed or replaced (through Terraform or gcloud) the
+# disk survives — the next VM attaches the same disk and Redis picks up
+# exactly where it left off. This is the durability layer; snapshots to
+# GCS are the second layer (for disk corruption / human error).
+#
+# Sized generously at 10 GB. Actual Redis usage today is ~5 MB, so
+# effectively unlimited runway. pd-standard because pd-ssd would be pure
+# waste for our workload — a Q&A chatbot's Redis load is a few hundred
+# ops/day, not the millions/sec you'd need to feel the SSD.
+resource "google_compute_disk" "redis_data" {
+  project = var.project_id
+  name    = "${var.instance_name}-data"
+  type    = "pd-standard"
+  size    = 10
+  zone    = var.zone
+
+  # Extra safety: refuse to destroy from a normal `terraform destroy`.
+  # If you genuinely need to remove this disk (e.g. project decommission),
+  # temporarily remove this lifecycle block, apply, then re-add.
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
 # ── The VM itself ──────────────────────────────────────────────────────────
 resource "google_compute_instance" "redis" {
   project      = var.project_id
@@ -169,6 +195,17 @@ resource "google_compute_instance" "redis" {
       size  = 10 # GB — plenty for OS + Redis dump.rdb (~5 MB today)
       type  = "pd-standard"
     }
+  }
+
+  # Attach the persistent data disk. device_name = "redis-data" makes it
+  # discoverable inside the VM at /dev/disk/by-id/google-redis-data —
+  # what the startup script mounts at /var/lib/redis-data. Detaching
+  # this from the VM (VM destroy or Terraform replace of the instance)
+  # does NOT delete the disk itself — that survives.
+  attached_disk {
+    source      = google_compute_disk.redis_data.id
+    device_name = "redis-data"
+    mode        = "READ_WRITE"
   }
 
   network_interface {
