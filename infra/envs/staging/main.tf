@@ -16,7 +16,6 @@ resource "google_project_service" "required" {
     "servicenetworking.googleapis.com",
     "vpcaccess.googleapis.com",
     "sqladmin.googleapis.com",
-    "redis.googleapis.com",
     "monitoring.googleapis.com",
     "logging.googleapis.com",
     # storage.googleapis.com powers the GCS bucket that receives the
@@ -67,27 +66,11 @@ module "cloud_sql" {
   ]
 }
 
-module "redis" {
-  source = "../../modules/memorystore_redis"
-
-  project_id         = var.project_id
-  region             = var.region
-  authorized_network = module.network.network_id
-
-  # MemoryStore PRIVATE_SERVICE_ACCESS reuses the same VPC peering Cloud SQL
-  # relies on — depend on module.network so the peering is up first.
-  depends_on = [
-    google_project_service.required,
-    module.network,
-  ]
-}
-
-# Self-hosted Redis on a Compute Engine e2-micro VM. Stands up ALONGSIDE the
-# managed MemoryStore instance above for now — nothing consumes its
-# redis_url yet. Cutover happens in a follow-up PR (dump MemoryStore RDB,
-# import to VM, rotate REDIS_URL secret, redeploy). After the cutover
-# stabilizes, module.redis (MemoryStore) is removed to actually drop the
-# ~$30/mo bill.
+# Self-hosted Redis on a Compute Engine e2-micro VM (replaced MemoryStore,
+# which used to sit alongside this block — see PR history for the cutover).
+# Data lives on a separate persistent disk (see modules/self_hosted_redis)
+# so a VM crash or replacement keeps the dataset intact; GCS snapshots are
+# the second layer of insurance.
 module "self_hosted_redis" {
   source = "../../modules/self_hosted_redis"
 
@@ -121,10 +104,6 @@ module "cloud_run" {
   plain_env_vars = {
     ALLOWED_ORIGINS = var.allowed_origins
     DATABASE_URL    = module.cloud_sql.database_url
-    # Cut over from MemoryStore (module.redis.redis_url) to the self-hosted
-    # VM. Same wire protocol, same wms:conv:<...> key scheme — but now
-    # includes the AUTH password. Migration steps for existing data live in
-    # docs/self-hosted-redis.md.
     REDIS_URL       = module.self_hosted_redis.redis_url
     PUBLIC_BASE_URL = var.public_base_url
   }
@@ -160,7 +139,6 @@ module "monitoring" {
   region                    = var.region
   service_name              = var.service_name
   cloud_sql_instance_id     = module.cloud_sql.instance_name
-  redis_instance_id         = module.redis.instance_name
   self_hosted_redis_vm_name = module.self_hosted_redis.instance_name
   alert_email               = var.alert_email
 
@@ -172,7 +150,7 @@ module "monitoring" {
     google_project_service.required,
     module.cloud_run,
     module.cloud_sql,
-    module.redis,
+    module.self_hosted_redis,
   ]
 }
 

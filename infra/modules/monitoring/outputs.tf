@@ -9,7 +9,6 @@ output "alert_policy_ids" {
     cloud_run_5xx_rate = google_monitoring_alert_policy.cloud_run_5xx_rate.id
     chat_latency_p95   = google_monitoring_alert_policy.chat_latency_p95.id
     cloud_sql_cpu      = google_monitoring_alert_policy.cloud_sql_cpu.id
-    redis_memory       = google_monitoring_alert_policy.redis_memory.id
   }
 }
 

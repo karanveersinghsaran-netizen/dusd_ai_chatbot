@@ -18,11 +18,6 @@ variable "cloud_sql_instance_id" {
   type        = string
 }
 
-variable "redis_instance_id" {
-  description = "MemoryStore Redis instance id (short name). Used to filter Redis metrics."
-  type        = string
-}
-
 variable "self_hosted_redis_vm_name" {
   description = "Compute Engine VM name running self-hosted Redis. Empty string skips creating the VM-uptime alert (module still works standalone). When set, an alert fires if the VM's uptime metric stops reporting for 5 min — covers VM crash, GCE maintenance reboot, and Ops Agent failure."
   type        = string

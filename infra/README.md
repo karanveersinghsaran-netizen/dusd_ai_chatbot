@@ -11,7 +11,7 @@ infra/
 │   ├── artifact_registry/       # Docker registry for CI to push images into.
 │   ├── cloud_run_service/       # Cloud Run service + its runtime service account.
 │   ├── cloud_sql/               # Postgres 16 (private IP) + user + password → secret version.
-│   ├── memorystore_redis/       # Redis in the VPC (BASIC tier, no auth on private net).
+│   ├── self_hosted_redis/       # Redis on a GCE e2-micro + persistent disk + GCS snapshots.
 │   ├── network/                 # VPC + subnet + private services access + VPC connector.
 │   └── secrets/                 # Secret Manager containers (IAM binding lives in envs/).
 └── envs/

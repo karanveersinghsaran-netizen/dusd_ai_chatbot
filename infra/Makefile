@@ -49,8 +49,8 @@ GENERIC ?=
 #   - Most of module.network    — VPC, subnet, peering, IAM are all free.
 #     Destroying the peering (google_service_networking_connection) fails
 #     with "Producer services still using this connection" because Google's
-#     backend cleanup of Cloud SQL / MemoryStore lags behind Terraform's
-#     view by several minutes. Since peering is free, just keep it.
+#     backend cleanup of Cloud SQL lags behind Terraform's view by several
+#     minutes. Since peering is free, just keep it.
 #
 # The only paid piece inside module.network is the VPC Access connector
 # (~$5-10/mo for 2× e2-micro), so that's targeted explicitly for destroy.
@@ -61,7 +61,6 @@ GENERIC ?=
 DESTROY_TARGETS := \
 	-target=module.cloud_run \
 	-target=module.cloud_sql \
-	-target=module.redis \
 	-target=module.self_hosted_redis.google_compute_instance.redis \
 	-target=module.self_hosted_redis.google_compute_address.redis \
 	-target=module.self_hosted_redis.google_compute_firewall.redis_from_connector \

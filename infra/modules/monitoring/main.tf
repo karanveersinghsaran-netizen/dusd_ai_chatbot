@@ -280,37 +280,6 @@ resource "google_monitoring_alert_policy" "self_hosted_redis_vm_up" {
   }
 }
 
-resource "google_monitoring_alert_policy" "redis_memory" {
-  project      = var.project_id
-  display_name = "wms-chatbot redis: memory > 80%"
-  combiner     = "OR"
-
-  documentation {
-    content   = "Redis memory usage crossed 80% of the configured 1 GB. At current usage (~5 MB) this would represent 200× growth and warrants investigation — likely a leaked key without TTL, or a runaway loop writing to Redis. Look at `commands/calls` by cmd to find the writer."
-    mime_type = "text/markdown"
-  }
-
-  conditions {
-    display_name = "memory used > 80%"
-    condition_threshold {
-      filter          = "resource.type=\"redis_instance\" AND resource.labels.instance_id=\"projects/${var.project_id}/locations/${var.region}/instances/${var.redis_instance_id}\" AND metric.type=\"redis.googleapis.com/stats/memory/usage_ratio\""
-      duration        = "300s"
-      comparison      = "COMPARISON_GT"
-      threshold_value = 0.8
-
-      aggregations {
-        alignment_period   = "60s"
-        per_series_aligner = "ALIGN_MEAN"
-      }
-    }
-  }
-
-  notification_channels = local.notification_channels
-  alert_strategy {
-    auto_close = "1800s"
-  }
-}
-
 # ── Dashboard ──────────────────────────────────────────────────────────────
 # Three rows × 3 tiles each in a 12-col mosaic grid. Ops on top, adoption in
 # the middle, resource utilization at the bottom — reading top-to-bottom
@@ -645,69 +614,15 @@ resource "google_monitoring_dashboard" "wms_chatbot" {
             }
           }
         },
-        {
-          xPos = 4, yPos = 11, width = 4, height = 4,
-          widget = {
-            title = "Redis memory used %"
-            xyChart = {
-              dataSets = [{
-                timeSeriesQuery = {
-                  timeSeriesFilter = {
-                    filter = "resource.type=\"redis_instance\" AND resource.labels.instance_id=\"projects/${var.project_id}/locations/${var.region}/instances/${var.redis_instance_id}\" AND metric.type=\"redis.googleapis.com/stats/memory/usage_ratio\""
-                    aggregation = {
-                      alignmentPeriod  = "60s"
-                      perSeriesAligner = "ALIGN_MEAN"
-                    }
-                  }
-                }
-                plotType = "LINE"
-              }]
-              yAxis = { label = "utilization", scale = "LINEAR" }
-              # XyChart threshold blocks only accept `value` and `label` —
-              # `color`, `direction`, and `targetAxis` are Scorecard-only and
-              # rejected here (Cloud Monitoring API returns 400). The line
-              # still renders horizontally at the value using default styling.
-              thresholds = [{ value = 0.8, label = "alert" }]
-            }
-          }
-        },
-        {
-          xPos = 8, yPos = 11, width = 4, height = 4,
-          widget = {
-            title = "Redis key count"
-            xyChart = {
-              dataSets = [{
-                timeSeriesQuery = {
-                  timeSeriesFilter = {
-                    filter = "resource.type=\"redis_instance\" AND resource.labels.instance_id=\"projects/${var.project_id}/locations/${var.region}/instances/${var.redis_instance_id}\" AND metric.type=\"redis.googleapis.com/keyspace/keys\""
-                    aggregation = {
-                      alignmentPeriod    = "60s"
-                      perSeriesAligner   = "ALIGN_MEAN"
-                      crossSeriesReducer = "REDUCE_SUM"
-                    }
-                  }
-                }
-                plotType = "LINE"
-              }]
-              yAxis = { label = "keys", scale = "LINEAR" }
-            }
-          }
-        },
 
-        # ── Row 5: Self-hosted Redis VM (added alongside MemoryStore
-        #    tiles above during the cutover — keep both so you can watch
-        #    MemoryStore go idle while the VM picks up traffic. Both rows
-        #    stay until PR 3 destroys MemoryStore, at which point Row 4's
-        #    two Redis tiles come out.)
-        #
-        #    Uses built-in compute.googleapis.com metrics, NOT the Ops
-        #    Agent's agent.googleapis.com/* namespace — even though the
-        #    agent is installed and active, its metric descriptors take
-        #    time to register in a fresh project (up to several hours in
-        #    some cases). Built-in metrics arrive immediately after VM
-        #    boot and require zero agent-side plumbing. If we ever want
-        #    finer-grained memory / Redis-specific counters, swap in the
-        #    agent metrics later. ─────────────────────────────────────────
+        # ── Row 5: Self-hosted Redis VM ───────────────────────────────────
+        # Uses built-in compute.googleapis.com metrics, NOT the Ops Agent's
+        # agent.googleapis.com/* namespace — even though the agent is
+        # installed and active, its metric descriptors take time to register
+        # in a fresh project (up to several hours in some cases). Built-in
+        # metrics arrive immediately after VM boot and require zero agent-
+        # side plumbing. If we ever want finer-grained memory / Redis-
+        # specific counters, swap in the agent metrics later.
         {
           xPos = 0, yPos = 15, width = 4, height = 4,
           widget = {

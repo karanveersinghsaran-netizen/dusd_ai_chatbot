@@ -38,13 +38,8 @@ output "cloud_sql_private_ip" {
   value       = module.cloud_sql.private_ip_address
 }
 
-output "redis_host" {
-  description = "Private IP MemoryStore Redis is reachable at."
-  value       = module.redis.host
-}
-
 output "self_hosted_redis_url" {
-  description = "REDIS_URL for the self-hosted VM. Present alongside the MemoryStore output during migration; consumers still read redis_host until cutover. Sensitive because it embeds the AUTH password."
+  description = "REDIS_URL for the self-hosted VM. Sensitive because it embeds the AUTH password."
   value       = module.self_hosted_redis.redis_url
   sensitive   = true
 }
