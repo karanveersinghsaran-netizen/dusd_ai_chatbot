@@ -77,7 +77,6 @@ ExecStart=/usr/bin/docker run --rm --name wms-redis --network=host \\
   redis-server \\
     --requirepass \$${REDIS_PASSWORD} \\
     --bind 0.0.0.0 \\
-    --appendonly yes --appendfilename appendonly.aof \\
     --save 300 1 --save 60 100 \\
     --maxmemory ${redis_maxmemory} --maxmemory-policy allkeys-lru \\
     --dir /data --dbfilename dump.rdb \\
