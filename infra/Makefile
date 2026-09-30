@@ -128,9 +128,9 @@ console:
 # Cloud NAT toggle — private VMs (self-hosted Redis) need outbound internet
 # for apt-get installs and OS/Ops-Agent updates, but not for day-to-day
 # Redis serving (Google APIs go via Private Google Access). Toggling saves
-# ~$1-2/mo when NAT isn't needed. `nat-off` is TEMPORARY unless you also set
-# `enable_nat = false` in $(TFVARS) — a regular `make apply` after
-# `make nat-off` will bring NAT back because the variable defaults to true.
+# ~$1-2/mo when NAT isn't needed. The `enable_nat` variable defaults to
+# false so steady-state `make apply` doesn't recreate NAT — flip it on
+# before booting/replacing a VM, then off once startup finishes.
 nat-on:
 	@echo "Bringing Cloud NAT UP — VM will regain outbound internet access."
 	terraform -chdir=$(ENV_DIR) apply $(TF_ARGS) -var enable_nat=true

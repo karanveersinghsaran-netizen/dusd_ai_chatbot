@@ -40,7 +40,7 @@ variable "alert_email" {
 }
 
 variable "enable_nat" {
-  description = "Whether Cloud NAT is provisioned on the VPC. Needed only when a private VM must reach the public internet (apt-get, dl.google.com/cloudagents, etc.). Default true keeps `make apply` behavior stable — toggle temporarily with `make nat-off` / `make nat-on`, or set to false in terraform.tfvars for persistent off."
+  description = "Whether Cloud NAT is provisioned on the VPC. Needed only when a private VM must reach the public internet (apt-get, dl.google.com/cloudagents, etc.). Default false — steady-state Redis reaches everything it needs (Secret Manager, GCS, Cloud Logging) via Private Google Access. Turn on with `make nat-on` before booting or replacing a VM, then off with `make nat-off` once startup finishes."
   type        = bool
-  default     = true
+  default     = false
 }

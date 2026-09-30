@@ -39,7 +39,7 @@ variable "connector_cidr" {
 }
 
 variable "enable_nat" {
-  description = "When true, provision a Cloud Router + Cloud NAT so private VMs (self-hosted Redis) can reach the public internet for package installs and OS/agent updates. When false, VMs can only reach Google APIs via Private Google Access — apt-get to deb.debian.org will fail. Toggled ergonomically by `make nat-on` / `make nat-off`. Default true keeps `make apply` idempotent — regular applies won't accidentally destroy NAT."
+  description = "When true, provision a Cloud Router + Cloud NAT so private VMs (self-hosted Redis) can reach the public internet for package installs and OS/agent updates. When false, VMs can only reach Google APIs via Private Google Access — apt-get to deb.debian.org will fail. Toggled ergonomically by `make nat-on` / `make nat-off`. Default false: steady-state Redis doesn't need it, and this keeps `make apply` idempotent so it won't try to recreate NAT after `make nat-off`."
   type        = bool
-  default     = true
+  default     = false
 }
