@@ -1,102 +1,123 @@
 #!/bin/bash
 set -euo pipefail
 
-# Compute Engine startup scripts run on every boot, not just first. Split the
-# work into two paths:
-#   * First-boot only: install packages, install snapshot timer + Ops Agent,
+# Runs on every VM boot. Two paths:
+#   * First-boot only: install Docker, install snapshot timer + Ops Agent,
 #     drop the marker file.
-#   * Every boot: fetch latest Redis AUTH password from Secret Manager,
-#     rewrite /etc/redis/redis.conf, restart Redis.
-# This way a password rotation is "add new Secret Manager version + reboot"
-# with no manual VM access needed.
+#   * Every boot: fetch latest Redis AUTH password from Secret Manager and
+#     write it to the systemd EnvironmentFile the redis-container unit
+#     reads. This way a password rotation is "add new Secret Manager
+#     version + reboot" with no manual VM access needed.
+#
+# Redis itself runs in the official `redis:7-alpine` container, not the
+# Debian package. This avoids the systemd sandbox + apt-postinst quirks we
+# hit with the packaged version, and pins the Redis version explicitly.
 
 MARKER=/var/lib/wms-chatbot-redis-installed
 export DEBIAN_FRONTEND=noninteractive
 
+REDIS_IMAGE="redis:7-alpine"
+DATA_DIR=/var/lib/redis-data
+PASSWORD_ENV=/etc/redis/password.env
+
 # ── First-boot install (idempotent, gated by marker) ───────────────────────
-# Debian GCE images ship with google-cloud-cli pre-installed, so we
-# deliberately DO NOT list it in apt install: including it triggers an
-# upgrade + Python-bytecode recompile that takes 10-20 minutes on e2-micro's
-# 0.25 shared vCPU. Only redis-server is a genuine addition.
 if [ ! -f "$MARKER" ]; then
   apt-get update
-  apt-get install -y redis-server
-  # /var/lib/redis is created + owned by redis:redis by the deb package;
-  # no mkdir/chown needed here anymore.
+  apt-get install -y docker.io
+  systemctl enable docker
+  systemctl start docker
+
+  # Pre-pull the Redis image so the systemd unit doesn't have to wait on a
+  # slow first-time image pull inside ExecStart (which can time out).
+  docker pull "$REDIS_IMAGE"
+
+  # Data dir on the host — bind-mounted into the container at /data. Redis
+  # writes dump.rdb + appendonly.aof + appendonlydir/ here; ownership 999:999
+  # matches the redis user baked into the official image.
+  mkdir -p "$DATA_DIR"
+  chown -R 999:999 "$DATA_DIR"
+  mkdir -p /etc/redis
 fi
 
-# ── Every boot: fetch password from Secret Manager + write redis.conf ─────
-# `gcloud secrets versions access latest` requires network + the VM SA to
-# have roles/secretmanager.secretAccessor on the secret (granted by
-# Terraform). --format='get(payload.data)' + base64 decode returns raw
-# bytes without gcloud's trailing newline gotcha.
+# ── Every boot: fetch password from Secret Manager + write EnvironmentFile ─
 PASSWORD=$(gcloud secrets versions access latest \
   --secret=${password_secret_id} \
   --project=${project_id})
 
-# Redis config. Rewritten on every boot to pick up password changes.
-# - bind 0.0.0.0 is safe here: only IPs that can reach us are the VPC
-#   connector's /28, enforced by the firewall rule. Redis is unreachable
-#   from the public internet.
-# - requirepass adds AUTH on top: defense-in-depth if the firewall ever
-#   opens up or someone else lands a VM in the connector CIDR.
-# - protected-mode off is required alongside bind 0.0.0.0; the firewall +
-#   requirepass are the real access controls.
-# - RDB (save 300 1) + AOF (appendonly yes) both on: RDB gives cheap point-
-#   in-time snapshots for the GCS backup path, AOF gives durability between
-#   snapshots so a VM crash loses at most a second of writes.
-# - maxmemory + allkeys-lru: caps Redis at ${redis_maxmemory} and evicts
-#   oldest keys under memory pressure. Given usage is ~5 MB, this is defense-
-#   in-depth against a runaway leak, not a day-to-day limit.
-cat >/etc/redis/redis.conf <<EOF
-bind 0.0.0.0 -::*
-protected-mode no
-port 6379
-requirepass $${PASSWORD}
-maxmemory ${redis_maxmemory}
-maxmemory-policy allkeys-lru
-dir /var/lib/redis
-dbfilename dump.rdb
-save 300 1
-save 60 100
-appendonly yes
-appendfilename appendonly.aof
-supervised systemd
-loglevel notice
-logfile /var/log/redis/redis-server.log
+# EnvironmentFile format — no quotes around the value, no spaces. Mode 600
+# so only root can read it (Docker daemon runs as root and passes the env
+# to the container).
+umask 077
+cat >"$PASSWORD_ENV" <<EOF
+REDIS_PASSWORD=$${PASSWORD}
 EOF
-chmod 640 /etc/redis/redis.conf
-chown root:redis /etc/redis/redis.conf
+umask 022
 
-systemctl enable redis-server
-systemctl restart redis-server
+# ── Redis container systemd unit (rewritten on every boot so config
+#     changes propagate cleanly) ─────────────────────────────────────────
+cat >/etc/systemd/system/wms-redis-container.service <<EOF
+[Unit]
+Description=Redis (official ${REDIS_IMAGE} container)
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Restart=always
+RestartSec=5
+EnvironmentFile=$${PASSWORD_ENV}
+TimeoutStartSec=120
+# --rm cleans up the container on stop; --name pins the container name so
+# ExecStop and the snapshot timer can find it. --network=host publishes
+# 6379 on the VM's network directly (simpler than -p mapping, and the
+# firewall already gates access).
+ExecStartPre=-/usr/bin/docker rm -f wms-redis
+ExecStart=/usr/bin/docker run --rm --name wms-redis --network=host \\
+  -v $${DATA_DIR}:/data \\
+  ${REDIS_IMAGE} \\
+  redis-server \\
+    --requirepass \$${REDIS_PASSWORD} \\
+    --bind 0.0.0.0 \\
+    --appendonly yes --appendfilename appendonly.aof \\
+    --save 300 1 --save 60 100 \\
+    --maxmemory ${redis_maxmemory} --maxmemory-policy allkeys-lru \\
+    --dir /data --dbfilename dump.rdb \\
+    --loglevel notice
+ExecStop=/usr/bin/docker stop -t 30 wms-redis
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable wms-redis-container.service
+systemctl restart wms-redis-container.service
 
 # ── First-boot only from here down ─────────────────────────────────────────
 if [ -f "$MARKER" ]; then
-  # Already installed the timer + Ops Agent; nothing else to do.
   systemctl restart wms-redis-snapshot.timer || true
   exit 0
 fi
 
 # ── GCS snapshot timer ─────────────────────────────────────────────────────
-# Every ${snapshot_interval}: BGSAVE inside Redis (non-blocking snapshot),
-# wait for it to finish, copy /var/lib/redis/dump.rdb to GCS with a timestamp,
-# then prune to the ${snapshot_retention_count} most recent.
+# Every ${snapshot_interval}: BGSAVE inside the running Redis container,
+# wait for it to finish, copy dump.rdb from the host bind-mount to GCS,
+# then prune to the ${snapshot_retention_count} most recent snapshots.
 cat >/usr/local/bin/wms-redis-snapshot.sh <<SNAPSHOT_EOF
 #!/bin/bash
 set -euo pipefail
 BUCKET="${gcs_bucket}"
 RETENTION=${snapshot_retention_count}
 
-# BGSAVE needs the AUTH password now.
 PASSWORD=\$(gcloud secrets versions access latest \\
   --secret=${password_secret_id} --project=${project_id})
-redis-cli -a "\$PASSWORD" --no-auth-warning BGSAVE >/dev/null
+
+docker exec wms-redis \\
+  redis-cli -a "\$PASSWORD" --no-auth-warning BGSAVE >/dev/null
 
 # Wait for the background save to finish.
 for _ in \$(seq 1 30); do
-  STATUS=\$(redis-cli -a "\$PASSWORD" --no-auth-warning INFO persistence \\
-    | tr -d '\r' | awk -F: '/rdb_bgsave_in_progress/ {print \$2}')
+  STATUS=\$(docker exec wms-redis redis-cli -a "\$PASSWORD" --no-auth-warning \\
+    INFO persistence | tr -d '\r' | awk -F: '/rdb_bgsave_in_progress/ {print \$2}')
   if [ "\$STATUS" = "0" ]; then
     break
   fi
@@ -104,7 +125,7 @@ for _ in \$(seq 1 30); do
 done
 
 DATE=\$(date -u +%Y-%m-%d-%H%M%S)
-gsutil -q cp /var/lib/redis/dump.rdb "gs://\$BUCKET/dump-\$DATE.rdb"
+gsutil -q cp $${DATA_DIR}/dump.rdb "gs://\$BUCKET/dump-\$DATE.rdb"
 
 # Retention: keep the newest N snapshots, delete the rest.
 mapfile -t OLD < <(gsutil ls "gs://\$BUCKET/dump-*.rdb" 2>/dev/null | sort | head -n -"\$RETENTION")
@@ -117,8 +138,8 @@ chmod +x /usr/local/bin/wms-redis-snapshot.sh
 cat >/etc/systemd/system/wms-redis-snapshot.service <<EOF
 [Unit]
 Description=Snapshot Redis dump.rdb to GCS
-Wants=redis-server.service
-After=redis-server.service network-online.target
+Wants=wms-redis-container.service
+After=wms-redis-container.service network-online.target
 
 [Service]
 Type=oneshot
@@ -143,7 +164,7 @@ systemctl enable --now wms-redis-snapshot.timer
 
 # ── Google Cloud Ops Agent ─────────────────────────────────────────────────
 # Ships VM metrics (CPU, memory, disk, uptime) + system logs to Cloud
-# Monitoring / Logging so the monitoring module can chart + alert.
+# Monitoring / Logging.
 curl -sSO https://dl.google.com/cloudagents/add-google-cloud-ops-agent-repo.sh
 bash add-google-cloud-ops-agent-repo.sh --also-install --version=latest
 
