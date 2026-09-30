@@ -651,6 +651,81 @@ resource "google_monitoring_dashboard" "wms_chatbot" {
               yAxis = { label = "keys", scale = "LINEAR" }
             }
           }
+        },
+
+        # ── Row 5: Self-hosted Redis VM (added alongside MemoryStore
+        #    tiles above during the cutover — keep both so you can watch
+        #    MemoryStore go idle while the VM picks up traffic. Both rows
+        #    stay until PR 3 destroys MemoryStore, at which point Row 4's
+        #    two Redis tiles come out.) ───────────────────────────────────
+        {
+          xPos = 0, yPos = 15, width = 4, height = 4,
+          widget = {
+            title = "VM Redis: CPU %"
+            xyChart = {
+              dataSets = [{
+                timeSeriesQuery = {
+                  timeSeriesFilter = {
+                    filter = var.self_hosted_redis_vm_name != "" ? "resource.type=\"gce_instance\" AND metric.type=\"compute.googleapis.com/instance/cpu/utilization\" AND metric.labels.instance_name=\"${var.self_hosted_redis_vm_name}\"" : ""
+                    aggregation = {
+                      alignmentPeriod  = "60s"
+                      perSeriesAligner = "ALIGN_MEAN"
+                    }
+                  }
+                }
+                plotType = "LINE"
+              }]
+              yAxis = { label = "utilization", scale = "LINEAR" }
+            }
+          }
+        },
+        {
+          xPos = 4, yPos = 15, width = 4, height = 4,
+          widget = {
+            title = "VM Redis: memory used %"
+            xyChart = {
+              dataSets = [{
+                timeSeriesQuery = {
+                  timeSeriesFilter = {
+                    # agent.googleapis.com metrics come from the Google Cloud
+                    # Ops Agent installed on the VM (see startup.sh.tftpl).
+                    # memory/percent_used is a straightforward 0-100 gauge.
+                    filter = var.self_hosted_redis_vm_name != "" ? "resource.type=\"gce_instance\" AND metric.type=\"agent.googleapis.com/memory/percent_used\" AND metric.labels.instance_name=\"${var.self_hosted_redis_vm_name}\"" : ""
+                    aggregation = {
+                      alignmentPeriod    = "60s"
+                      perSeriesAligner   = "ALIGN_MEAN"
+                      crossSeriesReducer = "REDUCE_MEAN"
+                    }
+                  }
+                }
+                plotType = "LINE"
+              }]
+              yAxis = { label = "percent", scale = "LINEAR" }
+            }
+          }
+        },
+        {
+          xPos = 8, yPos = 15, width = 4, height = 4,
+          widget = {
+            title = "VM Redis: uptime (s)"
+            xyChart = {
+              dataSets = [{
+                timeSeriesQuery = {
+                  timeSeriesFilter = {
+                    # A drop to 0 = VM rebooted (planned maintenance or
+                    # crash). Cross-references the VM-down alert policy.
+                    filter = var.self_hosted_redis_vm_name != "" ? "resource.type=\"gce_instance\" AND metric.type=\"compute.googleapis.com/instance/uptime\" AND metric.labels.instance_name=\"${var.self_hosted_redis_vm_name}\"" : ""
+                    aggregation = {
+                      alignmentPeriod  = "60s"
+                      perSeriesAligner = "ALIGN_MEAN"
+                    }
+                  }
+                }
+                plotType = "LINE"
+              }]
+              yAxis = { label = "seconds", scale = "LINEAR" }
+            }
+          }
         }
       ]
     }
