@@ -57,7 +57,7 @@ resource "google_logging_metric" "self_hosted_redis_dbsize" {
   filter = <<-EOT
     resource.type="gce_instance"
     logName=~"projects/.+/logs/syslog"
-    jsonPayload.MESSAGE=~"wms-redis-metrics.*dbsize="
+    jsonPayload.message=~"wms-redis-metrics.*dbsize="
   EOT
 
   metric_descriptor {
@@ -80,7 +80,7 @@ resource "google_logging_metric" "self_hosted_redis_dbsize" {
 
   # Grab the number after "dbsize=" as the metric value. With one sample
   # per 60s window, ALIGN_MEAN on the chart gives "current key count".
-  value_extractor = "REGEXP_EXTRACT(jsonPayload.MESSAGE, \"dbsize=([0-9]+)\")"
+  value_extractor = "REGEXP_EXTRACT(jsonPayload.message, \"dbsize=([0-9]+)\")"
 }
 
 resource "google_logging_metric" "feedback_submissions" {
