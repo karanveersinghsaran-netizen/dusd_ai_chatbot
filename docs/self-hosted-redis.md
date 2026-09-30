@@ -291,8 +291,10 @@ sudo mount /dev/disk/by-id/google-redis-data /mnt/newdisk
 # Stop Redis so the copy is consistent
 sudo systemctl stop wms-redis-container
 
-# Copy current data from boot disk to new disk
-sudo rsync -a /var/lib/redis-data/ /mnt/newdisk/
+# Copy current data from boot disk to new disk. Use `cp -a` — the Debian
+# GCE image doesn't ship rsync by default, and `cp -a` preserves ownership
+# and permissions just as well for a one-shot copy.
+sudo cp -a /var/lib/redis-data/. /mnt/newdisk/
 ls -la /mnt/newdisk/    # confirm dump.rdb (and appendonly.aof if present) copied
 
 # Unmount the temporary mount
