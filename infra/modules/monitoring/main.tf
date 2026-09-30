@@ -744,10 +744,15 @@ resource "google_monitoring_dashboard" "wms_chatbot" {
                   timeSeriesFilter = {
                     # Populated by the wms-redis-dbsize.timer on the VM +
                     # the self_hosted_redis_dbsize log-based metric above.
+                    # DELTA DISTRIBUTION metrics (which log-based metrics
+                    # with value_extractor produce) can't use ALIGN_MEAN —
+                    # Cloud Monitoring only accepts percentile aligners
+                    # or ALIGN_DELTA on them. With one sample per 60s
+                    # window, the P50 (median) IS the sample value.
                     filter = "metric.type=\"logging.googleapis.com/user/wms_chatbot/self_hosted_redis_dbsize\""
                     aggregation = {
                       alignmentPeriod    = "60s"
-                      perSeriesAligner   = "ALIGN_MEAN"
+                      perSeriesAligner   = "ALIGN_PERCENTILE_50"
                       crossSeriesReducer = "REDUCE_MEAN"
                     }
                   }
