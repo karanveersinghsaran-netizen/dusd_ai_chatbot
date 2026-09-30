@@ -31,12 +31,41 @@ if [ ! -f "$MARKER" ]; then
   # slow first-time image pull inside ExecStart (which can time out).
   docker pull "$REDIS_IMAGE"
 
-  # Data dir on the host — bind-mounted into the container at /data. Redis
-  # writes dump.rdb + appendonly.aof + appendonlydir/ here; ownership 999:999
-  # matches the redis user baked into the official image.
   mkdir -p "$DATA_DIR"
-  chown -R 999:999 "$DATA_DIR"
   mkdir -p /etc/redis
+fi
+
+# ── Persistent data disk mount (every boot — idempotent) ──────────────────
+# /dev/disk/by-id/google-redis-data is stable — comes from the attached_disk
+# block's device_name. First boot after attach: disk is empty, mkfs.ext4.
+# On subsequent boots (or fresh VMs attaching an existing disk): disk is
+# already formatted, fstab entry gets added, systemd auto-mounts.
+#
+# CRITICAL for the initial migration on a live VM: this script will mount
+# the (empty) disk on top of $DATA_DIR, MASKING any existing data. Copy
+# the old data OFF the boot disk BEFORE the first reset with this script
+# active. See docs/self-hosted-redis.md for the migration runbook.
+DATA_DEV=/dev/disk/by-id/google-redis-data
+if [ -b "$DATA_DEV" ]; then
+  # Format if blank. blkid returns non-zero on unformatted block devices.
+  if ! blkid "$DATA_DEV" >/dev/null 2>&1; then
+    mkfs.ext4 -F -L redis-data "$DATA_DEV"
+  fi
+
+  DATA_UUID=$(blkid -s UUID -o value "$DATA_DEV")
+
+  # Add fstab entry if missing (idempotent — won't add duplicates).
+  # `discard` (TRIM) + `noatime` are standard for persistent disks on GCE.
+  if ! grep -q "UUID=$${DATA_UUID}" /etc/fstab; then
+    echo "UUID=$${DATA_UUID} $${DATA_DIR} ext4 discard,defaults,noatime 0 2" >> /etc/fstab
+  fi
+
+  # Mount if not already mounted.
+  if ! mountpoint -q "$DATA_DIR"; then
+    mount "$DATA_DIR"
+  fi
+
+  chown -R 999:999 "$DATA_DIR"
 fi
 
 # ── Every boot: fetch password from Secret Manager + write EnvironmentFile ─
@@ -150,7 +179,7 @@ cat >/etc/systemd/system/wms-redis-snapshot.timer <<EOF
 Description=Run wms-redis-snapshot every ${snapshot_interval}
 
 [Timer]
-OnBootSec=15min
+OnBootSec=2min
 OnUnitActiveSec=${snapshot_interval}
 Persistent=true
 

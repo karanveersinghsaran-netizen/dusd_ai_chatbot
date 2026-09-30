@@ -229,6 +229,127 @@ sudo gsutil rm "gs://${BUCKET}/memorystore-dump-*.rdb"
 
 MemoryStore itself stays alive for PR 3 to destroy — that's the bill-dropping apply.
 
+## One-time migration to the persistent data disk
+
+When PR "Persistent Redis data disk" lands, the VM gets a separate 10 GB
+`google_compute_disk` (attached, not part of the boot disk). Data on it
+survives VM destroy/replace. But the migration requires manually moving
+data OFF the boot disk BEFORE the new startup-script logic mounts the
+empty new disk on top of `/var/lib/redis-data` and masks the old data.
+
+**Order matters — read all steps before starting.**
+
+### 1. Apply Terraform — creates + attaches the disk
+
+```bash
+cd infra
+make apply
+```
+
+Expected plan:
+- `+ google_compute_disk.redis_data` (new)
+- `~ google_compute_instance.redis` (in-place update: attaches disk)
+- No VM replacement — `metadata_startup_script` is in ignore_changes
+
+After apply, the disk is attached but **NOT mounted** on the VM (the
+startup script hasn't run since it was attached).
+
+### 2. Take a fresh RDB snapshot as insurance
+
+```bash
+# Right after step 1, in case anything below goes sideways:
+gcloud compute ssh wms-chatbot-redis --zone=us-west1-a --tunnel-through-iap \
+  --project=wms-chatbot-staging --quiet --command='
+  sudo docker exec wms-redis redis-cli \
+    -a "$(sudo cat /etc/redis/password.env | cut -d= -f2)" \
+    --no-auth-warning SAVE
+  sudo gsutil cp /var/lib/redis-data/dump.rdb \
+    gs://$(sudo ls /etc/redis/ 2>/dev/null; echo)wms-chatbot-redis-snapshots-*/pre-migration-$(date -u +%Y-%m-%d-%H%M%S).rdb'
+```
+
+### 3. On the VM: format + copy data off boot disk
+
+```bash
+gcloud compute ssh wms-chatbot-redis --zone=us-west1-a --tunnel-through-iap \
+  --project=wms-chatbot-staging
+```
+
+Then inside:
+
+```bash
+# Verify the disk is attached
+lsblk
+# expect to see something like: sdb  10G  disk  (unmounted, no partition)
+
+# Format the new disk
+sudo mkfs.ext4 -F -L redis-data /dev/disk/by-id/google-redis-data
+
+# Mount TEMPORARILY somewhere else (not /var/lib/redis-data yet)
+sudo mkdir -p /mnt/newdisk
+sudo mount /dev/disk/by-id/google-redis-data /mnt/newdisk
+
+# Stop Redis so the copy is consistent
+sudo systemctl stop wms-redis-container
+
+# Copy current data from boot disk to new disk
+sudo rsync -a /var/lib/redis-data/ /mnt/newdisk/
+ls -la /mnt/newdisk/    # confirm dump.rdb (and appendonly.aof if present) copied
+
+# Unmount the temporary mount
+sudo umount /mnt/newdisk
+sudo rmdir /mnt/newdisk
+
+# Exit SSH
+exit
+```
+
+### 4. Reset the VM — startup script mounts the disk properly
+
+```bash
+gcloud compute instances reset wms-chatbot-redis \
+  --zone=us-west1-a --project=wms-chatbot-staging
+```
+
+On boot, the startup script:
+- Detects the (now-formatted) data disk
+- Sees no fstab entry -> adds one
+- Mounts `/dev/disk/by-id/google-redis-data` at `/var/lib/redis-data`
+- Starts the Redis container, which loads `dump.rdb` from the (now mounted) disk
+
+### 5. Verify
+
+```bash
+gcloud compute ssh wms-chatbot-redis --zone=us-west1-a --tunnel-through-iap \
+  --project=wms-chatbot-staging --quiet --command='
+  # Data disk mounted?
+  mount | grep redis-data
+  # Right number of keys?
+  sudo docker exec wms-redis redis-cli \
+    -a "$(sudo cat /etc/redis/password.env | cut -d= -f2)" \
+    --no-auth-warning DBSIZE'
+```
+
+Expect: mount line showing the persistent disk mounted at
+`/var/lib/redis-data`, and DBSIZE = the same count you had before.
+
+### 6. Recovery from a future VM destroy
+
+Once persistent disk is in place, an accidental VM destroy is no longer
+a disaster:
+
+```bash
+# Whatever caused the VM to go away (terraform apply with a
+# force-replace field, gcloud compute instances delete, etc.)
+# Just recreate the instance:
+terraform -chdir=envs/staging apply \
+  -replace=module.self_hosted_redis.google_compute_instance.redis \
+  -var-file=terraform.tfvars
+
+# New VM boots, startup script detects the disk is already formatted +
+# has data, adds fstab, mounts, Redis loads its data. No manual
+# recovery, no data loss.
+```
+
 ## Failure modes to know about
 
 | Symptom | Cause | Fix |
