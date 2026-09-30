@@ -657,19 +657,33 @@ resource "google_monitoring_dashboard" "wms_chatbot" {
         #    tiles above during the cutover — keep both so you can watch
         #    MemoryStore go idle while the VM picks up traffic. Both rows
         #    stay until PR 3 destroys MemoryStore, at which point Row 4's
-        #    two Redis tiles come out.) ───────────────────────────────────
+        #    two Redis tiles come out.)
+        #
+        #    Uses built-in compute.googleapis.com metrics, NOT the Ops
+        #    Agent's agent.googleapis.com/* namespace — even though the
+        #    agent is installed and active, its metric descriptors take
+        #    time to register in a fresh project (up to several hours in
+        #    some cases). Built-in metrics arrive immediately after VM
+        #    boot and require zero agent-side plumbing. If we ever want
+        #    finer-grained memory / Redis-specific counters, swap in the
+        #    agent metrics later. ─────────────────────────────────────────
         {
           xPos = 0, yPos = 15, width = 4, height = 4,
           widget = {
-            title = "VM Redis: CPU %"
+            title = "VM Redis: CPU utilization (0-1)"
             xyChart = {
               dataSets = [{
                 timeSeriesQuery = {
                   timeSeriesFilter = {
                     filter = var.self_hosted_redis_vm_name != "" ? "resource.type=\"gce_instance\" AND metric.type=\"compute.googleapis.com/instance/cpu/utilization\" AND metric.labels.instance_name=\"${var.self_hosted_redis_vm_name}\"" : ""
+                    # REDUCE_MEAN collapses any multi-series output into a
+                    # single series — was missing in the first pass, which
+                    # let per-core values stack and produced the confusing
+                    # 250%-CPU readout.
                     aggregation = {
-                      alignmentPeriod  = "60s"
-                      perSeriesAligner = "ALIGN_MEAN"
+                      alignmentPeriod    = "60s"
+                      perSeriesAligner   = "ALIGN_MEAN"
+                      crossSeriesReducer = "REDUCE_MEAN"
                     }
                   }
                 }
@@ -682,25 +696,27 @@ resource "google_monitoring_dashboard" "wms_chatbot" {
         {
           xPos = 4, yPos = 15, width = 4, height = 4,
           widget = {
-            title = "VM Redis: memory used %"
+            title = "VM Redis: network egress bytes/s"
             xyChart = {
               dataSets = [{
                 timeSeriesQuery = {
                   timeSeriesFilter = {
-                    # agent.googleapis.com metrics come from the Google Cloud
-                    # Ops Agent installed on the VM (see startup.sh.tftpl).
-                    # memory/percent_used is a straightforward 0-100 gauge.
-                    filter = var.self_hosted_redis_vm_name != "" ? "resource.type=\"gce_instance\" AND metric.type=\"agent.googleapis.com/memory/percent_used\" AND metric.labels.instance_name=\"${var.self_hosted_redis_vm_name}\"" : ""
+                    # Redis traffic to Cloud Run rides the VPC — a proxy
+                    # for "is anyone talking to Redis". Non-zero = the
+                    # container is actively serving replies. Zero for a
+                    # sustained period = Cloud Run cutover isn't working
+                    # OR nobody's chatting.
+                    filter = var.self_hosted_redis_vm_name != "" ? "resource.type=\"gce_instance\" AND metric.type=\"compute.googleapis.com/instance/network/sent_bytes_count\" AND metric.labels.instance_name=\"${var.self_hosted_redis_vm_name}\"" : ""
                     aggregation = {
                       alignmentPeriod    = "60s"
-                      perSeriesAligner   = "ALIGN_MEAN"
-                      crossSeriesReducer = "REDUCE_MEAN"
+                      perSeriesAligner   = "ALIGN_RATE"
+                      crossSeriesReducer = "REDUCE_SUM"
                     }
                   }
                 }
                 plotType = "LINE"
               }]
-              yAxis = { label = "percent", scale = "LINEAR" }
+              yAxis = { label = "bytes/s", scale = "LINEAR" }
             }
           }
         },
@@ -716,8 +732,9 @@ resource "google_monitoring_dashboard" "wms_chatbot" {
                     # crash). Cross-references the VM-down alert policy.
                     filter = var.self_hosted_redis_vm_name != "" ? "resource.type=\"gce_instance\" AND metric.type=\"compute.googleapis.com/instance/uptime\" AND metric.labels.instance_name=\"${var.self_hosted_redis_vm_name}\"" : ""
                     aggregation = {
-                      alignmentPeriod  = "60s"
-                      perSeriesAligner = "ALIGN_MEAN"
+                      alignmentPeriod    = "60s"
+                      perSeriesAligner   = "ALIGN_MEAN"
+                      crossSeriesReducer = "REDUCE_MEAN"
                     }
                   }
                 }
