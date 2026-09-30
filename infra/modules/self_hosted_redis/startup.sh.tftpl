@@ -21,8 +21,8 @@ export DEBIAN_FRONTEND=noninteractive
 if [ ! -f "$MARKER" ]; then
   apt-get update
   apt-get install -y redis-server
-  mkdir -p /var/redis
-  chown redis:redis /var/redis
+  # /var/lib/redis is created + owned by redis:redis by the deb package;
+  # no mkdir/chown needed here anymore.
 fi
 
 # ── Every boot: fetch password from Secret Manager + write redis.conf ─────
@@ -55,7 +55,7 @@ port 6379
 requirepass $${PASSWORD}
 maxmemory ${redis_maxmemory}
 maxmemory-policy allkeys-lru
-dir /var/redis
+dir /var/lib/redis
 dbfilename dump.rdb
 save 300 1
 save 60 100
@@ -80,7 +80,7 @@ fi
 
 # ── GCS snapshot timer ─────────────────────────────────────────────────────
 # Every ${snapshot_interval}: BGSAVE inside Redis (non-blocking snapshot),
-# wait for it to finish, copy /var/redis/dump.rdb to GCS with a timestamp,
+# wait for it to finish, copy /var/lib/redis/dump.rdb to GCS with a timestamp,
 # then prune to the ${snapshot_retention_count} most recent.
 cat >/usr/local/bin/wms-redis-snapshot.sh <<SNAPSHOT_EOF
 #!/bin/bash
@@ -104,7 +104,7 @@ for _ in \$(seq 1 30); do
 done
 
 DATE=\$(date -u +%Y-%m-%d-%H%M%S)
-gsutil -q cp /var/redis/dump.rdb "gs://\$BUCKET/dump-\$DATE.rdb"
+gsutil -q cp /var/lib/redis/dump.rdb "gs://\$BUCKET/dump-\$DATE.rdb"
 
 # Retention: keep the newest N snapshots, delete the rest.
 mapfile -t OLD < <(gsutil ls "gs://\$BUCKET/dump-*.rdb" 2>/dev/null | sort | head -n -"\$RETENTION")
