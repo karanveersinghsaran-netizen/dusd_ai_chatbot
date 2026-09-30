@@ -121,7 +121,11 @@ module "cloud_run" {
   plain_env_vars = {
     ALLOWED_ORIGINS = var.allowed_origins
     DATABASE_URL    = module.cloud_sql.database_url
-    REDIS_URL       = module.redis.redis_url
+    # Cut over from MemoryStore (module.redis.redis_url) to the self-hosted
+    # VM. Same wire protocol, same wms:conv:<...> key scheme — but now
+    # includes the AUTH password. Migration steps for existing data live in
+    # docs/self-hosted-redis.md.
+    REDIS_URL       = module.self_hosted_redis.redis_url
     PUBLIC_BASE_URL = var.public_base_url
   }
 
