@@ -101,7 +101,7 @@ Unlike the session cookie, this token is *meant* to be rotated routinely — min
 needed for that path; see the infra repo's `docs/deploy.md` § 6b.
 
 Revoking every previously issued link at once (e.g. one leaked) means rotating
-`CHATBOX_TOKEN_SIGNING_KEY` itself, which does need a new Cloud Run revision — every outstanding
+`CHATBOX_TOKEN_SIGNING_KEY` itself, which does need a new deployment — every outstanding
 token immediately fails signature verification. This is coarse, all-or-nothing revocation (no
 per-token denylist, no server-side state at all), an acceptable tradeoff given what's gated is a
 preview of a staging chatbot UI, not production data.

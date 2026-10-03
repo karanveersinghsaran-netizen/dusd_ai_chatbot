@@ -24,7 +24,7 @@ can't reach into it (or vice versa).
 | `data-school`     | No       | School identifier (e.g. `wells`, `dhs` — see `data/schools/`), forwarded to the chatbox as a `?school=` query param and from there to every `/chat` request. Omitting it falls back to `DEFAULT_SCHOOL_ID` server-side. |
 
 `<app-host>` is the same origin that serves `/chat` and `/chatbox` — currently
-wherever the FastAPI app is deployed (e.g. an ngrok tunnel or Cloud Run URL).
+wherever the FastAPI app is deployed (e.g. an ngrok tunnel or a hosted URL).
 
 ## Local testing
 
@@ -52,6 +52,6 @@ should round-trip through `/chat` and render a Markdown-formatted reply.
 ## Current hosting
 
 `/embed/wms-chatbot.js` and `/chatbox` are served directly by the FastAPI app
-as an interim measure. Sprint 1.7 (#10) will host both as static assets on
-Cloud Storage + Cloud CDN, at which point `data-api-base` should point at the
-Cloud Run backend and the script `src` should point at the CDN URL instead.
+as an interim measure. Sprint 1.7 (#10) will host both as static assets behind
+a CDN, at which point `data-api-base` should point at the app's own backend
+and the script `src` should point at the CDN URL instead.
