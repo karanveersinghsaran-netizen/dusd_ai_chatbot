@@ -76,9 +76,10 @@ if PROMPT_CACHE_TTL not in ("5m", "1h"):
     raise ValueError(f"PROMPT_CACHE_TTL must be '5m' or '1h', got {PROMPT_CACHE_TTL!r}")
 
 # WebsiteScraper's (app/services/scraper.py) in-memory per-page cache TTL.
-# Cloud Run keeps at least one instance warm (infra/envs/staging/main.tf), so
-# without a TTL a scraped page could stay stale for as long as that instance
-# lives — potentially days — with no way to see a school's own site updates
+# Cloud Run keeps at least one instance warm (see the infra repo's
+# envs/staging/main.tf), so without a TTL a scraped page could stay stale
+# for as long as that instance lives — potentially days — with no way to
+# see a school's own site updates
 # (staff directory, academics page, ...) short of a redeploy. School website
 # content (staff, academics, attendance policy, ...) changes on the order of
 # days/weeks, not minutes, so a full day balances freshness against not
