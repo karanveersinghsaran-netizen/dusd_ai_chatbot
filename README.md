@@ -83,7 +83,6 @@ wms_ai_chatbot/
 │   └── store/                   # Redis (sessions) and Postgres (feedback)
 ├── data/                       # Campus map, instructional calendars
 ├── db/schema.sql               # Postgres schema
-├── infra/                      # Terraform (GCP: Cloud Run, Cloud SQL, Redis)
 ├── scripts/                    # Operator CLIs (e.g. mint a /chatbox access token)
 ├── requirements.txt
 └── .env.example

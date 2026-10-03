@@ -98,7 +98,7 @@ distribution and per-person continuity are fundamentally in tension. Minted via
 Unlike the session cookie, this token is *meant* to be rotated routinely — minting a fresh
 7-day link is the normal way to (re)grant or extend access, and it's a pure local computation
 (`scripts/generate_chatbox_token.py`) against the already-deployed signing key. No redeploy
-needed for that path; see `docs/deploy.md` § 6b.
+needed for that path; see the infra repo's `docs/deploy.md` § 6b.
 
 Revoking every previously issued link at once (e.g. one leaked) means rotating
 `CHATBOX_TOKEN_SIGNING_KEY` itself, which does need a new Cloud Run revision — every outstanding
