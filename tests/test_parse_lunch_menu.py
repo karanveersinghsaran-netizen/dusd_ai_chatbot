@@ -67,6 +67,39 @@ def test_extract_filters_dash_and_na_as_no_allergen():
     assert result == {"Fruit Cup": set()}
 
 
+def test_extract_normalizes_allergen_spelling_variants():
+    """The real PDFs spell one allergen several ways within a single dish —
+    the pancake row says "eggs", the omelette row says "egg". Unioning the
+    raw strings produced "egg, eggs, ..." which reads as two separate
+    allergens, defeating the point of quoting the list verbatim."""
+    rows = [
+        ["TH", "Mini Pancakes and Eggs", "Pancake", "-", "-", "-", "-", "-", "-", "wheat, eggs, milk"],
+        [None, None, "Omelette", "-", "-", "-", "-", "-", "-", "egg, milk"],
+    ]
+    with patch("scripts.parse_lunch_menu.fitz.open", return_value=_fake_pdf([[rows]])):
+        result = _extract_dish_allergens("fake.pdf")
+    assert result == {"Mini Pancakes and Eggs": {"wheat", "egg", "milk"}}
+
+
+def test_extract_normalizes_allergen_wrapped_across_lines():
+    """pymupdf leaves the newline from a wrapped cell inside the value, so
+    the dressings row really does come through as "sesame\nseeds"."""
+    rows = [["M-F", "Dressings", "Asian Sesame", "-", "-", "-", "-", "-", "-", "soy, sesame\nseeds"]]
+    with patch("scripts.parse_lunch_menu.fitz.open", return_value=_fake_pdf([[rows]])):
+        result = _extract_dish_allergens("fake.pdf")
+    assert result == {"Dressings": {"soy", "sesame"}}
+
+
+def test_extract_passes_through_unrecognised_allergen_tokens():
+    """An unknown token is information. Dropping one silently is the worst
+    possible failure mode on an allergy question, so it survives as-is for
+    a human to notice during the spot-check."""
+    rows = [["M", "Banana Bread", "Loaf", "-", "-", "-", "-", "-", "-", "gluten, milk"]]
+    with patch("scripts.parse_lunch_menu.fitz.open", return_value=_fake_pdf([[rows]])):
+        result = _extract_dish_allergens("fake.pdf")
+    assert result == {"Banana Bread": {"gluten", "milk"}}
+
+
 def test_extract_skips_header_echo_rows_without_resetting_current_dish():
     """The header repeats mid-table wherever the source PDF's table spans a
     page break — treating it as a fake dish would orphan whatever real dish

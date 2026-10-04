@@ -11,7 +11,7 @@ from app import config
 from app.schools import SchoolConfig, get_school
 from app.services.clubs import get_club_list
 from app.services.course_catalog import get_course_catalog_section, get_department_names
-from app.services.lunch_menu import get_lunch_menu_text
+from app.services.lunch_menu import get_lunch_menu_text, get_lunch_menu_urls
 from app.services.scraper import WebsiteScraper
 from app.services.calendar import (
     get_upcoming_events,
@@ -279,13 +279,17 @@ class SchoolAgent:
             self.tools.append({
                 "name": "get_lunch_menu",
                 "description": (
-                    f"Get this month's {school.name} lunch menu, including every dish's listed "
+                    f"Get the current {school.name} lunch menu, including every dish's listed "
                     "allergens (from the standard 9: wheat, egg, soy, milk, sesame, fish, tree nut, "
                     "peanut, shellfish). Use this for ANY question about what's for lunch, whether a "
                     "specific dish or day is safe for an allergy, or what options avoid a given "
-                    "allergen. The menu repeats the same Monday-Friday pattern every week this month "
-                    "— 'today's lunch' and 'this Friday's lunch' both come from this same data, "
-                    "matched by weekday name, not a specific date."
+                    "allergen. The district publishes on multi-week menu cycles that do NOT line up "
+                    "with calendar months; the result states today's date and the served cycle's "
+                    "exact date range, and repeats the same Monday-Friday pattern every week within "
+                    "that range — so 'today's lunch' and 'this Friday's lunch' both come from this "
+                    "same data, matched by weekday name. Check the returned date range before "
+                    "answering about a specific date, and report any caveat it carries about the "
+                    "data being outside that range."
                 ),
                 "input_schema": {"type": "object", "properties": {}},
             })
@@ -541,13 +545,21 @@ CRITICAL RULES:
             return (result, False)
         if tool_name == "get_lunch_menu":
             text = get_lunch_menu_text(self.school.district_id, self.school.lunch_menu_grade_band)
-            source_url = self.school.lunch_menu_url or self.school.website
+            # Prefer the URLs recorded on the menu cycle being served over the
+            # ones on the school record: a cycle's PDFs are what its allergen
+            # data was actually parsed from, so they can't fall out of sync
+            # with the dishes being quoted the way a school-level link does
+            # once the district publishes a new cycle.
+            menu_url, nutrition_url = get_lunch_menu_urls(
+                self.school.district_id, self.school.lunch_menu_grade_band)
+            source_url = menu_url or self.school.lunch_menu_url or self.school.website
+            nutrition_url = nutrition_url or self.school.lunch_menu_nutrition_url
             result = f"SOURCE: {source_url}\n\n" + text
             nutrition_note = ""
-            if self.school.lunch_menu_nutrition_url:
+            if nutrition_url:
                 nutrition_note = (
                     " If the user wants to verify allergen/ingredient detail themselves, you may "
-                    f"also mention the full nutrition document: {self.school.lunch_menu_nutrition_url} "
+                    f"also mention the full nutrition document: {nutrition_url} "
                     "— but the SOURCE line above stays the one 📍 Source link per the formatting rule; "
                     "this is just an optional mention in your response text, not a second source line."
                 )

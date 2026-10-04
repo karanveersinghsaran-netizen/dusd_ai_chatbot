@@ -1,31 +1,47 @@
 """Converts a DUSD grade-band nutrition PDF (per-ingredient allergen table)
 plus a hand-written day->dish-name map into the structured JSON
 app/services/lunch_menu.py serves. Re-run this whenever the district
-publishes a new month's menu.
+publishes a new menu CYCLE — see scripts/lunch_menu_day_maps/README.md for
+why the unit is a cycle and not a calendar month.
 
 The nutrition PDF has a real, structured "Allergens List" column — one row
 per ingredient/component per dish — extractable via pymupdf's table finder.
 It does NOT say which dish is offered on which weekday, though: that's a
 separate, visually-laid-out calendar PDF (graphic, not a clean table), so
 the day->dish mapping is a small file a human writes by reading that
-calendar PDF once a month (same maintenance shape as
+calendar PDF once per menu cycle (same maintenance shape as
 parse_course_catalog.py's DEPARTMENT_HEADINGS).
 
 Usage:
     python -m scripts.parse_lunch_menu "path/to/nutrition.pdf" \
         --district-id dusd --grade-band 6-8 \
-        --period-label "September 2026" --month-key 2026_09 \
+        --period-label "Cycle 3 (October 12 - November 20, 2026)" \
+        --start-date 2026-10-12 --end-date 2026-11-20 \
         --day-map path/to/day_map.json \
         --peanut-tree-nut-free \
-        --out data/lunch_menus/dusd/6-8/2026_09.json
+        --menu-url "https://.../menus/6-8_Menu_Oct_2026.pdf" \
+        --nutrition-url "https://.../nutriinfo/_6-8_Oct_2026_Nutrition.pdf" \
+        --out data/lunch_menus/dusd/6-8/2026_10_12.json
+
+The output file is named for the cycle's START DATE, and the service picks
+the file whose start_date..end_date covers the day being asked about. Take
+the range from the nutrition PDF's own title line ("26-27 SY C3 MENU (OCT
+12 - NOV 20)") — NOT from the calendar PDF's filename, which is per-month
+and will split one cycle across two names.
 
 day_map.json shape:
     {
       "Monday": ["Cheeseburger with Potato Wedges", "Cheesy Breaded Ravioli with Marinara Sauce"],
       "Tuesday": [...], "Wednesday": [...], "Thursday": [...], "Friday": [...],
       "daily_options": ["Spicy Chicken Sandwich", "Grilled Cheese with Tomato Soup", ...],
-      "overrides": {"Some Dish Name": ["wheat", "milk"]}
+      "overrides": {"Some Dish Name": ["wheat", "milk"]},
+      "notes": ["No school October 15-16, 2026 — no meals served."]
     }
+
+"notes" is optional free text passed straight through to the output and
+shown to the user above the weekday listing — for anything about the cycle
+the weekday pattern alone can't express, e.g. a no-school day in the middle
+of it.
 
 "overrides" is optional — a complete, manually verified replacement of a
 dish's extracted allergen set, for the rare case _extract_dish_allergens
@@ -34,6 +50,7 @@ contamination one of those cases caused in a neighboring dish.
 """
 import argparse
 import json
+from datetime import date
 from pathlib import Path
 from typing import Dict, List, Set
 
@@ -42,9 +59,39 @@ import fitz
 
 _HEADER_ECHO_NAMES = {"Breakfast Menu Item", "Lunch Menu Item", "Menu Item"}
 
+# The source PDFs spell the same allergen several ways across ingredient
+# rows — "egg" and "eggs" both appear within a single dish (e.g. 6-8 C3's
+# "Mini Pancakes, Chicken Sausage & Eggs", whose pancake row says "eggs"
+# and omelette row says "egg"), and dressings say "sesame seeds". Unioning
+# the raw strings therefore produced sets like "egg, eggs, milk, soy,
+# wheat", which reads as two distinct allergens and undercuts the whole
+# point of quoting the list verbatim to the user. Normalise to the standard
+# 9 allergen names the PDFs' own header column uses. Anything unrecognised
+# is passed through untouched rather than dropped — an unknown token is
+# information, and silently discarding one on an allergy question is the
+# worst possible failure mode here.
+_ALLERGEN_ALIASES = {
+    "eggs": "egg",
+    "sesame seeds": "sesame",
+    "sesame seed": "sesame",
+    "treenut": "tree nut",
+    "treenuts": "tree nut",
+    "tree nuts": "tree nut",
+    "peanuts": "peanut",
+}
+
 
 def _clean_cell(value) -> str:
     return " ".join((value or "").split())
+
+
+def _normalize_allergen(value: str) -> str:
+    """Canonical name for one allergen token — see _ALLERGEN_ALIASES. Also
+    collapses the newlines pymupdf leaves inside wrapped cells (e.g.
+    "sesame\nseeds"), which _clean_cell can't reach because allergens are
+    split out of the cell after it."""
+    cleaned = " ".join(value.split()).lower()
+    return _ALLERGEN_ALIASES.get(cleaned, cleaned)
 
 
 def _extract_dish_allergens(pdf_path: Path) -> Dict[str, Set[str]]:
@@ -71,7 +118,7 @@ def _extract_dish_allergens(pdf_path: Path) -> Dict[str, Set[str]]:
     against the source PDF before committing it — a dish with an
     implausibly small/empty allergen set, or a neighboring dish with
     allergens that don't match its own ingredients, is the tell. Verified
-    and hand-corrected for the initial September 2026 data; see
+    and hand-corrected for the initial Cycle 2 2026 data; see
     scripts/lunch_menu_day_maps/README.md for the specific corrections."""
     segments: List[List[list]] = []
     for page in fitz.open(pdf_path):
@@ -96,7 +143,7 @@ def _extract_dish_allergens(pdf_path: Path) -> Dict[str, Set[str]]:
         bucket = dish_allergens.setdefault(name, set())
         for row in segment:
             for allergen in (row[9] or "").split(","):
-                cleaned = allergen.strip().lower()
+                cleaned = _normalize_allergen(allergen)
                 if cleaned and cleaned not in ("-", "--", "n/a"):
                     bucket.add(cleaned)
 
@@ -123,7 +170,7 @@ def parse(pdf_path: Path, day_map: dict) -> Dict[str, List[dict]]:
     (see its docstring), or to correct a set contaminated by one of those
     cases bleeding into a neighboring dish. Always a manually verified,
     documented correction, never a silent guess — see
-    scripts/lunch_menu_day_maps/README.md for this month's specific cases
+    scripts/lunch_menu_day_maps/README.md for each cycle's specific cases
     and how they were verified."""
     dish_allergens = _extract_dish_allergens(pdf_path)
     overrides = day_map.get("overrides", {})
@@ -144,17 +191,32 @@ def main():
     parser.add_argument("nutrition_pdf", type=Path)
     parser.add_argument("--district-id", required=True, help="e.g. dusd")
     parser.add_argument("--grade-band", required=True, help="e.g. 6-8, 9-12")
-    parser.add_argument("--period-label", required=True, help="e.g. 'September 2026'")
-    parser.add_argument("--month-key", required=True, help="e.g. 2026_09")
+    parser.add_argument("--period-label", required=True, help="e.g. 'Cycle 3 (October 12 - November 20, 2026)'")
+    parser.add_argument("--start-date", required=True, help="first day this cycle is served, YYYY-MM-DD")
+    parser.add_argument("--end-date", required=True, help="last day this cycle is served, YYYY-MM-DD")
     parser.add_argument("--day-map", type=Path, required=True)
     parser.add_argument("--peanut-tree-nut-free", action="store_true")
+    parser.add_argument("--menu-url", help="the calendar PDF this cycle's day-map was read from")
+    parser.add_argument("--nutrition-url", help="the nutrition PDF the allergens came from")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
+
+    start, end = date.fromisoformat(args.start_date), date.fromisoformat(args.end_date)
+    if end < start:
+        parser.error(f"--end-date {end} is before --start-date {start}")
 
     day_map = json.loads(args.day_map.read_text(encoding="utf-8"))
     data = parse(args.nutrition_pdf, day_map)
     data["period_label"] = args.period_label
+    data["start_date"] = start.isoformat()
+    data["end_date"] = end.isoformat()
     data["peanut_tree_nut_free"] = args.peanut_tree_nut_free
+    if args.menu_url:
+        data["menu_url"] = args.menu_url
+    if args.nutrition_url:
+        data["nutrition_url"] = args.nutrition_url
+    if day_map.get("notes"):
+        data["notes"] = day_map["notes"]
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
