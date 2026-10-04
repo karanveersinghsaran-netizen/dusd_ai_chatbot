@@ -1,0 +1,133 @@
+{
+  "days": {
+    "Monday": [
+      {
+        "name": "Pulled Pork Sandwich with Potato Wedges",
+        "allergens": [
+          "egg",
+          "sesame",
+          "soy",
+          "wheat"
+        ]
+      },
+      {
+        "name": "Black Bean Cheeseburger with Potato Wedges",
+        "allergens": [
+          "egg",
+          "milk",
+          "sesame",
+          "soy",
+          "wheat"
+        ]
+      }
+    ],
+    "Tuesday": [
+      {
+        "name": "Soft Taco Bar",
+        "allergens": []
+      },
+      {
+        "name": "Cheese Quesadilla with Salsa Cup",
+        "allergens": [
+          "milk",
+          "soy",
+          "wheat"
+        ]
+      }
+    ],
+    "Wednesday": [
+      {
+        "name": "Chicken Nuggets and WG Cookie",
+        "allergens": [
+          "egg",
+          "milk",
+          "soy",
+          "wheat"
+        ]
+      },
+      {
+        "name": "Vegan Nuggets and WG Cookie",
+        "allergens": [
+          "egg",
+          "milk",
+          "soy",
+          "wheat"
+        ]
+      }
+    ],
+    "Thursday": [
+      {
+        "name": "Mini Pancakes, Chicken Sausage & Eggs",
+        "allergens": [
+          "egg",
+          "milk",
+          "soy",
+          "wheat"
+        ]
+      },
+      {
+        "name": "Mini Pancakes and Eggs",
+        "allergens": [
+          "egg",
+          "milk",
+          "soy",
+          "wheat"
+        ]
+      }
+    ],
+    "Friday": [
+      {
+        "name": "Turkey Pepperoni Pizza Slice",
+        "allergens": [
+          "milk",
+          "soy",
+          "wheat"
+        ]
+      },
+      {
+        "name": "Cheese Pizza Slice",
+        "allergens": [
+          "milk",
+          "soy",
+          "wheat"
+        ]
+      }
+    ]
+  },
+  "daily_options": [
+    {
+      "name": "Spicy Chicken Sandwich",
+      "allergens": [
+        "sesame",
+        "soy",
+        "wheat"
+      ]
+    },
+    {
+      "name": "Cheese Pizza Slice",
+      "allergens": [
+        "milk",
+        "soy",
+        "wheat"
+      ]
+    },
+    {
+      "name": "Sidekick",
+      "allergens": [
+        "milk",
+        "sesame",
+        "soy",
+        "wheat"
+      ]
+    }
+  ],
+  "period_label": "Cycle 3",
+  "start_date": "2026-10-12",
+  "end_date": "2026-10-30",
+  "peanut_tree_nut_free": true,
+  "menu_url": "https://www.schoolnutritionandfitness.com/schools/dusd_2203112030183753/menus/6-8_Menu_Oct_2026.pdf",
+  "nutrition_url": "https://www.schoolnutritionandfitness.com/schools/dusd_2203112030183753/nutriinfo/_6-8_Oct_2026_Nutrition.pdf",
+  "notes": [
+    "No school Thursday October 15 and Friday October 16, 2026 — no meals are served those two days."
+  ]
+}
