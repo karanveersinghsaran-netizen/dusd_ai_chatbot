@@ -17,7 +17,13 @@ from app import config
 from app.agent import get_agent
 from app.daily_cap import FRIENDLY_CAP_MESSAGE, check_and_increment
 from app.schools import get_school, load_schools
-from app.security.chatbox_token import verify_chatbox_token
+from app.security.chatbox_token import (
+    TOKEN_EXPIRED,
+    TOKEN_MALFORMED,
+    TOKEN_MISSING,
+    classify_chatbox_token,
+    verify_chatbox_token,
+)
 from app.security.identity import resolve_user_id
 from app.security.middleware import (
     enforce_max_body_size,
@@ -95,7 +101,7 @@ async def _add_app_version_header(request: Request, call_next):
 
 
 CHATBOX_HTML = Path(__file__).parent / "chatbox.html"
-EXPIRED_LINK_HTML = Path(__file__).parent / "static" / "expired-link.html"
+LINK_UNAVAILABLE_HTML = Path(__file__).parent / "static" / "link-unavailable.html"
 EMBED_JS = Path(__file__).parent / "embed" / "wms-chatbot.js"
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -194,6 +200,74 @@ class ThanksRequest(BaseModel):
     school_id: str | None = None
 
 
+
+# One <main> block per reason a chatbox link can be rejected. The EXPIRED
+# entry must stay byte-identical to the default already in
+# link-unavailable.html — that's what _link_unavailable_page swaps out — so
+# the file remains a correct standalone page and the swap has something to
+# match. tests/test_main.py asserts each reason renders its own distinctive
+# copy, which is what catches drift between the two.
+#
+# Worth keeping distinct because "expired" was previously shown for ALL
+# THREE cases, and a damaged link is the one people actually hit: tokens
+# get truncated by chat clients, mangled by markdown escaping (a generic
+# token's user_id field is a literal "*", which renders as "\*"), or
+# copied without their last line. Telling someone their perfectly good
+# link "expired" sends them to ask for a replacement that will fail the
+# exact same way.
+LINK_PROBLEM_BLOCKS = {
+    TOKEN_EXPIRED: """<main>
+  <div class="icon" aria-hidden="true">⏱</div>
+  <h1>Your access link has expired</h1>
+  <p>
+    This preview link is only valid for a limited time.
+    Ask Karanveer for a fresh link and try again.
+  </p>
+  <p class="hint">
+    If you installed this app from an expired link, delete the icon and add
+    it again from the new link.
+  </p>
+</main>""",
+    TOKEN_MALFORMED: """<main>
+  <div class="icon" aria-hidden="true">✂</div>
+  <h1>This link looks incomplete</h1>
+  <p>
+    Your link may not have copied across in full — chat apps and email
+    sometimes cut the end off, or break it across two lines.
+  </p>
+  <p class="hint">
+    Go back to where you got it, copy the whole link in one piece, and paste
+    it into your browser's address bar. If it still doesn't open, ask
+    Karanveer for a new one.
+  </p>
+</main>""",
+    TOKEN_MISSING: """<main>
+  <div class="icon" aria-hidden="true">🔗</div>
+  <h1>You need an access link</h1>
+  <p>
+    This chat is opened through a personal link rather than from this page.
+  </p>
+  <p class="hint">
+    If you installed this app from a link that has since expired, delete the
+    icon and add it again from a fresh link. Otherwise, ask Karanveer for
+    one.
+  </p>
+</main>""",
+}
+
+
+def _link_unavailable_page(reason: str) -> str:
+    """The link-unavailable page, worded for why the link was rejected.
+    Falls back to the file's default (expired) wording for an unrecognised
+    reason, so a new reason added to chatbox_token.py renders something
+    sane instead of raising on a user-facing error path."""
+    page = LINK_UNAVAILABLE_HTML.read_text()
+    block = LINK_PROBLEM_BLOCKS.get(reason)
+    if block is None or reason == TOKEN_EXPIRED:
+        return page
+    return page.replace(LINK_PROBLEM_BLOCKS[TOKEN_EXPIRED], block)
+
+
 MAX_SCREENSHOT_BYTES = 2 * 1024 * 1024
 ALLOWED_SCREENSHOT_CONTENT_TYPES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -228,18 +302,22 @@ async def chatbox(
     cookie storage under browsers' cross-origin Secure-cookie rules.
 
     Gated behind a signed, self-expiring token (app/security/chatbox_token.py).
-    Missing/invalid tokens render a friendly HTML "link expired" page (with a
-    404 status) instead of a raw JSON error, because installed PWAs commonly
-    land here after their embedded token expires — showing them "detail not
-    found" was the worst possible first impression.
+    Rejected tokens render a friendly HTML page (with a 404 status) instead
+    of a raw JSON error, because installed PWAs commonly land here after
+    their embedded token expires — showing them "detail not found" was the
+    worst possible first impression. The page is worded for WHY the token
+    was rejected (see LINK_PROBLEM_BLOCKS): a link that lapsed and a link
+    that arrived truncated need opposite instructions, and saying "expired"
+    for both sends people to request a replacement that fails identically.
 
     `school` (#52) pins per-school branding: it's forwarded into the manifest
     link so the installed PWA gets that school's icon, and — when a matching
     apple-touch-icon-<id>.png exists — swapped into the static apple-touch-icon
     link too, since iOS reads that tag at page-load time, before any JS runs."""
-    if token is None or not verify_chatbox_token(token):
+    rejection = classify_chatbox_token(token)
+    if rejection is not None:
         return HTMLResponse(
-            EXPIRED_LINK_HTML.read_text(),
+            _link_unavailable_page(rejection),
             status_code=404,
             headers={"cache-control": "no-store"},
         )
