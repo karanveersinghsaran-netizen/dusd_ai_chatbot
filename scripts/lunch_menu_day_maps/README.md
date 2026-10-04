@@ -37,6 +37,53 @@ C3 pattern, interrupted by the Oct 15-16 no-school days). Put that kind of
 mid-cycle gap in the day-map's `"notes"` rather than inventing a cycle
 boundary for it.
 
+## Cycle 3 2026 (Oct 12 - Nov 20), 9-12 only
+
+From `9-12_Oct_2026_Nutrition.pdf` (title line `26-27 SY C3 MENU (OCT 12 -
+NOV 20) DUSD`) and the `HS_Menu_Oct_19-30,_2026.pdf` calendar. **6-8 has
+no C3 file yet** — Wells still serves Cycle 2 only, and its data stops
+after Oct 9.
+
+The weekday pattern is corroborated twice over: this nutrition PDF has its
+own `Day` column, and it agrees with the calendar's columns on every day.
+Read the calendar's columns **positionally** (bucket each dish block's x
+centre to the nearest weekday header centre) — reading pymupdf's text
+order instead puts Wednesday and Thursday the wrong way round, which is
+exactly the mistake that produced a phantom "the two documents disagree"
+during this cycle's prep.
+
+`end_date` is the district's own `NOV 20`, not the Oct 30 the calendar PDF
+covers. Justified because the nutrition PDF spans the whole cycle and its
+`Day` column matches October's calendar, so the pattern is the cycle's and
+not just October's. If the November calendar turns out to differ, shorten
+this file's `end_date` rather than editing the days in place — the service
+will then flag dates past it instead of serving the wrong week.
+
+Three overrides, all verified by hand against the PDF's ingredient rows:
+
+- **"Spicy Buffalo Chicken Pizza"**: the two documents genuinely disagree
+  on the NAME. The calendar advertises *Spicy Buffalo Chicken Pizza*; the
+  nutrition table calls the same Monday slot *BBQ Chicken Pizza* and lists
+  `BBQ Sauce` among its ingredients. Allergens are identical either way
+  (`Cheese Pizza Slice WG` wheat/soy/milk; chicken strips, sauce and green
+  onions add none), so the dish name carries both spellings and the
+  override supplies that set. **Worth asking the district which is
+  actually served** — this is the one unresolved conflict in the file.
+- **"Cheese Baked Pasta"**: extracted with a spurious `soy`. Its segment
+  swallowed the trailing `Brown Rice` and `Pulled Pork` rows of the next
+  dish at a page break. Its real ingredients (Cellentani wheat; Alfredo
+  milk; Cheddar milk; Texas Toast Garlic Bread milk/wheat) union to
+  `milk, wheat`.
+- **"Pork Carnitas Burrito Bowl"**: the other half of that same page
+  break — extracted EMPTY, because the `Brown Rice`/`Pulled Pork` rows
+  that belong to it landed in the preceding segment. `Pulled Pork` carries
+  `soy`; everything else (corn, black beans, red onion, vinegar, sugar,
+  limes) is clean, so its real set is `soy`.
+
+An empty allergen set is the tell for this failure, and nothing in the
+committed file has one. Note that an override is a COMPLETE replacement,
+so correcting the bleed means fixing both dishes, not just the empty one.
+
 ## Cycle 2 2026 (Aug 31 - Oct 9) manual overrides
 
 Both files' `"overrides"` keys correct the same underlying issue: at a page
