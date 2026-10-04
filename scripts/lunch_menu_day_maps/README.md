@@ -37,6 +37,109 @@ C3 pattern, interrupted by the Oct 15-16 no-school days). Put that kind of
 mid-cycle gap in the day-map's `"notes"` rather than inventing a cycle
 boundary for it.
 
+## Cycle 3 2026 (Oct 12 - Nov 20), 6-8
+
+From `_6-8_Oct_2026_Nutrition.pdf` (note the leading underscore in the
+district's filename) and `6-8_Menu_Oct_2026.pdf`. That ONE calendar PDF
+holds TWO patterns stacked vertically — Oct 1-9 (Cycle 2) above, Oct 12-30
+(Cycle 3) below — so separate the bands by y coordinate before bucketing
+dishes to weekday columns, or you will merge two cycles into one file. The
+period labels on the page give the band boundaries.
+
+Two overrides, both from one page break:
+
+- **"Pulled Pork Sandwich with Potato Wedges"**: the worst case this
+  parser hits. Its name wraps across a page break ("Pulled Pork Sandwich
+  with Potato" / "Wedges"), AND its first rows carry no Day marker, so
+  they were glued onto the preceding BREAKFAST segment — `Cereal,
+  Variety` — which had already claimed the name slot. Net effect: the
+  dish disappeared from the extraction entirely, and a leftover `Wedges`
+  entry appeared in its place. Its real ingredients (Pulled Pork soy; Bun
+  wheat/soy/sesame; BBQ Sauce none; Coleslaw dressing egg; Seasoned Wedge
+  Potatoes none) union to `egg, sesame, soy, wheat`.
+  Side effect worth knowing: `Cereal, Variety` picks up a spurious
+  `sesame` from that bun. It's a breakfast item and isn't in any lunch
+  day-map, so it never reaches a user — but don't copy that extracted set
+  into one.
+- **"Black Bean Cheeseburger with Potato Wedges"**: the extracted
+  allergens are correct; the override exists only to fix the nutrition
+  PDF's spelling, which reads "Black Bean **Cheeeseburger**". A typo is
+  not worth showing a parent. (Cycle 2's `Fruit & Yogurt Partfait` still
+  carries its own typo verbatim — fix that whenever that cycle is next
+  regenerated.)
+
+**"Soft Taco Bar" has a genuinely EMPTY allergen set.** That is normally
+the tell for an extraction loss, so it was checked against the raw page
+text: the PDF really does list only Corn Tortillas, Pulled chicken and a
+food tray for it, none carrying a listed allergen. Left empty, rendering
+as "allergens: none listed" — which is the honest statement, and the
+agent prompt already forbids turning that into "safe". The calendar calls
+this dish *Chicken Taco Bar*; the nutrition table's *Soft Taco Bar* name
+is used, and its pulled-chicken ingredient confirms they're the same
+dish.
+
+The Oct 15-16 no-school note is corroborated by
+`data/calendars/dusd/2026_27.json`, which marks both days "No School"
+district-wide — not inferred from the HS menu PDF, which is the only one
+of the two calendars that mentions it.
+
+## Cycle 3 2026 (Oct 12 - Nov 20), 6-8
+
+From `9-12_Oct_2026_Nutrition.pdf` (title line `26-27 SY C3 MENU (OCT 12 -
+NOV 20) DUSD`) and the `HS_Menu_Oct_19-30,_2026.pdf` calendar. **6-8 has
+no C3 file yet** — Wells still serves Cycle 2 only, and its data stops
+after Oct 9.
+
+The weekday pattern is corroborated twice over: this nutrition PDF has its
+own `Day` column, and it agrees with the calendar's columns on every day.
+Read the calendar's columns **positionally** (bucket each dish block's x
+centre to the nearest weekday header centre) — reading pymupdf's text
+order instead puts Wednesday and Thursday the wrong way round, which is
+exactly the mistake that produced a phantom "the two documents disagree"
+during this cycle's prep.
+
+`end_date` is **Oct 30**, not the `NOV 20` on the nutrition PDF's title
+line. The nutrition PDF covers allergens for the whole C3 cycle, but every
+CALENDAR published for October stops at Oct 30 (`6-8_Menu_Oct_2026`:
+"October 12 - October 30"; HS: "October 12 - October 14" and "October 19 -
+October 30"), and the calendar is the only document that says which dish
+falls on which day. Nothing here evidences November's weekday pattern, so
+the file doesn't claim it: from Nov 2 the service flags the period as ended
+and points at the menu link, which is the correct behaviour for data we
+don't have. Extend `end_date` only once a November calendar has actually
+been read.
+
+This was initially committed as `NOV 20` on the reasoning that the
+nutrition PDF's `Day` column corroborates October's calendar, so the
+pattern was the cycle's rather than the month's. That inferred three weeks
+of menu from a document that doesn't assign dates — the agreement shows
+October is internally consistent, not that November repeats it.
+
+Three overrides, all verified by hand against the PDF's ingredient rows:
+
+- **"Spicy Buffalo Chicken Pizza"**: the two documents genuinely disagree
+  on the NAME. The calendar advertises *Spicy Buffalo Chicken Pizza*; the
+  nutrition table calls the same Monday slot *BBQ Chicken Pizza* and lists
+  `BBQ Sauce` among its ingredients. Allergens are identical either way
+  (`Cheese Pizza Slice WG` wheat/soy/milk; chicken strips, sauce and green
+  onions add none), so the dish name carries both spellings and the
+  override supplies that set. **Worth asking the district which is
+  actually served** — this is the one unresolved conflict in the file.
+- **"Cheese Baked Pasta"**: extracted with a spurious `soy`. Its segment
+  swallowed the trailing `Brown Rice` and `Pulled Pork` rows of the next
+  dish at a page break. Its real ingredients (Cellentani wheat; Alfredo
+  milk; Cheddar milk; Texas Toast Garlic Bread milk/wheat) union to
+  `milk, wheat`.
+- **"Pork Carnitas Burrito Bowl"**: the other half of that same page
+  break — extracted EMPTY, because the `Brown Rice`/`Pulled Pork` rows
+  that belong to it landed in the preceding segment. `Pulled Pork` carries
+  `soy`; everything else (corn, black beans, red onion, vinegar, sugar,
+  limes) is clean, so its real set is `soy`.
+
+An empty allergen set is the tell for this failure, and nothing in the
+committed file has one. Note that an override is a COMPLETE replacement,
+so correcting the bleed means fixing both dishes, not just the empty one.
+
 ## Cycle 2 2026 (Aug 31 - Oct 9) manual overrides
 
 Both files' `"overrides"` keys correct the same underlying issue: at a page

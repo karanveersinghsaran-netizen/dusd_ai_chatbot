@@ -1,0 +1,159 @@
+{
+  "days": {
+    "Monday": [
+      {
+        "name": "Spicy Buffalo Chicken Pizza (listed in the district nutrition document as BBQ Chicken Pizza)",
+        "allergens": [
+          "milk",
+          "soy",
+          "wheat"
+        ]
+      },
+      {
+        "name": "Cheese Pizza",
+        "allergens": [
+          "milk",
+          "soy",
+          "wheat"
+        ]
+      }
+    ],
+    "Tuesday": [
+      {
+        "name": "Orange Chicken Rice Bowl",
+        "allergens": [
+          "egg",
+          "milk",
+          "sesame",
+          "soy",
+          "wheat"
+        ]
+      },
+      {
+        "name": "Cheese Baked Pasta",
+        "allergens": [
+          "milk",
+          "wheat"
+        ]
+      }
+    ],
+    "Wednesday": [
+      {
+        "name": "Pork Carnitas Burrito Bowl",
+        "allergens": [
+          "soy"
+        ]
+      },
+      {
+        "name": "Chipotle \"Sofritas\" Burrito Bowl",
+        "allergens": [
+          "soy"
+        ]
+      }
+    ],
+    "Thursday": [
+      {
+        "name": "Beef Bolognese Pasta and Garlic Bread",
+        "allergens": [
+          "milk",
+          "wheat"
+        ]
+      },
+      {
+        "name": "Bosco Bistro Basket",
+        "allergens": [
+          "egg",
+          "fish",
+          "milk",
+          "wheat"
+        ]
+      }
+    ],
+    "Friday": [
+      {
+        "name": "Buffalo Chicken Mac&Cheese with Cornbread",
+        "allergens": [
+          "egg",
+          "milk",
+          "soy",
+          "wheat"
+        ]
+      },
+      {
+        "name": "Mac&Cheese with Cornbread",
+        "allergens": [
+          "egg",
+          "milk",
+          "soy",
+          "wheat"
+        ]
+      }
+    ]
+  },
+  "daily_options": [
+    {
+      "name": "Spicy Chicken Sandwich",
+      "allergens": [
+        "sesame",
+        "soy",
+        "wheat"
+      ]
+    },
+    {
+      "name": "Salad, Spicy Chicken",
+      "allergens": [
+        "egg",
+        "fish",
+        "milk",
+        "wheat"
+      ]
+    },
+    {
+      "name": "Black Bean Cheeseburger",
+      "allergens": [
+        "egg",
+        "milk",
+        "sesame",
+        "soy",
+        "wheat"
+      ]
+    },
+    {
+      "name": "Garden Salad",
+      "allergens": [
+        "egg",
+        "fish",
+        "milk",
+        "wheat"
+      ]
+    },
+    {
+      "name": "Caesar Salad",
+      "allergens": [
+        "egg",
+        "fish",
+        "milk",
+        "wheat"
+      ]
+    },
+    {
+      "name": "Protein Box",
+      "allergens": [
+        "egg",
+        "milk",
+        "sesame",
+        "soy",
+        "wheat"
+      ]
+    }
+  ],
+  "period_label": "Cycle 3",
+  "start_date": "2026-10-12",
+  "end_date": "2026-10-30",
+  "peanut_tree_nut_free": true,
+  "menu_url": "https://www.schoolnutritionandfitness.com/schools/dusd_2203112030183753/menus/HS_Menu_Oct_19-30,_2026.pdf",
+  "nutrition_url": "https://www.schoolnutritionandfitness.com/schools/dusd_2203112030183753/nutriinfo/9-12_Oct_2026_Nutrition.pdf",
+  "notes": [
+    "No school Thursday October 15 and Friday October 16, 2026 — no meals are served those two days."
+  ]
+}
