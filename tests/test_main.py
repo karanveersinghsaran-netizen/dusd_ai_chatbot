@@ -1,5 +1,6 @@
 """Unit tests for the FastAPI app in main.py: web /chat session-cookie flow."""
 import json
+import re
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -9,7 +10,12 @@ from fastapi.testclient import TestClient
 import main
 from app import config
 from app.agent import ChatReply
-from app.security.chatbox_token import issue_chatbox_token
+from app.security.chatbox_token import (
+    TOKEN_EXPIRED,
+    TOKEN_MALFORMED,
+    TOKEN_MISSING,
+    issue_chatbox_token,
+)
 from app.store.redis_store import RedisStore
 from tests.store.conftest import FakeRedisClient
 
@@ -710,22 +716,14 @@ def test_chatbox_route_serves_html_with_valid_token(client):
 
 def test_chatbox_route_rejects_missing_token(client):
     """Status stays 404 (semantically the resource isn't reachable), but the
-    body is now a friendly HTML page — installed PWAs land here after their
+    body is a friendly HTML page — installed PWAs land here after their
     embedded token expires, and the old raw JSON body ("detail: Not Found")
     made the app look broken on first launch from home screen."""
     resp = client.get("/chatbox")
 
     assert resp.status_code == 404
     assert resp.headers["content-type"].startswith("text/html")
-    assert "expired" in resp.text.lower()
-
-
-def test_chatbox_route_rejects_invalid_token(client):
-    resp = client.get("/chatbox?token=garbage")
-
-    assert resp.status_code == 404
-    assert resp.headers["content-type"].startswith("text/html")
-    assert "expired" in resp.text.lower()
+    assert "You need an access link" in resp.text
 
 
 def test_chatbox_route_rejects_expired_token(client):
@@ -735,6 +733,61 @@ def test_chatbox_route_rejects_expired_token(client):
     assert resp.status_code == 404
     assert resp.headers["content-type"].startswith("text/html")
     assert "expired" in resp.text.lower()
+
+
+def test_chatbox_route_rejects_invalid_token_as_incomplete_not_expired(client):
+    """A damaged token must NOT be reported as expired. Telling someone
+    their perfectly good link lapsed sends them to request a replacement
+    that will be truncated the exact same way."""
+    resp = client.get("/chatbox?token=garbage")
+
+    assert resp.status_code == 404
+    assert resp.headers["content-type"].startswith("text/html")
+    assert "This link looks incomplete" in resp.text
+    assert "has expired" not in resp.text
+
+
+def test_chatbox_route_reports_markdown_mangled_generic_token_as_incomplete(client):
+    """The real-world case: a generic token's user_id field is the literal
+    "*" marker, and writing that link in markdown escapes it to "\\*". The
+    signature then fails and the old page blamed expiry."""
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY, generic=True)
+    resp = client.get(f"/chatbox?token={token.replace('*', chr(92) + '*')}")
+
+    assert resp.status_code == 404
+    assert "This link looks incomplete" in resp.text
+
+
+def test_chatbox_route_reports_truncated_token_as_incomplete(client):
+    """How a link actually breaks in a chat client or email: the tail of
+    the signature is cut off."""
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+    resp = client.get(f"/chatbox?token={token[:-8]}")
+
+    assert resp.status_code == 404
+    assert "This link looks incomplete" in resp.text
+
+
+def test_each_link_rejection_reason_renders_its_own_copy():
+    """Guards the exact-string swap in _link_unavailable_page: the EXPIRED
+    block in main.py must stay byte-identical to the default already in
+    link-unavailable.html, or the replace silently no-ops and every reason
+    renders "expired" again — the bug this all exists to fix."""
+    headings = {
+        reason: re.search(r"<h1>(.*?)</h1>", main._link_unavailable_page(reason)).group(1)
+        for reason in (TOKEN_EXPIRED, TOKEN_MALFORMED, TOKEN_MISSING)
+    }
+
+    assert len(set(headings.values())) == 3, headings
+    assert "expired" in headings[TOKEN_EXPIRED].lower()
+
+
+def test_unrecognised_link_rejection_reason_still_renders_a_page():
+    """A reason added to chatbox_token.py without a block here must degrade
+    to the default wording, never raise on a user-facing error path."""
+    page = main._link_unavailable_page("some-future-reason")
+
+    assert "<h1>" in page
 
 
 def test_chatbox_route_injects_token_into_manifest_link(client):

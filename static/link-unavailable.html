@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<title>Link expired · DUSD Chat</title>
+<title>Link unavailable · DUSD Chat</title>
 <style>
   :root {
     --bg: #f5f5f7;
@@ -61,6 +61,15 @@
 </style>
 </head>
 <body>
+<!--
+  The expired wording below is the DEFAULT so this file stays a correct,
+  viewable page on its own. /chatbox swaps the whole <main> block for a
+  different one when the link was damaged or absent rather than lapsed —
+  see LINK_PROBLEM_BLOCKS in main.py. Keep this block byte-identical to
+  main.py's EXPIRED entry; tests/test_main.py asserts each reason renders
+  its own copy, so drift fails there rather than silently showing everyone
+  "expired".
+-->
 <main>
   <div class="icon" aria-hidden="true">⏱</div>
   <h1>Your access link has expired</h1>
