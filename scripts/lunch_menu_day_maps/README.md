@@ -37,7 +37,53 @@ C3 pattern, interrupted by the Oct 15-16 no-school days). Put that kind of
 mid-cycle gap in the day-map's `"notes"` rather than inventing a cycle
 boundary for it.
 
-## Cycle 3 2026 (Oct 12 - Nov 20), 9-12 only
+## Cycle 3 2026 (Oct 12 - Nov 20), 6-8
+
+From `_6-8_Oct_2026_Nutrition.pdf` (note the leading underscore in the
+district's filename) and `6-8_Menu_Oct_2026.pdf`. That ONE calendar PDF
+holds TWO patterns stacked vertically — Oct 1-9 (Cycle 2) above, Oct 12-30
+(Cycle 3) below — so separate the bands by y coordinate before bucketing
+dishes to weekday columns, or you will merge two cycles into one file. The
+period labels on the page give the band boundaries.
+
+Two overrides, both from one page break:
+
+- **"Pulled Pork Sandwich with Potato Wedges"**: the worst case this
+  parser hits. Its name wraps across a page break ("Pulled Pork Sandwich
+  with Potato" / "Wedges"), AND its first rows carry no Day marker, so
+  they were glued onto the preceding BREAKFAST segment — `Cereal,
+  Variety` — which had already claimed the name slot. Net effect: the
+  dish disappeared from the extraction entirely, and a leftover `Wedges`
+  entry appeared in its place. Its real ingredients (Pulled Pork soy; Bun
+  wheat/soy/sesame; BBQ Sauce none; Coleslaw dressing egg; Seasoned Wedge
+  Potatoes none) union to `egg, sesame, soy, wheat`.
+  Side effect worth knowing: `Cereal, Variety` picks up a spurious
+  `sesame` from that bun. It's a breakfast item and isn't in any lunch
+  day-map, so it never reaches a user — but don't copy that extracted set
+  into one.
+- **"Black Bean Cheeseburger with Potato Wedges"**: the extracted
+  allergens are correct; the override exists only to fix the nutrition
+  PDF's spelling, which reads "Black Bean **Cheeeseburger**". A typo is
+  not worth showing a parent. (Cycle 2's `Fruit & Yogurt Partfait` still
+  carries its own typo verbatim — fix that whenever that cycle is next
+  regenerated.)
+
+**"Soft Taco Bar" has a genuinely EMPTY allergen set.** That is normally
+the tell for an extraction loss, so it was checked against the raw page
+text: the PDF really does list only Corn Tortillas, Pulled chicken and a
+food tray for it, none carrying a listed allergen. Left empty, rendering
+as "allergens: none listed" — which is the honest statement, and the
+agent prompt already forbids turning that into "safe". The calendar calls
+this dish *Chicken Taco Bar*; the nutrition table's *Soft Taco Bar* name
+is used, and its pulled-chicken ingredient confirms they're the same
+dish.
+
+The Oct 15-16 no-school note is corroborated by
+`data/calendars/dusd/2026_27.json`, which marks both days "No School"
+district-wide — not inferred from the HS menu PDF, which is the only one
+of the two calendars that mentions it.
+
+## Cycle 3 2026 (Oct 12 - Nov 20), 6-8
 
 From `9-12_Oct_2026_Nutrition.pdf` (title line `26-27 SY C3 MENU (OCT 12 -
 NOV 20) DUSD`) and the `HS_Menu_Oct_19-30,_2026.pdf` calendar. **6-8 has
