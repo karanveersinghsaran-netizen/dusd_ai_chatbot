@@ -98,12 +98,22 @@ order instead puts Wednesday and Thursday the wrong way round, which is
 exactly the mistake that produced a phantom "the two documents disagree"
 during this cycle's prep.
 
-`end_date` is the district's own `NOV 20`, not the Oct 30 the calendar PDF
-covers. Justified because the nutrition PDF spans the whole cycle and its
-`Day` column matches October's calendar, so the pattern is the cycle's and
-not just October's. If the November calendar turns out to differ, shorten
-this file's `end_date` rather than editing the days in place — the service
-will then flag dates past it instead of serving the wrong week.
+`end_date` is **Oct 30**, not the `NOV 20` on the nutrition PDF's title
+line. The nutrition PDF covers allergens for the whole C3 cycle, but every
+CALENDAR published for October stops at Oct 30 (`6-8_Menu_Oct_2026`:
+"October 12 - October 30"; HS: "October 12 - October 14" and "October 19 -
+October 30"), and the calendar is the only document that says which dish
+falls on which day. Nothing here evidences November's weekday pattern, so
+the file doesn't claim it: from Nov 2 the service flags the period as ended
+and points at the menu link, which is the correct behaviour for data we
+don't have. Extend `end_date` only once a November calendar has actually
+been read.
+
+This was initially committed as `NOV 20` on the reasoning that the
+nutrition PDF's `Day` column corroborates October's calendar, so the
+pattern was the cycle's rather than the month's. That inferred three weeks
+of menu from a document that doesn't assign dates — the agreement shows
+October is internally consistent, not that November repeats it.
 
 Three overrides, all verified by hand against the PDF's ingredient rows:
 
