@@ -392,6 +392,7 @@ SOURCE CITATION:
 - For bell schedule questions: 📍 [Source]({bell_schedule_source})
 - For other hardcoded school info: 📍 [Source]({school.website})
 - One source line only — pick the most relevant URL if multiple pages were scraped.
+- EXCEPTION, lunch menu answers: when a tool result carries a "NUTRITION:" marker, add a SECOND line directly under the source line, formatted "🥗 [Nutrition info](<that URL>)". Use the URL from that marker verbatim and always include it, on every lunch answer, whether or not nutrition was asked about — it is how anyone finds calories, sodium, fat, carbs, fiber and added sugar, which the menu itself does not carry. The marker is chosen for the exact menu period the answer quotes, so there is nothing for you to decide: never substitute a different period's document, and never omit the line because the question was only about dishes or allergens.
 - Skip the source line for conversational replies, error messages, and feedback acknowledgments.
 
 CRITICAL RULES:
@@ -575,7 +576,17 @@ CRITICAL RULES:
                 self.school.district_id, self.school.lunch_menu_grade_band)
             source_url = menu_url or self.school.lunch_menu_url or self.school.website
             nutrition_url = nutrition_url or self.school.lunch_menu_nutrition_url
-            result = f"SOURCE: {source_url}\n\n" + text
+            # Both markers name the SAME menu period — whichever cycle
+            # get_lunch_menu_text just served — because they come from the
+            # same lookup. That's the point of emitting the nutrition URL
+            # here rather than leaving the model to choose between periods: it
+            # picked wrong when given two bare date ranges, telling a user
+            # that Monday October 5 "falls within the October 12-30 menu
+            # period" and handing over that period's document.
+            result = f"SOURCE: {source_url}\n"
+            if nutrition_url:
+                result += f"NUTRITION: {nutrition_url}\n"
+            result += "\n" + text
             nutrition_note = ""
             if nutrition_url:
                 nutrition_note = (
@@ -706,7 +717,10 @@ CRITICAL RULES:
         links = get_lunch_nutrition_links(
             self.school.district_id, self.school.lunch_menu_grade_band)
         if not links and self.school.lunch_menu_nutrition_url:
-            links = [("the current menu period", self.school.lunch_menu_nutrition_url)]
+            # Same 4-tuple shape as get_lunch_nutrition_links, with no dates
+            # to state — a school whose cycle files predate nutrition_url has
+            # only this one school-level document.
+            links = [("current", None, None, self.school.lunch_menu_nutrition_url)]
         if not links:
             return None
 
@@ -715,10 +729,28 @@ CRITICAL RULES:
             "carry per-ingredient calories, sodium, saturated fat, carbs, fiber and "
             "added sugar:",
         ]
-        lines += [f"- {period}: {url}" for period, url in links]
+        for status, start, end, url in links:
+            # Each entry says outright whether it covers today. Listing two
+            # bare date ranges and leaving the model to work out which applied
+            # produced the opposite answer: asked about Monday October 5 it
+            # replied that the date "falls within the October 12-30 menu
+            # period" and handed over that period's document.
+            if status == "current" and not start:
+                lines.append(f"- THE CURRENT ONE, covering today: {url}")
+            elif status == "current":
+                lines.append(
+                    f"- THE CURRENT ONE. Covers today, and every date from {start} up to "
+                    f"and including {end}. Use this for any question about a date in that "
+                    f"range, and for a question with no date: {url}")
+            else:
+                lines.append(
+                    f"- NOT IN EFFECT YET. Starts {start} and runs to {end}. Use this ONLY "
+                    f"for a question about a date on or after {start}: {url}")
         lines.append(
             "When the user asks about nutrition or calories for school meals, give them "
-            "the link covering the period their question is about. Do NOT reply that "
+            "the link whose stated date range contains the date they asked about — check "
+            "that range against today's date above rather than guessing which period a "
+            "date falls in. Do NOT reply that "
             "nutrition information is unavailable, and do NOT tell them to phone the "
             "school or visit the district website for it as a first answer — this is "
             "that information. You have NOT read these documents, so never quote or "

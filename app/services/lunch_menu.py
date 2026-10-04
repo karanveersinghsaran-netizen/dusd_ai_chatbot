@@ -112,9 +112,10 @@ def get_lunch_menu_urls(
 
 def get_lunch_nutrition_links(
     district_id: str, grade_band: str, on_date: Optional[date] = None
-) -> List[Tuple[str, str]]:
-    """(period description, nutrition document URL) for the period covering
-    `on_date` and, when it's parsed, the one after it.
+) -> List[Tuple[str, str, str, str]]:
+    """(status, period start, period end, nutrition document URL) for the
+    period covering `on_date` and, when it's parsed, the one after it. Status
+    is _CURRENT or _UPCOMING.
 
     Exists so the agent can state these documents in its per-request system
     context rather than only inside a tool result. A tool result is discarded
@@ -128,13 +129,18 @@ def get_lunch_nutrition_links(
     current, _ = _select_cycle(cycles, on_date or pacific_today())
     if not current:
         return []
-    periods = [current]
+    periods = [(_CURRENT, current)]
     nxt = _next_cycle(cycles, current)
     if nxt:
-        periods.append(nxt)
+        periods.append((_UPCOMING, nxt))
+    # Returns the STATUS explicitly rather than relying on list order. Order
+    # alone is wrong the moment the current period has no nutrition_url and
+    # the next one does — the caller would then label the next period as the
+    # current one, which is precisely the mislabelling this signature exists
+    # to prevent.
     return [
-        (f"{_format_date(c['_start'])} through {_format_date(c['_end'])}", c["nutrition_url"])
-        for c in periods
+        (status, _format_date(c["_start"]), _format_date(c["_end"]), c["nutrition_url"])
+        for status, c in periods
         if c.get("nutrition_url")
     ]
 
