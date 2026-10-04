@@ -1,4 +1,10 @@
 {
+  "period_label": "Cycle 2",
+  "start_date": "2026-08-31",
+  "end_date": "2026-10-09",
+  "peanut_tree_nut_free": true,
+  "menu_url": "https://www.schoolnutritionandfitness.com/schools/dusd_2203112030183753/menus/HS_Menu_Sept_2026__.pdf",
+  "nutrition_url": "https://www.schoolnutritionandfitness.com/schools/dusd_2203112030183753/nutriinfo/9-12_Sept_2026_Nutrition.pdf.pdf",
   "days": {
     "Monday": [
       {
@@ -139,7 +145,5 @@
         "wheat"
       ]
     }
-  ],
-  "period_label": "September 2026",
-  "peanut_tree_nut_free": true
+  ]
 }

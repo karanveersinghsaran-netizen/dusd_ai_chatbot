@@ -376,11 +376,24 @@ def test_get_lunch_menu_calls_service_with_district_and_grade_band(dhs_agent):
     assert attach_map is False
 
 
-def test_get_lunch_menu_cites_lunch_menu_url(dhs_agent):
-    with patch("app.agent.get_lunch_menu_text", return_value="..."):
+def test_get_lunch_menu_cites_the_served_cycles_own_menu_url(dhs_agent):
+    """The cited PDF has to be the one the quoted dishes were parsed from,
+    so the cycle's own URL wins over the school-level fallback — otherwise
+    an answer quotes this cycle's dishes under last cycle's document."""
+    with patch("app.agent.get_lunch_menu_text", return_value="..."), \
+            patch("app.agent.get_lunch_menu_urls",
+                  return_value=("https://example.test/cycle_menu.pdf", None)):
         result, _ = dhs_agent.process_tool_call("get_lunch_menu", {})
 
-    assert "SOURCE: https://www.schoolnutritionandfitness.com/schools/dusd_2203112030183753/menus/HS_Menu_Sept_2026__.pdf" in result
+    assert "SOURCE: https://example.test/cycle_menu.pdf" in result
+
+
+def test_get_lunch_menu_cites_lunch_menu_url_when_cycle_has_none(dhs_agent):
+    with patch("app.agent.get_lunch_menu_text", return_value="..."), \
+            patch("app.agent.get_lunch_menu_urls", return_value=(None, None)):
+        result, _ = dhs_agent.process_tool_call("get_lunch_menu", {})
+
+    assert f"SOURCE: {dhs_agent.school.lunch_menu_url}" in result
 
 
 def test_get_lunch_menu_mentions_nutrition_url_when_set(dhs_agent):
@@ -388,15 +401,26 @@ def test_get_lunch_menu_mentions_nutrition_url_when_set(dhs_agent):
     SOURCE line — the system prompt only allows one — but should still be
     surfaced as an optional mention for a user who wants to verify allergen
     info themselves."""
-    with patch("app.agent.get_lunch_menu_text", return_value="..."):
+    with patch("app.agent.get_lunch_menu_text", return_value="..."), \
+            patch("app.agent.get_lunch_menu_urls",
+                  return_value=(None, "https://example.test/cycle_nutrition.pdf")):
         result, _ = dhs_agent.process_tool_call("get_lunch_menu", {})
 
-    assert "https://www.schoolnutritionandfitness.com/schools/dusd_2203112030183753/nutriinfo/9-12_Sept_2026_Nutrition.pdf.pdf" in result
+    assert "https://example.test/cycle_nutrition.pdf" in result
+
+
+def test_get_lunch_menu_mentions_school_nutrition_url_when_cycle_has_none(dhs_agent):
+    with patch("app.agent.get_lunch_menu_text", return_value="..."), \
+            patch("app.agent.get_lunch_menu_urls", return_value=(None, None)):
+        result, _ = dhs_agent.process_tool_call("get_lunch_menu", {})
+
+    assert dhs_agent.school.lunch_menu_nutrition_url in result
 
 
 def test_get_lunch_menu_source_falls_back_to_website_when_unset():
-    """A school with lunch_menu_grade_band set but no lunch_menu_url must
-    still cite something usable, not crash or cite 'None'."""
+    """A school with lunch_menu_grade_band set but neither a cycle-level nor
+    a school-level menu URL must still cite something usable, not crash or
+    cite 'None'."""
     school = replace(get_school("dhs"), lunch_menu_url=None)
     with patch("app.agent.anthropic.Anthropic"):
         agent = SchoolAgent(
@@ -405,7 +429,8 @@ def test_get_lunch_menu_source_falls_back_to_website_when_unset():
             postgres_store=MagicMock(),
         )
 
-    with patch("app.agent.get_lunch_menu_text", return_value="..."):
+    with patch("app.agent.get_lunch_menu_text", return_value="..."), \
+            patch("app.agent.get_lunch_menu_urls", return_value=(None, None)):
         result, _ = agent.process_tool_call("get_lunch_menu", {})
 
     assert f"SOURCE: {school.website}" in result
