@@ -125,9 +125,16 @@ def get_lunch_menu_text(
 
     The header states today's date and the cycle's date range explicitly,
     because the model can't otherwise tell whether the weekday pattern it's
-    reading applies to the day being asked about."""
+    reading applies to the day being asked about.
+
+    When the NEXT cycle is already parsed, it's appended as a second, clearly
+    fenced block (see _render_upcoming_block) so questions about a date just
+    past a cycle boundary can be answered. Returning only today's cycle meant
+    "what's for lunch on Monday?" asked the week before a boundary was
+    declined for data already sitting on disk."""
     today = on_date or pacific_today()
-    cycle, status = _select_cycle(_load_cycles(district_id, grade_band), today)
+    cycles = _load_cycles(district_id, grade_band)
+    cycle, status = _select_cycle(cycles, today)
     if not cycle:
         return "No lunch menu is available for this school right now."
 
@@ -150,6 +157,30 @@ def get_lunch_menu_text(
             "period's end date, and point the user to the menu link for the current "
             "one — do NOT present these dishes as what's being served today."
         )
+    lines.extend(_render_cycle_body(cycle))
+
+    # When today sits inside a cycle and the NEXT one is already parsed, append
+    # it as a clearly-fenced second block. Without this the tool returned only
+    # today's cycle, so "what's for lunch on Monday?" asked a few days before a
+    # cycle boundary was declined for a menu already sitting on disk — the data
+    # was there, the model was just never shown it.
+    #
+    # Only for _CURRENT: the _UPCOMING branch is already serving the next cycle
+    # as its primary block (appending it again would print it twice), and _PAST
+    # means there is no later cycle by definition.
+    upcoming = _next_cycle(cycles, cycle) if status == _CURRENT else None
+    if upcoming:
+        lines.extend(_render_upcoming_block(upcoming, cycle))
+
+    return "\n".join(lines)
+
+
+def _render_cycle_body(cycle: dict, weekday_suffix: str = "") -> List[str]:
+    """One cycle's dishes — the part that's identical for the current and the
+    upcoming block. weekday_suffix is appended to each weekday heading so a
+    reader (human or model) can't mistake which period a "Monday:" belongs to
+    once two of them are on screen."""
+    lines = []
     if cycle.get("peanut_tree_nut_free"):
         lines.append("District-wide: meals are peanut & tree nut free (except coconut).")
     for note in cycle.get("notes") or []:
@@ -160,12 +191,53 @@ def get_lunch_menu_text(
         dishes = days.get(weekday)
         if not dishes:
             continue
-        lines.append(f"\n{weekday}:")
+        lines.append(f"\n{weekday}{weekday_suffix}:")
         lines.extend(_format_dish(d) for d in dishes)
 
     daily_options = cycle.get("daily_options") or []
     if daily_options:
-        lines.append("\nAvailable every day:")
+        lines.append(f"\nAvailable every day{weekday_suffix}:")
         lines.extend(_format_dish(d) for d in daily_options)
+    return lines
 
-    return "\n".join(lines)
+
+def _render_upcoming_block(upcoming: dict, current: dict) -> List[str]:
+    """The next cycle, fenced and labelled so it can't be read as today's.
+
+    The fencing is deliberately heavy-handed. Two periods means two different
+    "Monday" blocks in one result, and this model has already demonstrated it
+    will misread this data — describing a Monday-only dish as served "each
+    day", and denying a dish that was present in the output. Quoting the wrong
+    period's allergens for a date is the specific harm to avoid, so the block
+    states its date range, repeats it on every weekday heading, and says
+    explicitly which dates each period governs rather than leaving the model to
+    infer it from two bare ranges."""
+    start, end = _format_date(upcoming["_start"]), _format_date(upcoming["_end"])
+    label = upcoming.get("period_label")
+    return [
+        "",
+        "=== NEXT MENU PERIOD — NOT what is being served now ===",
+        f"A newer menu period starts {start} and runs through {end}"
+        + (f" ({label})." if label else "."),
+        f"Use the dishes below ONLY for dates from {start} onward. For any date up to "
+        f"and including {_format_date(current['_end'])}, use the menu ABOVE. The two "
+        "periods serve DIFFERENT dishes on the same weekday, so decide which period "
+        "the date falls in before quoting any dish or allergen list.",
+        # The SOURCE line the caller prepends describes the CURRENT period, so
+        # an answer about this later one would otherwise cite the wrong
+        # document — the exact period/source mismatch that putting URLs on the
+        # cycle instead of the school record was meant to prevent. Observed
+        # live before this line existed: a reply about October 12 citing the
+        # September PDF.
+        *([f"Source document for THIS later period: {upcoming['menu_url']} — when your "
+           "answer is about dates in this later period, cite this link as the single "
+           "📍 Source instead of the SOURCE line above, which describes the current "
+           "period only."] if upcoming.get("menu_url") else []),
+        *_render_cycle_body(upcoming, weekday_suffix=f" ({start} onward)"),
+    ]
+
+
+def _next_cycle(cycles: List[dict], current: dict) -> Optional[dict]:
+    """The earliest cycle starting after `current` ends, or None."""
+    later = [c for c in cycles if c["_start"] > current["_end"]]
+    return later[0] if later else None
