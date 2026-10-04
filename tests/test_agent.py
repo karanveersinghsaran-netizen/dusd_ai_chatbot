@@ -1356,3 +1356,55 @@ def test_nutrition_suffix_falls_back_to_the_school_record_url(agent):
         suffix = agent._lunch_nutrition_suffix()
 
     assert agent.school.lunch_menu_nutrition_url in suffix
+
+
+# ── nutrition link emitted next to SOURCE (#162 follow-up) ────────────────
+
+def test_get_lunch_menu_emits_a_nutrition_marker_next_to_source(dhs_agent):
+    """Code picks this URL for the exact period the answer quotes, so the
+    model has nothing to decide. Given two bare date ranges to choose
+    between it picked wrong, telling a user that Monday October 5 "falls
+    within the October 12-30 menu period"."""
+    with patch("app.agent.get_lunch_menu_text", return_value="..."), \
+            patch("app.agent.get_lunch_menu_urls",
+                  return_value=("https://example.test/menu.pdf",
+                                "https://example.test/nutrition.pdf")):
+        result, _ = dhs_agent.process_tool_call("get_lunch_menu", {})
+
+    assert "SOURCE: https://example.test/menu.pdf" in result
+    assert "NUTRITION: https://example.test/nutrition.pdf" in result
+
+
+def test_get_lunch_menu_omits_the_nutrition_marker_when_there_is_no_document():
+    school = replace(get_school("dhs"), lunch_menu_nutrition_url=None)
+    with patch("app.agent.anthropic.Anthropic"):
+        agent = SchoolAgent(
+            school=school,
+            redis_store=RedisStore(client=FakeRedisClient()),
+            postgres_store=MagicMock(),
+        )
+
+    with patch("app.agent.get_lunch_menu_text", return_value="..."), \
+            patch("app.agent.get_lunch_menu_urls", return_value=("https://m.test", None)):
+        result, _ = agent.process_tool_call("get_lunch_menu", {})
+
+    assert "NUTRITION:" not in result
+
+
+def test_system_prompt_requires_the_nutrition_link_on_every_lunch_answer(dhs_agent):
+    """Always, not only when nutrition was asked about — it's how anyone
+    discovers the document exists. The menu carries no nutrition values."""
+    prompt = dhs_agent._system_prompt
+
+    assert "NUTRITION:" in prompt
+    assert "🥗 [Nutrition info]" in prompt
+    assert "whether or not nutrition was asked about" in prompt
+
+
+def test_nutrition_suffix_marks_which_period_covers_today(dhs_agent):
+    """The bug: two bare date ranges, and the model assigned October 5 to the
+    October 12-30 period."""
+    suffix = dhs_agent._lunch_nutrition_suffix()
+
+    assert "THE CURRENT ONE" in suffix
+    assert "NOT IN EFFECT YET" in suffix
