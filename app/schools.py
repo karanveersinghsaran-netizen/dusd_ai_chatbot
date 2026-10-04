@@ -53,19 +53,18 @@ class SchoolConfig:
     # the data (same "presence gates it" shape as campus_map_file/
     # clubs_sheet_url) since the grade-band value itself is what's needed.
     lunch_menu_grade_band: Optional[str] = None
-    # The specific PDF the current month's data/lunch_menus/*/*.json entry
-    # was parsed from — cited as the SOURCE for lunch-menu questions (a
-    # direct link to the actual document, not just the district's generic
-    # menus portal), same reasoning as bell_schedule_url/course_catalog_url.
-    # Falls back to school.website if unset. Points at a specific month's
-    # filename, so update it alongside re-running
-    # scripts/parse_lunch_menu.py each month — same maintenance cadence as
-    # the data refresh itself, not extra work.
+    # FALLBACK source link for lunch-menu questions. The real source is the
+    # menu_url recorded inside the cycle JSON being served, which the agent
+    # prefers — it's the document that cycle's data was actually parsed
+    # from, so it can't cite the wrong month's PDF for the dishes being
+    # quoted. These two fields exist for a school whose cycle files predate
+    # that convention (or lack the URLs), and fall back in turn to
+    # school.website.
     lunch_menu_url: Optional[str] = None
     # The nutrition PDF (per-ingredient allergen detail) that
     # lunch_menu_url's calendar PDF doesn't itself show — offered as a
     # secondary, more detailed source when a user wants to verify allergen
-    # info themselves. Same monthly-update cadence as lunch_menu_url.
+    # info themselves. Same fallback role as lunch_menu_url.
     lunch_menu_nutrition_url: Optional[str] = None
     # Per-school branding (#52). All optional so a school.json that predates
     # theming still loads — callers fall back to the neutral blue theme when

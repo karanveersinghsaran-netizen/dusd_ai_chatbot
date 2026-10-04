@@ -1,18 +1,43 @@
 Hand-maintained day->dish-name maps for `scripts/parse_lunch_menu.py`, one
-per district+grade-band+month. Re-create the relevant file by reading that
-month's calendar PDF (schoolnutritionandfitness.com) when the district
-publishes a new one — a few minutes of work, same shape as
+per district+grade-band+**menu cycle**. Re-create the relevant file by
+reading that cycle's calendar PDF (schoolnutritionandfitness.com) when the
+district publishes a new one — a few minutes of work, same shape as
 `scripts/parse_course_catalog.py`'s `DEPARTMENT_HEADINGS`.
 
 **Not committed** (`.gitignore`'d) — everything durable from a given
-month's day-map already lives in the parser's output
-(`data/lunch_menus/<district_id>/<grade_band>/<YYYY_MM>.json`), including
-the day->dish structure itself. The one thing a day-map captures that
-isn't reconstructable from that output — *why* a manual override was
+cycle's day-map already lives in the parser's output
+(`data/lunch_menus/<district_id>/<grade_band>/<cycle start YYYY_MM_DD>.json`),
+including the day->dish structure itself. The one thing a day-map captures
+that isn't reconstructable from that output — *why* a manual override was
 needed — is written up below instead, so nothing is lost by not keeping
 the day-map file itself around past the run that used it.
 
-## September 2026 manual overrides
+## Cycles, not months
+
+Take `--start-date`/`--end-date` from the **nutrition PDF's own title
+line**, e.g. `26-27 SY C2 MENU (AUG 31 - OCT 9) DUSD` or `C3 MENU (OCT 12
+- NOV 20)`. The district publishes on multi-week cycles that straddle month
+boundaries, and the calendar PDFs are filed per month, so a month is the
+wrong unit: the first version of this feature keyed its data by month and
+the tool went dark on Oct 1 2026 while the committed "September" file was
+still the district's correct menu for eight more school days. The service
+selects a file by "which cycle's date range covers today", so the range
+inside the file is what matters — not the filename, and not the month on
+the calendar PDF.
+
+Record the two PDFs you used as `--menu-url` and `--nutrition-url`. They
+go in the cycle JSON, not on the school record, so the SOURCE the chatbot
+cites can never drift from the dishes it's quoting.
+
+One calendar month can also contain more than one cycle (October 2026 is
+C2 through the 9th, then C3), and a single cycle can be split across
+several calendar PDFs when a short week falls inside it (HS October 2026
+ships as `Oct 1-9`, `Oct 12-14`, `Oct 19-30` — the last two are the same
+C3 pattern, interrupted by the Oct 15-16 no-school days). Put that kind of
+mid-cycle gap in the day-map's `"notes"` rather than inventing a cycle
+boundary for it.
+
+## Cycle 2 2026 (Aug 31 - Oct 9) manual overrides
 
 Both files' `"overrides"` keys correct the same underlying issue: at a page
 break in the source nutrition PDF, pymupdf's table extraction occasionally
@@ -21,7 +46,7 @@ ingredient row, with nothing left to signal where a new dish starts. See
 `_extract_dish_allergens`'s docstring in `parse_lunch_menu.py` for the full
 mechanism — most instances of this ARE auto-recovered (the parser looks
 ahead within the row-run for a later row that does carry the name), but two
-cases in this month's source PDFs had no recoverable name anywhere in their
+cases in this cycle's source PDFs had no recoverable name anywhere in their
 segment:
 
 - **6-8 (Wells), "Tortellini Pasta with Beef Bolognese"**: extracted with
