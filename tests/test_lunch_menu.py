@@ -161,6 +161,25 @@ def test_upcoming_block_omits_the_source_line_when_the_cycle_has_no_url(tmp_path
     assert "Source document for THIS later period" not in result
 
 
+def test_upcoming_block_carries_its_own_nutrition_document(two_cycle_dir):
+    """The nutrition document is period-specific, and the one the agent
+    offers belongs to the CURRENT period — so a nutrition question about a
+    date in the later period would get the previous period's figures."""
+    result = get_lunch_menu_text("acme", "6-8", IN_CYCLE_2)
+
+    assert "https://example.test/c3_nutrition.pdf" in result
+    assert "not the current period's" in result
+
+
+def test_upcoming_block_omits_nutrition_line_when_the_cycle_has_no_url(tmp_path):
+    _write(tmp_path, CYCLE_2, {k: v for k, v in CYCLE_3.items() if k != "nutrition_url"})
+    with patch("app.services.lunch_menu.DATA_DIR", tmp_path):
+        result = get_lunch_menu_text("acme", "6-8", IN_CYCLE_2)
+
+    assert "NEXT MENU PERIOD" in result
+    assert "Nutrition document for THIS later period" not in result
+
+
 def test_no_upcoming_block_when_today_is_in_the_last_cycle(two_cycle_dir):
     result = get_lunch_menu_text("acme", "6-8", date(2026, 10, 20))
 

@@ -233,6 +233,14 @@ def _render_upcoming_block(upcoming: dict, current: dict) -> List[str]:
            "answer is about dates in this later period, cite this link as the single "
            "📍 Source instead of the SOURCE line above, which describes the current "
            "period only."] if upcoming.get("menu_url") else []),
+        # The nutrition document is period-specific too, and the one the agent
+        # offers alongside its SOURCE line belongs to the CURRENT period. A
+        # nutrition question about a date in this later period would otherwise
+        # be answered with the previous period's figures.
+        *([f"Nutrition document for THIS later period (per-ingredient calories, sodium, "
+           f"saturated fat, carbs, fiber, added sugar): {upcoming['nutrition_url']} — use "
+           "this one, not the current period's, for nutrition questions about dates in "
+           "this later period."] if upcoming.get("nutrition_url") else []),
         *_render_cycle_body(upcoming, weekday_suffix=f" ({start} onward)"),
     ]
 

@@ -575,10 +575,18 @@ CRITICAL RULES:
             nutrition_note = ""
             if nutrition_url:
                 nutrition_note = (
-                    " If the user wants to verify allergen/ingredient detail themselves, you may "
-                    f"also mention the full nutrition document: {nutrition_url} "
-                    "— but the SOURCE line above stays the one 📍 Source link per the formatting rule; "
-                    "this is just an optional mention in your response text, not a second source line."
+                    " The district's full nutrition document for this menu period is at "
+                    f"{nutrition_url} — it lists per-ingredient calories, sodium, saturated fat, "
+                    "carbs, fiber and added sugar alongside the allergens, NONE of which is in the "
+                    "menu above. So when the user asks about nutrition facts (calories, sugar, "
+                    "sodium, fat, carbs) or wants to check ingredient detail for themselves, give "
+                    "them this link. Do NOT tell them nutrition information is unavailable, and do "
+                    "NOT send them to phone the school for it, as a first answer — this document "
+                    "is what they're asking for and we have it. You have NOT read it, so never "
+                    "quote or estimate a specific number from it; link it and say what it "
+                    "contains. The SOURCE line above stays the one 📍 Source link per the "
+                    "formatting rule; this is an extra mention in your response text, not a "
+                    "second source line."
                 )
             result += (
                 "\n\n[NOTE: For ANY question that involves judging multiple dishes against an "
