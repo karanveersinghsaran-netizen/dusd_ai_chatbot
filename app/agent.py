@@ -11,7 +11,11 @@ from app import config
 from app.schools import SchoolConfig, get_school
 from app.services.clubs import get_club_list
 from app.services.course_catalog import get_course_catalog_section, get_department_names
-from app.services.lunch_menu import get_lunch_menu_text, get_lunch_menu_urls
+from app.services.lunch_menu import (
+    get_lunch_menu_text,
+    get_lunch_menu_urls,
+    get_lunch_nutrition_links,
+)
 from app.services.scraper import WebsiteScraper
 from app.services.calendar import (
     get_upcoming_events,
@@ -683,6 +687,47 @@ CRITICAL RULES:
             screenshot_content_type=screenshot_content_type,
         )
 
+    def _lunch_nutrition_suffix(self) -> Optional[str]:
+        """The district's nutrition documents, stated in per-request system
+        context rather than only in the lunch tool's result.
+
+        A tool result is discarded at the end of its turn (only the user
+        message and the final reply are persisted), so "what is the nutrition
+        info" asked right after a menu answer reached a model with no
+        knowledge that these documents exist. It replied that nutrition data
+        was unavailable and told the user to phone the school, while we held
+        the district's own figures — measured at 0/5 on that two-turn
+        sequence. Nutrition questions are nearly always follow-ups to a menu
+        question, which makes the tool result the one place this link is least
+        likely to be seen. Here it is present on every request regardless of
+        history, for about fifty tokens."""
+        if not self.school.lunch_menu_grade_band:
+            return None
+        links = get_lunch_nutrition_links(
+            self.school.district_id, self.school.lunch_menu_grade_band)
+        if not links and self.school.lunch_menu_nutrition_url:
+            links = [("the current menu period", self.school.lunch_menu_nutrition_url)]
+        if not links:
+            return None
+
+        lines = [
+            "SCHOOL MEAL NUTRITION DOCUMENTS — the district publishes these, and they "
+            "carry per-ingredient calories, sodium, saturated fat, carbs, fiber and "
+            "added sugar:",
+        ]
+        lines += [f"- {period}: {url}" for period, url in links]
+        lines.append(
+            "When the user asks about nutrition or calories for school meals, give them "
+            "the link covering the period their question is about. Do NOT reply that "
+            "nutrition information is unavailable, and do NOT tell them to phone the "
+            "school or visit the district website for it as a first answer — this is "
+            "that information. You have NOT read these documents, so never quote or "
+            "estimate a figure from one: the lunch menu tool returns allergens only, "
+            "with no nutrition values, and the figures in these PDFs are per-ingredient "
+            "rather than per-serving totals. Link the document and say what it contains."
+        )
+        return "\n".join(lines)
+
     def _call_api(
         self,
         messages: list,
@@ -706,6 +751,12 @@ CRITICAL RULES:
             {"type": "text", "text": self._current_datetime_suffix()},
             {"type": "text", "text": self._language_directive_suffix(language)},
         ]
+        # Fourth uncached block, same reasoning as the date one: it names the
+        # CURRENT menu period's documents, so it changes at every cycle
+        # rollover and can't live in the cached prefix.
+        nutrition_suffix = self._lunch_nutrition_suffix()
+        if nutrition_suffix:
+            system.append({"type": "text", "text": nutrition_suffix})
         # A second breakpoint on the last message: Anthropic caches everything
         # up to and including a breakpoint, so this lets the NEXT call — the
         # next conversation turn, or the next tool-loop iteration within this

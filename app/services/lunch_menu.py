@@ -110,6 +110,35 @@ def get_lunch_menu_urls(
     return cycle.get("menu_url"), cycle.get("nutrition_url")
 
 
+def get_lunch_nutrition_links(
+    district_id: str, grade_band: str, on_date: Optional[date] = None
+) -> List[Tuple[str, str]]:
+    """(period description, nutrition document URL) for the period covering
+    `on_date` and, when it's parsed, the one after it.
+
+    Exists so the agent can state these documents in its per-request system
+    context rather than only inside a tool result. A tool result is discarded
+    at the end of the turn that produced it, so a follow-up question — "what
+    is the nutrition info", right after a menu answer — reached a model that
+    had no idea the document existed, and answered that nutrition data was
+    unavailable while we held the district's own figures. Nutrition questions
+    are overwhelmingly follow-ups to a menu question, so the tool result is
+    the one place this link is least likely to be seen."""
+    cycles = _load_cycles(district_id, grade_band)
+    current, _ = _select_cycle(cycles, on_date or pacific_today())
+    if not current:
+        return []
+    periods = [current]
+    nxt = _next_cycle(cycles, current)
+    if nxt:
+        periods.append(nxt)
+    return [
+        (f"{_format_date(c['_start'])} through {_format_date(c['_end'])}", c["nutrition_url"])
+        for c in periods
+        if c.get("nutrition_url")
+    ]
+
+
 def get_lunch_menu_text(
     district_id: str, grade_band: str, on_date: Optional[date] = None
 ) -> str:
