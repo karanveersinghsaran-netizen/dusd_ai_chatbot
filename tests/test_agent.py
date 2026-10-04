@@ -459,6 +459,15 @@ def test_get_no_school_days_cites_the_instructional_calendar_pdf_not_the_events_
     assert "apps/events" not in result
 
 
+def _system_block(system, marker):
+    """The system block containing `marker`. Indexing system[] positionally
+    made these tests break whenever a block was added — find by content so
+    they assert what they actually care about."""
+    matches = [b for b in system if marker in b["text"]]
+    assert len(matches) == 1, f"expected exactly one block containing {marker!r}, got {len(matches)}"
+    return matches[0]
+
+
 # ── _call_api passes system as list with cache_control ────────────────────────
 
 def test_call_api_system_is_list_with_cache_control(agent):
@@ -471,10 +480,11 @@ def test_call_api_system_is_list_with_cache_control(agent):
     _, kwargs = agent.client.beta.messages.create.call_args
     system = kwargs["system"]
     assert isinstance(system, list)
-    assert len(system) == 3
     assert system[0]["type"] == "text"
     assert system[0]["cache_control"] == {"type": "ephemeral", "ttl": "5m"}
     assert system[0]["text"] == agent._system_prompt
+    # Exactly one cached block; every later block is per-request and uncached.
+    assert sum("cache_control" in b for b in system) == 1
 
 
 def test_call_api_puts_cache_breakpoint_on_last_message(agent):
@@ -618,7 +628,8 @@ def test_call_api_omits_truncation_notice_by_default(agent):
     agent._call_api([{"role": "user", "content": "hi"}])
 
     _, kwargs = agent.client.beta.messages.create.call_args
-    assert len(kwargs["system"]) == 3
+    assert not [b for b in kwargs["system"]
+                if "only retain the most recent conversation" in b["text"]]
 
 
 def test_call_api_adds_truncation_notice_when_flagged(agent):
@@ -632,10 +643,9 @@ def test_call_api_adds_truncation_notice_when_flagged(agent):
 
     _, kwargs = agent.client.beta.messages.create.call_args
     system = kwargs["system"]
-    assert len(system) == 4
-    assert "cache_control" not in system[3]
-    assert str(MAX_HISTORY) in system[3]["text"]
-    assert "only retain the most recent conversation" in system[3]["text"]
+    block = _system_block(system, "only retain the most recent conversation")
+    assert "cache_control" not in block
+    assert str(MAX_HISTORY) in block["text"]
 
 
 def test_chat_tells_model_when_conversation_was_truncated(agent):
@@ -656,8 +666,8 @@ def test_chat_tells_model_when_conversation_was_truncated(agent):
 
     _, kwargs = agent.client.beta.messages.create.call_args
     system = kwargs["system"]
-    assert len(system) == 4
-    assert str(MAX_HISTORY) in system[3]["text"]
+    assert str(MAX_HISTORY) in _system_block(
+        system, "only retain the most recent conversation")["text"]
 
 
 def test_chat_omits_truncation_notice_for_short_conversation(agent):
@@ -668,7 +678,8 @@ def test_chat_omits_truncation_notice_for_short_conversation(agent):
         agent.chat("hi", user_id="fresh_user")
 
     _, kwargs = agent.client.beta.messages.create.call_args
-    assert len(kwargs["system"]) == 3
+    assert not [b for b in kwargs["system"]
+                if "only retain the most recent conversation" in b["text"]]
 
 
 # ── Last tool has cache_control ───────────────────────────────────────────────
@@ -1142,9 +1153,8 @@ def test_call_api_always_includes_a_third_uncached_language_block(agent):
     agent._call_api([{"role": "user", "content": "hi"}])
 
     system = agent.client.beta.messages.create.call_args[1]["system"]
-    assert len(system) == 3
-    assert "cache_control" not in system[2]
-    assert "default to English" in system[2]["text"]
+    block = _system_block(system, "default to English")
+    assert "cache_control" not in block
 
 
 def test_call_api_appends_uncached_language_suffix_for_spanish(agent):
@@ -1155,8 +1165,7 @@ def test_call_api_appends_uncached_language_suffix_for_spanish(agent):
     agent._call_api([{"role": "user", "content": "hi"}], language="es")
 
     system = agent.client.beta.messages.create.call_args[1]["system"]
-    assert len(system) == 3
-    language_block = system[2]
+    language_block = _system_block(system, "default to")
     assert "cache_control" not in language_block
     assert language_block["type"] == "text"
     assert "default to Spanish" in language_block["text"]
@@ -1170,8 +1179,7 @@ def test_call_api_appends_uncached_language_suffix_for_mandarin(agent):
     agent._call_api([{"role": "user", "content": "hi"}], language="zh")
 
     system = agent.client.beta.messages.create.call_args[1]["system"]
-    assert len(system) == 3
-    assert "default to Simplified Mandarin Chinese" in system[2]["text"]
+    _system_block(system, "default to Simplified Mandarin Chinese")
 
 
 def test_chat_defaults_to_english_when_no_language_ever_set(agent):
@@ -1184,8 +1192,7 @@ def test_chat_defaults_to_english_when_no_language_ever_set(agent):
         agent.chat("Hello", user_id="lang_u1")
 
     system = agent.client.beta.messages.create.call_args[1]["system"]
-    assert len(system) == 3
-    assert "default to English" in system[2]["text"]
+    _system_block(system, "default to English")
 
 
 def test_chat_with_language_arg_persists_and_applies_directive(agent):
@@ -1249,8 +1256,7 @@ def test_chat_ignores_unknown_language_code(agent):
         agent.chat("Hello", user_id="lang_u5", language="fr")
 
     system = agent.client.beta.messages.create.call_args[1]["system"]
-    assert len(system) == 3
-    assert "default to English" in system[2]["text"]
+    _system_block(system, "default to English")
     assert agent.redis_store.get_preferred_language(agent._session_key("lang_u5")) is None
 
 
@@ -1281,3 +1287,72 @@ def test_conversations_are_isolated_across_schools(agent, dhs_agent):
 
     assert wells_history == [{"role": "user", "content": "wells message"}]
     assert dhs_history == [{"role": "user", "content": "dhs message"}]
+
+
+# ── nutrition documents in per-request system context (#159) ───────────────
+
+def test_call_api_states_the_nutrition_documents_every_request(agent):
+    """These must NOT live only in the lunch tool's result. A tool result is
+    discarded at the end of its turn, and "what is the nutrition info" is
+    almost always a follow-up to a menu question — so the tool result is the
+    one place the model is least likely to see this link. Measured at 0/5 on
+    that two-turn sequence before this block existed."""
+    mock_response = MagicMock()
+    mock_response.stop_reason = "end_turn"
+    agent.client.beta.messages.create.return_value = mock_response
+
+    agent._call_api([{"role": "user", "content": "hi"}])
+
+    system = agent.client.beta.messages.create.call_args[1]["system"]
+    block = _system_block(system, "SCHOOL MEAL NUTRITION DOCUMENTS")
+    assert "nutriinfo" in block["text"]
+    # Per-request, so it must not be inside the cached prefix — it changes at
+    # every menu-cycle rollover.
+    assert "cache_control" not in block
+
+
+def test_nutrition_suffix_forbids_quoting_figures_from_the_documents(agent):
+    """The menu tool returns allergens only, and the PDFs' figures are
+    per-ingredient rather than per-serving totals — summing them yields a
+    garden salad at 863 kcal. Linking is safe; quoting is not."""
+    suffix = agent._lunch_nutrition_suffix()
+
+    assert "never quote or estimate a figure" in suffix
+    assert "per-serving" in suffix
+
+
+def test_nutrition_suffix_forbids_deflecting_to_the_school(agent):
+    """The bug: it answered "nutrition information is unavailable, call the
+    school" while holding the district's own figures."""
+    suffix = agent._lunch_nutrition_suffix()
+
+    assert "do NOT tell them to phone the school" in suffix.replace("\n", " ")
+    assert "nutrition information is unavailable" in suffix.replace("\n", " ")
+
+
+def test_nutrition_suffix_lists_the_upcoming_period_too(agent):
+    """Nutrition documents are period-specific, so a question about a date in
+    the next period needs that period's document, not the current one's."""
+    suffix = agent._lunch_nutrition_suffix()
+
+    assert suffix.count("nutriinfo") >= 2
+
+
+def test_nutrition_suffix_absent_for_a_school_with_no_lunch_menu():
+    school = replace(get_school("wells"), lunch_menu_grade_band=None)
+    with patch("app.agent.anthropic.Anthropic"):
+        agent = SchoolAgent(
+            school=school,
+            redis_store=RedisStore(client=FakeRedisClient()),
+            postgres_store=MagicMock(),
+        )
+
+    assert agent._lunch_nutrition_suffix() is None
+
+
+def test_nutrition_suffix_falls_back_to_the_school_record_url(agent):
+    """A school whose cycle files predate nutrition_url still gets a link."""
+    with patch("app.agent.get_lunch_nutrition_links", return_value=[]):
+        suffix = agent._lunch_nutrition_suffix()
+
+    assert agent.school.lunch_menu_nutrition_url in suffix
