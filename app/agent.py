@@ -299,7 +299,14 @@ class SchoolAgent:
                     "So 'today's lunch' and 'this Friday's lunch' both come from this same data, "
                     "matched by weekday name. Check the returned range before answering about a "
                     "specific date, and report any caveat it carries about that date being outside "
-                    "the range."
+                    "the range.\n"
+                    "The result MAY also contain a second block headed 'NEXT MENU PERIOD', which "
+                    "is the menu that starts once the first period ends. It is NOT being served "
+                    "yet. Work out which period the date being asked about falls in, then quote "
+                    "dishes and allergens from THAT period only — the two serve different dishes "
+                    "on the same weekday, so mixing them attaches the wrong allergen list to a "
+                    "date, which is the most harmful mistake available here. When a date falls in "
+                    "the later period, say which date that menu starts."
                 ),
                 "input_schema": {"type": "object", "properties": {}},
             })

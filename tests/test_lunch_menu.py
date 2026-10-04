@@ -97,8 +97,105 @@ def test_first_day_of_a_cycle_is_inclusive(menu_dir):
 
 
 def test_date_picks_the_right_cycle_when_several_are_loaded(two_cycle_dir):
-    assert "Cheeseburger" in get_lunch_menu_text("acme", "6-8", IN_CYCLE_2)
-    assert "Pulled Pork Sandwich" in get_lunch_menu_text("acme", "6-8", date(2026, 10, 20))
+    """Asserts on the PRIMARY "Menu period:" header, not just on a dish being
+    present somewhere — both cycles now appear in one result, so a substring
+    check no longer distinguishes which is being served."""
+    in_c2 = get_lunch_menu_text("acme", "6-8", IN_CYCLE_2)
+    in_c3 = get_lunch_menu_text("acme", "6-8", date(2026, 10, 20))
+
+    assert "Menu period: August 31, 2026 through October 9, 2026" in in_c2
+    assert "Cheeseburger" in in_c2
+    assert "Menu period: October 12, 2026 through November 20, 2026" in in_c3
+    assert "Pulled Pork Sandwich" in in_c3
+
+
+# ── the upcoming-cycle block ───────────────────────────────────────────────
+
+def test_next_cycle_is_appended_when_already_parsed(two_cycle_dir):
+    """The gap this closes: with only today's cycle returned, "what's for
+    lunch on Monday?" asked the week before a boundary was declined for a
+    menu already sitting on disk."""
+    result = get_lunch_menu_text("acme", "6-8", IN_CYCLE_2)
+
+    assert "NEXT MENU PERIOD" in result
+    assert "Pulled Pork Sandwich" in result
+
+
+def test_upcoming_block_states_which_dates_each_period_governs(two_cycle_dir):
+    """Two bare date ranges would leave the model to infer the boundary. It
+    has already misread this data — calling a Monday-only dish daily, and
+    denying a dish present in the output — so the split is spelled out."""
+    result = get_lunch_menu_text("acme", "6-8", IN_CYCLE_2)
+
+    assert "ONLY for dates from October 12, 2026 onward" in result
+    assert "up to and including October 9, 2026" in result
+
+
+def test_upcoming_block_labels_every_weekday_with_its_range(two_cycle_dir):
+    """Two periods means two "Monday" headings in one result; the suffix is
+    what stops the wrong one being read for a date."""
+    result = get_lunch_menu_text("acme", "6-8", IN_CYCLE_2)
+
+    assert "Monday (October 12, 2026 onward):" in result
+    # The current period's own headings stay unsuffixed.
+    assert "\nMonday:" in result
+
+
+def test_upcoming_block_carries_its_own_source_document(two_cycle_dir):
+    """The SOURCE line prepended by the caller describes the CURRENT period.
+    Without the later period's own link, an answer about a date in it cites
+    the wrong document — observed live: a reply about October 12 citing the
+    September PDF."""
+    result = get_lunch_menu_text("acme", "6-8", IN_CYCLE_2)
+
+    assert "https://example.test/c3_menu.pdf" in result
+    assert "cite this link as the single" in result
+
+
+def test_upcoming_block_omits_the_source_line_when_the_cycle_has_no_url(tmp_path):
+    _write(tmp_path, CYCLE_2, {k: v for k, v in CYCLE_3.items() if k != "menu_url"})
+    with patch("app.services.lunch_menu.DATA_DIR", tmp_path):
+        result = get_lunch_menu_text("acme", "6-8", IN_CYCLE_2)
+
+    assert "NEXT MENU PERIOD" in result
+    assert "Source document for THIS later period" not in result
+
+
+def test_no_upcoming_block_when_today_is_in_the_last_cycle(two_cycle_dir):
+    result = get_lunch_menu_text("acme", "6-8", date(2026, 10, 20))
+
+    assert "NEXT MENU PERIOD" not in result
+
+
+def test_no_upcoming_block_when_only_one_cycle_exists(menu_dir):
+    result = get_lunch_menu_text("acme", "6-8", IN_CYCLE_2)
+
+    assert "NEXT MENU PERIOD" not in result
+
+
+def test_gap_date_does_not_print_the_next_cycle_twice(two_cycle_dir):
+    """In a gap the next cycle is ALREADY the primary block. Appending it
+    again would show the same dishes under two contradictory headers."""
+    result = get_lunch_menu_text("acme", "6-8", date(2026, 10, 10))
+
+    assert "NEXT MENU PERIOD" not in result
+    assert result.count("Pulled Pork Sandwich") == 1
+
+
+def test_ended_cycle_does_not_print_an_upcoming_block(menu_dir):
+    """By definition there is no later cycle when today is past them all."""
+    result = get_lunch_menu_text("acme", "6-8", date(2026, 11, 1))
+
+    assert "already ENDED" in result
+    assert "NEXT MENU PERIOD" not in result
+
+
+def test_upcoming_block_carries_its_own_notes_not_the_current_cycles(two_cycle_dir):
+    """Cycle 3's no-school days belong to Cycle 3's block. Cycle 2 has no
+    notes, so the note appearing at all proves it came from the right one."""
+    result = get_lunch_menu_text("acme", "6-8", IN_CYCLE_2)
+
+    assert "No school October 15-16, 2026" in result
 
 
 def test_date_in_the_gap_between_cycles_resolves_forward(two_cycle_dir):
