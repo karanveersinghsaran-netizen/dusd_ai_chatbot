@@ -5,6 +5,10 @@ import pytest
 
 from app.security.chatbox_token import (
     GENERIC_USER_MARKER,
+    TOKEN_EXPIRED,
+    TOKEN_MALFORMED,
+    TOKEN_MISSING,
+    classify_chatbox_token,
     decode_chatbox_token,
     issue_chatbox_token,
     verify_chatbox_token,
@@ -130,3 +134,65 @@ def test_decode_returns_none_for_invalid_token():
 def test_decode_returns_none_for_expired_token():
     token = issue_chatbox_token(signing_key=KEY, user_id="admin-1", days_valid=-1)
     assert decode_chatbox_token(token, KEY) is None
+
+
+# ── classify_chatbox_token: WHY a link was rejected ─────────────────────────
+
+def test_classify_returns_none_for_a_valid_token():
+    assert classify_chatbox_token(issue_chatbox_token(signing_key=KEY), KEY) is None
+
+
+def test_classify_reports_expired_separately_from_malformed():
+    """The distinction the error page depends on: a lapsed link and a
+    damaged one need opposite instructions."""
+    expired = issue_chatbox_token(signing_key=KEY, days_valid=-1)
+    assert classify_chatbox_token(expired, KEY) == TOKEN_EXPIRED
+    assert classify_chatbox_token("garbage", KEY) == TOKEN_MALFORMED
+
+
+@pytest.mark.parametrize("token", ["", None])
+def test_classify_reports_missing_for_absent_token(token):
+    assert classify_chatbox_token(token, KEY) == TOKEN_MISSING
+
+
+def test_classify_reports_truncated_token_as_malformed():
+    token = issue_chatbox_token(signing_key=KEY)
+    assert classify_chatbox_token(token[:-8], KEY) == TOKEN_MALFORMED
+
+
+def test_classify_reports_markdown_escaped_generic_marker_as_malformed():
+    """A generic token's user_id is the literal "*"; written in markdown it
+    becomes "\\*", breaking the signature. This is the case that produced a
+    misleading "expired" page in practice."""
+    token = issue_chatbox_token(signing_key=KEY, generic=True)
+    assert classify_chatbox_token(token.replace("*", chr(92) + "*"), KEY) == TOKEN_MALFORMED
+
+
+def test_classify_reports_wrong_key_as_malformed():
+    """A token signed for another environment isn't expired — it just can't
+    be verified here."""
+    token = issue_chatbox_token(signing_key="other-key")
+    assert classify_chatbox_token(token, KEY) == TOKEN_MALFORMED
+
+
+def test_classify_reports_expiry_extension_attempt_as_malformed():
+    """Bumping the embedded expiry invalidates the signature, so a forged
+    extension is malformed — NOT expired, and certainly not valid."""
+    token = issue_chatbox_token(signing_key=KEY, days_valid=-1)
+    _, user_id, signature = token.split(".", 2)
+    forged = f"9999999999.{user_id}.{signature}"
+    assert classify_chatbox_token(forged, KEY) == TOKEN_MALFORMED
+
+
+def test_classify_and_verify_never_disagree():
+    """Both read the same decode, so "valid" means the same thing to the
+    gate and to the page it renders on rejection."""
+    tokens = [
+        issue_chatbox_token(signing_key=KEY),
+        issue_chatbox_token(signing_key=KEY, generic=True),
+        issue_chatbox_token(signing_key=KEY, days_valid=-1),
+        "garbage",
+        "a.b.c",
+    ]
+    for token in tokens:
+        assert verify_chatbox_token(token, KEY) is (classify_chatbox_token(token, KEY) is None)

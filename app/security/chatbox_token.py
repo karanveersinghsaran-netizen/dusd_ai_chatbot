@@ -13,6 +13,11 @@ DEFAULT_VALID_DAYS = 7
 # emits multi-character base64url strings), so it can't collide with a real one.
 GENERIC_USER_MARKER = "*"
 
+# Why a chatbox link was rejected — see classify_chatbox_token.
+TOKEN_MISSING = "missing"
+TOKEN_MALFORMED = "malformed"
+TOKEN_EXPIRED = "expired"
+
 
 class ChatboxTokenPayload(NamedTuple):
     expires_at: int
@@ -86,28 +91,64 @@ def decode_chatbox_token(
     future endpoint, e.g. #72/#73's history-management work) can call this
     directly to recover the token's stable user_id instead of just checking
     the token is valid."""
+    return _decode(token, signing_key)[0]
+
+
+def classify_chatbox_token(
+    token: Optional[str],
+    signing_key: Optional[Union[str, bytes]] = None,
+) -> Optional[str]:
+    """None if the token is valid and current, else WHY it was rejected:
+    TOKEN_MISSING, TOKEN_MALFORMED, or TOKEN_EXPIRED.
+
+    decode_chatbox_token collapses all three into None, which is exactly
+    right for gating a request but wrong for the page shown afterwards. A
+    link that lapsed and a link that arrived damaged (truncated by a chat
+    client, mangled by markdown escaping, copied without its last line)
+    need opposite instructions — "ask for a fresh link" vs "you already
+    have a good link, copy all of it" — and rendering "expired" for both
+    sends people chasing the wrong problem.
+
+    Reporting EXPIRED does confirm that a signature verified, where
+    MALFORMED doesn't. That's not a useful oracle: HMAC-SHA256 gives an
+    attacker no way to search for a valid signature, and the only person
+    who can elicit EXPIRED is someone already holding a legitimately-signed
+    token, who therefore learns nothing new about it."""
+    if not token:
+        return TOKEN_MISSING
+    return _decode(token, signing_key)[1]
+
+
+def _decode(
+    token: str,
+    signing_key: Optional[Union[str, bytes]] = None,
+) -> tuple[Optional[ChatboxTokenPayload], Optional[str]]:
+    """(payload, None) when valid, else (None, rejection reason). The single
+    implementation behind both decode_chatbox_token and
+    classify_chatbox_token, so the two can never disagree about whether a
+    given token passes."""
     try:
         expires_at_str, user_id, signature = token.split(".", 2)
     except (ValueError, AttributeError):
-        return None
+        return None, TOKEN_MALFORMED
 
     if not expires_at_str or not user_id or not signature:
-        return None
+        return None, TOKEN_MALFORMED
 
     payload_str = f"{expires_at_str}.{user_id}"
     expected = _sign(payload_str, _resolve_key(signing_key))
     if not hmac.compare_digest(expected, signature):
-        return None
+        return None, TOKEN_MALFORMED
 
     try:
         expires_at = int(expires_at_str)
     except ValueError:
-        return None
+        return None, TOKEN_MALFORMED
 
     if expires_at <= int(time.time()):
-        return None
+        return None, TOKEN_EXPIRED
 
-    return ChatboxTokenPayload(expires_at=expires_at, user_id=user_id)
+    return ChatboxTokenPayload(expires_at=expires_at, user_id=user_id), None
 
 
 def _sign(payload_str: str, key: bytes) -> str:
