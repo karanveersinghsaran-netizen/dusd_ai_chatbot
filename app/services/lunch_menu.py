@@ -126,13 +126,21 @@ def get_lunch_nutrition_links(
     are overwhelmingly follow-ups to a menu question, so the tool result is
     the one place this link is least likely to be seen."""
     cycles = _load_cycles(district_id, grade_band)
-    current, _ = _select_cycle(cycles, on_date or pacific_today())
-    if not current:
+    selected, status = _select_cycle(cycles, on_date or pacific_today())
+    if not selected:
         return []
-    periods = [(_CURRENT, current)]
-    nxt = _next_cycle(cycles, current)
-    if nxt:
-        periods.append((_UPCOMING, nxt))
+    # Pass _select_cycle's OWN status through. Hardcoding _CURRENT here told
+    # the caller that the served cycle covers today even when it doesn't: on
+    # a gap day (today between two cycles) _select_cycle resolves forward, so
+    # on Saturday October 10 2026 this claimed the October 12-30 period
+    # "covers today". A later period is only appended when today really is
+    # inside a cycle — when the status is _UPCOMING the selected cycle is
+    # already the next one, and when it is _PAST there is no later cycle.
+    periods = [(status, selected)]
+    if status == _CURRENT:
+        nxt = _next_cycle(cycles, selected)
+        if nxt:
+            periods.append((_UPCOMING, nxt))
     # Returns the STATUS explicitly rather than relying on list order. Order
     # alone is wrong the moment the current period has no nutrition_url and
     # the next one does — the caller would then label the next period as the
