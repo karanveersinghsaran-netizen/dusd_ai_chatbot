@@ -742,10 +742,17 @@ CRITICAL RULES:
                     f"- THE CURRENT ONE. Covers today, and every date from {start} up to "
                     f"and including {end}. Use this for any question about a date in that "
                     f"range, and for a question with no date: {url}")
+            elif status == "past":
+                lines.append(
+                    f"- This period has ENDED (it ran {start} to {end}) and is the most "
+                    f"recent one loaded. The district has likely published a newer one that "
+                    f"is not available here, so say that rather than presenting this as "
+                    f"today's: {url}")
             else:
                 lines.append(
-                    f"- NOT IN EFFECT YET. Starts {start} and runs to {end}. Use this ONLY "
-                    f"for a question about a date on or after {start}: {url}")
+                    f"- NOT IN EFFECT YET. Starts {start} and runs to {end}; no menu period "
+                    f"covers today, which falls between periods. Use this ONLY for a question "
+                    f"about a date on or after {start}, and say it has not started yet: {url}")
         lines.append(
             "When the user asks about nutrition or calories for school meals, give them "
             "the link whose stated date range contains the date they asked about — check "
