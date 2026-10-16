@@ -1,13 +1,13 @@
-fastapi==0.142.2
+fastapi==0.143.0
 python-multipart==0.0.32
 pytest==9.1.1
 pytest-asyncio==1.4.0
 uvicorn[standard]==0.54.0
 python-dotenv==1.2.4
-anthropic==1.11.0
+anthropic==1.13.0
 beautifulsoup4==4.15.0
 requests==2.34.2
-pydantic==2.13.5
+pydantic==2.14.1
 httpx==0.28.1
 urllib3==2.8.0
 pymupdf==1.28.2
