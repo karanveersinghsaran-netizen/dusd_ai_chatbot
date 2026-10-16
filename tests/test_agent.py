@@ -1332,10 +1332,19 @@ def test_nutrition_suffix_forbids_deflecting_to_the_school(agent):
 
 def test_nutrition_suffix_lists_the_upcoming_period_too(agent):
     """Nutrition documents are period-specific, so a question about a date in
-    the next period needs that period's document, not the current one's."""
-    suffix = agent._lunch_nutrition_suffix()
+    the next period needs that period's document, not the current one's.
 
-    assert suffix.count("nutriinfo") >= 2
+    Pins a date inside a cycle. Reading the real clock made this (and the
+    status test below) pass only while today happened to fall inside a cycle
+    that had a successor — both broke on their own the morning the date
+    rolled into the Oct 10-11 gap between cycles."""
+    with patch("app.agent.get_lunch_nutrition_links", return_value=[
+        ("current", "August 31, 2026", "October 9, 2026", "https://x.test/a_nutriinfo.pdf"),
+        ("upcoming", "October 12, 2026", "October 30, 2026", "https://x.test/b_nutriinfo.pdf"),
+    ]):
+        suffix = agent._lunch_nutrition_suffix()
+
+    assert suffix.count("nutriinfo") == 2
 
 
 def test_nutrition_suffix_absent_for_a_school_with_no_lunch_menu():
@@ -1404,7 +1413,38 @@ def test_system_prompt_requires_the_nutrition_link_on_every_lunch_answer(dhs_age
 def test_nutrition_suffix_marks_which_period_covers_today(dhs_agent):
     """The bug: two bare date ranges, and the model assigned October 5 to the
     October 12-30 period."""
-    suffix = dhs_agent._lunch_nutrition_suffix()
+    with patch("app.agent.get_lunch_nutrition_links", return_value=[
+        ("current", "August 31, 2026", "October 9, 2026", "https://x.test/a.pdf"),
+        ("upcoming", "October 12, 2026", "October 30, 2026", "https://x.test/b.pdf"),
+    ]):
+        suffix = dhs_agent._lunch_nutrition_suffix()
 
     assert "THE CURRENT ONE" in suffix
     assert "NOT IN EFFECT YET" in suffix
+
+
+def test_nutrition_suffix_does_not_claim_a_future_period_covers_today(dhs_agent):
+    """On a day between two periods, _select_cycle resolves FORWARD, so the
+    document offered is the next period's. Labelling it "covers today" is
+    wrong and was live on Saturday October 10 2026, which sits in the gap
+    between the Oct 9 and Oct 12 cycles."""
+    with patch("app.agent.get_lunch_nutrition_links", return_value=[
+        ("upcoming", "October 12, 2026", "October 30, 2026", "https://x.test/b.pdf"),
+    ]):
+        suffix = dhs_agent._lunch_nutrition_suffix()
+
+    assert "NOT IN EFFECT YET" in suffix
+    assert "Covers today" not in suffix
+    assert "falls between periods" in suffix
+
+
+def test_nutrition_suffix_flags_a_period_that_has_already_ended(dhs_agent):
+    """Past every loaded cycle: the document is stale, and saying so beats
+    presenting it as today's."""
+    with patch("app.agent.get_lunch_nutrition_links", return_value=[
+        ("past", "October 12, 2026", "October 30, 2026", "https://x.test/b.pdf"),
+    ]):
+        suffix = dhs_agent._lunch_nutrition_suffix()
+
+    assert "ENDED" in suffix
+    assert "Covers today" not in suffix
