@@ -722,14 +722,24 @@
      below this width they just fill the available space on a phone. */
   #school-picker > * {
     width: 100%;
-    max-width: 420px;
+    max-width: 560px;
     margin: 0 auto;
   }
-  /* One row per level, so a phone never has to fit them side by side. */
+  /* Both level dropdowns share one row, so the picker costs two rows of
+     vertical space instead of three and the transcript gets the rest.
+     Wraps back to stacked below ~380px, where two labelled selects stop
+     fitting legibly. */
+  #school-levels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+  }
   .school-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
+    flex: 1 1 170px;
+    min-width: 0;
   }
   .school-row > .school-row-label {
     color: var(--text-muted);
@@ -774,6 +784,26 @@
     color: var(--user-bubble-text, #fff);
   }
   #active-school-row input { accent-color: var(--user-bubble-bg); }
+
+  /* Below ~420px the full "Middle School:" / "High School:" captions push
+     the two selects onto separate rows AND wrap the chips, taking the
+     picker from 86px to 158px — worst on the phones with least room. Swap
+     in the short caption (kept in data-short, with the long one still in
+     the DOM for screen readers) and tighten the spacing so one row each
+     survives down to the narrowest phones. */
+  @media (max-width: 420px) {
+    #school-levels { gap: 6px 8px; }
+    .school-row { gap: 4px; flex-basis: 140px; }
+    .school-row > .school-row-label[data-short] {
+      font-size: 0;
+    }
+    .school-row > .school-row-label[data-short]::before {
+      content: attr(data-short) ":";
+      font-size: 0.85rem;
+    }
+    #active-school-row { gap: 6px; }
+    #active-school-row label { padding: 5px 8px; }
+  }
 
   #messages {
     flex: 1;
@@ -1666,6 +1696,7 @@
     // falls into "other" rather than disappearing from the picker.
     const LEVEL_ORDER = ["middle", "high"];
     const LEVEL_LABELS = { middle: "Middle School", high: "High School", other: "School" };
+    const LEVEL_SHORT = { middle: "Middle", high: "High", other: "School" };
     const levelLabel = (lvl) =>
       LEVEL_LABELS[lvl] || (lvl.charAt(0).toUpperCase() + lvl.slice(1) + " School");
 
@@ -1709,12 +1740,17 @@
     const activeRowEl = document.createElement("div");
     activeRowEl.id = "active-school-row";
 
+    const levelsRowEl = document.createElement("div");
+    levelsRowEl.id = "school-levels";
     for (const lvl of levels) {
       const row = document.createElement("div");
       row.className = "school-row";
       const label = document.createElement("span");
       label.className = "school-row-label";
       label.textContent = levelLabel(lvl) + ":";
+      // Short caption for narrow screens (see the max-width media query).
+      // The long text stays in the DOM so screen readers still read it.
+      label.dataset.short = LEVEL_SHORT[lvl] || levelLabel(lvl);
       const select = document.createElement("select");
       select.dataset.level = lvl;
       select.setAttribute("aria-label", levelLabel(lvl));
@@ -1727,8 +1763,9 @@
         select.appendChild(opt);
       }
       row.append(label, select);
-      schoolPickerEl.appendChild(row);
+      levelsRowEl.appendChild(row);
     }
+    schoolPickerEl.appendChild(levelsRowEl);
     schoolPickerEl.appendChild(activeRowEl);
 
     // Chatbox token (#51): forwarded into every /chat, /feedback/thanks, and
