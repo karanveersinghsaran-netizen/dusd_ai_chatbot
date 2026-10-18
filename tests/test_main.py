@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 import main
 from app import config
 from app.agent import ChatReply
+from app.schools import load_schools
 from app.security.chatbox_token import (
     TOKEN_EXPIRED,
     TOKEN_MALFORMED,
@@ -1409,3 +1410,34 @@ def test_chatbox_html_has_ai_disclaimer(client):
     assert resp.status_code == 200
     assert 'id="disclaimer"' in resp.text
     assert "AI can make mistakes" in resp.text
+
+
+# ── school picker is driven by the school data, not hardcoded (#173) ───────
+
+def test_chatbox_does_not_hardcode_school_radio_buttons():
+    """The picker listed wells and dhs as literal <input> tags, so onboarding
+    Fallon and Emerald left them unreachable from it even though every
+    backend endpoint served them. Nothing in the suite noticed, because the
+    picker is markup. Build it from the school data instead."""
+    markup = Path(main.__file__).parent.joinpath("chatbox.html").read_text(encoding="utf-8")
+
+    assert 'name="school" value=' not in markup, (
+        "school radios are hardcoded again — build them from school-theme-data"
+    )
+
+
+def test_chatbox_theme_data_covers_every_school(client):
+    """Whatever the picker renders comes from this island, so every school
+    under data/schools/ has to appear in it."""
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+    body = client.get(f"/chatbox?token={token}").text
+
+    island = re.search(
+        r'<script id="school-theme-data"[^>]*>(.*?)</script>', body, re.S).group(1)
+    themes = json.loads(island)
+
+    assert set(themes) == set(load_schools()), (
+        f"chatbox exposes {sorted(themes)} but data/schools has {sorted(load_schools())}"
+    )
+    # A name is what the picker label and header are derived from.
+    assert all(t.get("name") for t in themes.values())
