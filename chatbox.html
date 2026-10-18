@@ -707,83 +707,91 @@
   }
   #toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-  #school-picker {
-    display: none;
-    padding: 7px 12px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    font-size: 0.85rem;
-    flex-shrink: 0;
-  }
-  #school-picker.visible { display: block; }
-  /* Both levels on one row. Each row carries its own radio, so the school a
-     question goes to is marked in place rather than repeated in a separate
-     "chatting with" row — which listed every school name a second time. */
-  #school-levels {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 10px;
-    width: 100%;
-    max-width: 620px;
-    margin: 0 auto;
-  }
-  .school-row {
+  /* Header title doubles as the school switcher. */
+  #school-switch-btn {
     display: flex;
     align-items: center;
-    gap: 6px;
-    flex: 1 1 200px;
-    min-width: 0;
-    padding: 3px 8px;
-    border-radius: 999px;
-    border: 1px solid transparent;
-  }
-  /* Unmistakable, because picking up the wrong school means reading another
-     child's menu or bell schedule. */
-  .school-row.active {
-    border-color: var(--user-bubble-bg);
-    background: var(--bg);
-  }
-  .school-row > label {
-    color: var(--text-muted);
-    white-space: nowrap;
-    cursor: pointer;
-  }
-  .school-row.active > label { color: var(--text); font-weight: 600; }
-  .school-row > input[type="radio"] {
-    accent-color: var(--user-bubble-bg);
+    gap: 8px;
+    background: none;
+    border: 0;
+    padding: 2px 6px 2px 0;
     margin: 0;
+    font: inherit;
+    color: inherit;
     cursor: pointer;
+    border-radius: 8px;
+    min-width: 0;
+  }
+  #school-switch-btn:hover { background: rgba(127, 127, 127, 0.12); }
+  #school-switch-caret {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    opacity: 0.65;
+    transition: transform 150ms ease;
+  }
+  #school-switch-btn[aria-expanded="true"] #school-switch-caret { transform: rotate(180deg); }
+
+  #school-sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 30;
+  }
+  #school-sheet {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    top: 56px;
+    width: min(320px, calc(100vw - 24px));
+    max-height: min(70vh, 520px);
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+    padding: 8px;
+    z-index: 31;
+  }
+  #school-sheet[hidden], #school-sheet-backdrop[hidden] { display: none; }
+  #school-sheet-title {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    padding: 4px 10px 8px;
+  }
+  .school-sheet-group {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    padding: 10px 10px 4px;
+  }
+  .school-sheet-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px;
+    background: none;
+    border: 0;
+    border-radius: 10px;
+    font: inherit;
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+  }
+  .school-sheet-item:hover { background: var(--bg); }
+  .school-sheet-item[aria-current="true"] { background: var(--bg); font-weight: 600; }
+  .school-sheet-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
     flex-shrink: 0;
   }
-  .school-row select {
-    flex: 1;
-    min-width: 0;
-    padding: 4px 6px;
-    border-radius: 7px;
-    border: 1px solid var(--border);
-    background: var(--bg);
-    color: var(--text);
-    font: inherit;
-    cursor: pointer;
-  }
-  /* Below ~430px the captions cost more than they're worth: keeping them
-     squeezed the selects until the school names elided mid-word ("Fallon
-     Mid", "Emerald Hig"), which is the one thing in this row a parent has
-     to be able to read. The option text already says which level a school
-     is, so the caption is hidden visually and kept for screen readers,
-     handing its width to the select. */
-  @media (max-width: 430px) {
-    #school-levels { gap: 5px 6px; }
-    .school-row { flex-basis: 150px; gap: 5px; padding: 3px 6px; }
-    .school-row > label {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      overflow: hidden;
-      clip-path: inset(50%);
-      white-space: nowrap;
-    }
-  }
+  .school-sheet-check { margin-left: auto; opacity: 0.9; flex-shrink: 0; }
+
 
   /* Below ~420px the full "Middle School:" / "High School:" captions push
      the two selects onto separate rows AND wrap the chips, taking the
@@ -961,7 +969,14 @@
 </head>
 <body>
   <header>
-    <div class="title"><span id="school-logo" class="school-logo" aria-hidden="true"></span><span id="title-text">School Chat</span></div>
+    <button id="school-switch-btn" class="title" type="button" aria-haspopup="dialog"
+            aria-controls="school-sheet" aria-expanded="false" title="Switch school">
+      <span id="school-logo" class="school-logo" aria-hidden="true"></span><span id="title-text">School Chat</span>
+      <svg id="school-switch-caret" viewBox="0 0 24 24" aria-hidden="true" fill="none"
+           stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="6 9 12 15 18 9"/>
+      </svg>
+    </button>
     <a id="bell-schedule-link" href="#" target="_blank" rel="noopener noreferrer"
        aria-label="Bell schedule" title="Bell schedule">🔔</a>
     <a id="instagram-link" href="https://www.instagram.com/dusdchat/" target="_blank" rel="noopener noreferrer"
@@ -1189,7 +1204,14 @@
        hardcoded: these radios used to list wells and dhs literally, so
        onboarding Fallon and Emerald left them unreachable from the picker
        even though the backend served them fine. -->
-  <div id="school-picker"></div>
+  <!-- Replaces the always-visible picker row: the school is a setting, not a
+       per-message control, so it costs no permanent screen space. Opened from
+       the header title. -->
+  <div id="school-sheet-backdrop" hidden></div>
+  <div id="school-sheet" role="dialog" aria-modal="true" aria-label="Switch school" hidden>
+    <div id="school-sheet-title">Switch school</div>
+    <div id="school-sheet-list"></div>
+  </div>
 
   <div id="messages"></div>
 
@@ -1670,7 +1692,6 @@
     const messagesEl = document.getElementById("messages");
     const inputEl = document.getElementById("input");
     const sendEl = document.getElementById("send");
-    const schoolPickerEl = document.getElementById("school-picker");
 
     // Parsed here rather than further down because the picker is built from
     // it. Every school under data/schools/ reaches this island via
@@ -1678,21 +1699,14 @@
     // the picker with no edit to this file.
     const schoolThemes = JSON.parse(document.getElementById("school-theme-data").textContent || "{}");
 
-    // One dropdown per level, so a family with a kid at each can keep both
-    // selected at once. "level" comes from school.json; anything without one
-    // falls into "other" rather than disappearing from the picker.
+    // Schools grouped by level for the switcher sheet. "level" comes from
+    // school.json; anything without one falls into "other" rather than
+    // disappearing.
     const LEVEL_ORDER = ["middle", "high"];
     const LEVEL_LABELS = { middle: "Middle School", high: "High School", other: "School" };
-    const LEVEL_SHORT = { middle: "Middle", high: "High", other: "School" };
     const levelLabel = (lvl) =>
       LEVEL_LABELS[lvl] || (lvl.charAt(0).toUpperCase() + lvl.slice(1) + " School");
-
-    // Per-level default: the backend's own default school when it's in that
-    // level, else whichever sorts first — so every dropdown starts on a real
-    // school and the active toggle always has something to point at.
-    const LEVEL_DEFAULTS = { middle: "wells", high: "dhs" };
-    const PREF_SELECTED = "wms-school-by-level";   // {level: schoolId}
-    const PREF_ACTIVE = "wms-school";              // which selection is live
+    const PREF_ACTIVE = "wms-school";
 
     const schoolsByLevel = {};
     for (const [id, theme] of Object.entries(schoolThemes)) {
@@ -1709,145 +1723,97 @@
         (schoolThemes[a].name || a).localeCompare(schoolThemes[b].name || b));
     }
 
-    let savedByLevel = {};
-    try { savedByLevel = JSON.parse(localStorage.getItem(PREF_SELECTED) || "{}") || {}; }
-    catch (err) { savedByLevel = {}; }
-
-    // selectedByLevel: the school chosen in each dropdown. Saved choice wins,
-    // then the level's default, then first alphabetically.
-    const selectedByLevel = {};
-    for (const lvl of levels) {
-      const options = schoolsByLevel[lvl];
-      const saved = savedByLevel[lvl];
-      selectedByLevel[lvl] = options.includes(saved) ? saved
-        : options.includes(LEVEL_DEFAULTS[lvl]) ? LEVEL_DEFAULTS[lvl]
-        : options[0];
-    }
-
-    const levelsRowEl = document.createElement("div");
-    levelsRowEl.id = "school-levels";
-    for (const lvl of levels) {
-      const row = document.createElement("div");
-      row.className = "school-row";
-      row.dataset.level = lvl;
-
-      // The radio marks which level's selection questions go to. Sitting in
-      // the row means each school name is shown once, not twice.
-      const radio = document.createElement("input");
-      radio.type = "radio";
-      radio.name = "active-school";
-      radio.id = "active-" + lvl;
-      radio.addEventListener("change", () => setActiveSchool(selectedByLevel[lvl]));
-
-      const label = document.createElement("label");
-      label.htmlFor = radio.id;
-      label.textContent = levelLabel(lvl);
-      // Short caption for narrow screens (see the max-width media query).
-      // The long text stays in the DOM so screen readers still read it.
-      label.dataset.short = LEVEL_SHORT[lvl] || levelLabel(lvl);
-
-      const select = document.createElement("select");
-      select.dataset.level = lvl;
-      select.setAttribute("aria-label", levelLabel(lvl));
-      for (const id of schoolsByLevel[lvl]) {
-        const opt = document.createElement("option");
-        opt.value = id;
-        // textContent, not innerHTML — names come from school.json.
-        opt.textContent = shortSchoolName(schoolThemes[id].name || id);
-        opt.selected = id === selectedByLevel[lvl];
-        select.appendChild(opt);
-      }
-      row.append(radio, label, select);
-      levelsRowEl.appendChild(row);
-    }
-    schoolPickerEl.appendChild(levelsRowEl);
-
-    // Chatbox token (#51): forwarded into every /chat, /feedback/thanks, and
-    // /feedback/report call so the backend can resolve a stable user_id from
-    // it instead of the (per-cookie-jar) session cookie. This is what keeps
-    // a Safari tab and a home-screen-installed PWA opened from the SAME link
-    // sharing the same conversation, even though iOS gives the installed
-    // PWA its own isolated cookie jar. Falls back to cookie-only identity
-    // when absent, so the plain iframe embed (no token) is unaffected.
-    const chatboxToken = new URLSearchParams(window.location.search).get("token");
-    function withToken(path) {
-      return chatboxToken ? `${path}?token=${encodeURIComponent(chatboxToken)}` : path;
-    }
-
-    // schoolId is the ACTIVE school — the one questions actually go to. The
-    // dropdowns above only record which school is chosen per level; a family
-    // with a kid at a middle and a high school keeps both selected and says
-    // here which one they're asking about. The backend serves one school per
-    // conversation (history is keyed school:user_id in app/agent.py), so this
-    // has to resolve to exactly one id.
+    // The school is a setting rather than a per-message control, so it lives
+    // behind the header instead of costing a permanent row. A family with one
+    // child never opens this at all.
+    const DEFAULT_SCHOOL = "wells";
+    const allSchoolIds = levels.flatMap((lvl) => schoolsByLevel[lvl]);
     let schoolId = new URLSearchParams(window.location.search).get("school");
-    const pinnedSchool = schoolId && schoolThemes[schoolId] ? schoolId : null;
-    if (pinnedSchool) {
-      // An embed pinned a school: start there, and point that level's
-      // dropdown at it, but don't lock the picker — switching is the feature.
-      const lvl = schoolThemes[pinnedSchool].level || "other";
-      if (schoolsByLevel[lvl]) {
-        selectedByLevel[lvl] = pinnedSchool;
-        const sel = schoolPickerEl.querySelector('select[data-level="' + lvl + '"]');
-        if (sel) sel.value = pinnedSchool;
-      }
-      schoolId = pinnedSchool;
-    } else {
-      let savedActive = null;
-      try { savedActive = localStorage.getItem(PREF_ACTIVE); } catch (err) {}
-      const chosen = levels.map((lvl) => selectedByLevel[lvl]);
-      schoolId = chosen.includes(savedActive) ? savedActive : chosen[0];
-    }
-    schoolPickerEl.classList.add("visible");
-
-    function persistSchoolPrefs() {
-      try {
-        localStorage.setItem(PREF_SELECTED, JSON.stringify(selectedByLevel));
-        localStorage.setItem(PREF_ACTIVE, schoolId);
-      } catch (err) {}
+    if (!schoolId || !schoolThemes[schoolId]) {
+      let saved = null;
+      try { saved = localStorage.getItem(PREF_ACTIVE); } catch (err) {}
+      schoolId = schoolThemes[saved] ? saved
+        : (schoolThemes[DEFAULT_SCHOOL] ? DEFAULT_SCHOOL : allSchoolIds[0]);
     }
 
-    // Marks which row is live. Replaces a second row that re-listed every
-    // school name purely to say which one was active.
+    const switchBtn = document.getElementById("school-switch-btn");
+    const sheetEl = document.getElementById("school-sheet");
+    const sheetListEl = document.getElementById("school-sheet-list");
+    const sheetBackdropEl = document.getElementById("school-sheet-backdrop");
+
     function renderActiveRow() {
-      for (const row of schoolPickerEl.querySelectorAll(".school-row")) {
-        const id = selectedByLevel[row.dataset.level];
-        const isActive = id === schoolId;
-        row.classList.toggle("active", isActive);
-        const radio = row.querySelector('input[type="radio"]');
-        radio.value = id;
-        radio.checked = isActive;
-        radio.setAttribute("aria-label",
-          "Chat with " + shortSchoolName(schoolThemes[id].name || id));
+      sheetListEl.textContent = "";
+      for (const lvl of levels) {
+        const group = document.createElement("div");
+        group.className = "school-sheet-group";
+        group.textContent = levelLabel(lvl);
+        sheetListEl.appendChild(group);
+        for (const id of schoolsByLevel[lvl]) {
+          const theme = schoolThemes[id];
+          const item = document.createElement("button");
+          item.type = "button";
+          item.className = "school-sheet-item";
+          item.dataset.school = id;
+          if (id === schoolId) item.setAttribute("aria-current", "true");
+
+          const dot = document.createElement("span");
+          dot.className = "school-sheet-dot";
+          dot.style.background = theme.theme_color || "var(--text-muted)";
+          item.appendChild(dot);
+          // textContent, not innerHTML — names come from school.json.
+          item.appendChild(document.createTextNode(shortSchoolName(theme.name || id)));
+          if (id === schoolId) {
+            const check = document.createElement("span");
+            check.className = "school-sheet-check";
+            check.textContent = "✓";
+            item.appendChild(check);
+          }
+          item.addEventListener("click", () => { setActiveSchool(id); closeSheet(); });
+          sheetListEl.appendChild(item);
+        }
       }
     }
 
-    // Everything that has to follow the active school listens for
-    // "school-changed" rather than a raw change event: changing the dropdown
-    // for the level you are NOT chatting with updates that selection without
-    // tearing down the conversation you're in the middle of.
-    function setActiveSchool(id) {
-      if (!schoolThemes[id]) return;
-      const changed = id !== schoolId;
-      schoolId = id;
-      persistSchoolPrefs();
+    function openSheet() {
       renderActiveRow();
-      if (changed) schoolPickerEl.dispatchEvent(new CustomEvent("school-changed"));
+      sheetEl.hidden = false;
+      sheetBackdropEl.hidden = false;
+      switchBtn.setAttribute("aria-expanded", "true");
+      const current = sheetListEl.querySelector('[aria-current="true"]') ||
+        sheetListEl.querySelector(".school-sheet-item");
+      if (current) current.focus();
+    }
+    function closeSheet() {
+      sheetEl.hidden = true;
+      sheetBackdropEl.hidden = true;
+      switchBtn.setAttribute("aria-expanded", "false");
+      switchBtn.focus();
+    }
+    switchBtn.addEventListener("click", () =>
+      (sheetEl.hidden ? openSheet() : closeSheet()));
+    sheetBackdropEl.addEventListener("click", closeSheet);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !sheetEl.hidden) closeSheet();
+    });
+
+    // Only one school can be live at a time, and everything that follows it
+    // (theme, announcements, title, transcript) listens for this event.
+    function setActiveSchool(id) {
+      if (!schoolThemes[id] || id === schoolId) return;
+      schoolId = id;
+      try { localStorage.setItem(PREF_ACTIVE, schoolId); } catch (err) {}
+      document.dispatchEvent(new CustomEvent("school-changed"));
     }
 
-    for (const sel of schoolPickerEl.querySelectorAll("select[data-level]")) {
-      sel.addEventListener("change", (e) => {
-        const lvl = e.target.dataset.level;
-        const wasActiveLevel = selectedByLevel[lvl] === schoolId;
-        selectedByLevel[lvl] = e.target.value;
-        persistSchoolPrefs();
-        if (wasActiveLevel) setActiveSchool(e.target.value);
-        else renderActiveRow();
-      });
+    // A single school means nothing to switch between — hide the affordance
+    // rather than offer a menu with one entry.
+    if (allSchoolIds.length < 2) {
+      switchBtn.removeAttribute("aria-haspopup");
+      switchBtn.removeAttribute("title");
+      document.getElementById("school-switch-caret").hidden = true;
+      switchBtn.disabled = true;
     }
-
-    renderActiveRow();
-    persistSchoolPrefs();
+    try { localStorage.setItem(PREF_ACTIVE, schoolId); } catch (err) {}
 
     // Per-school theming (#52): reads the theme data island embedded by
     // /chatbox (main.py's _public_school_theme()) and reflects the pinned
@@ -1974,7 +1940,7 @@
 
     applySchoolTheme(schoolId);
     renderAnnouncements(schoolId);
-    schoolPickerEl.addEventListener("school-changed", () => {
+    document.addEventListener("school-changed", () => {
       applySchoolTheme(schoolId);
       renderAnnouncements(schoolId);
       // refreshTitle (defined below, in the language section) is a hoisted
@@ -2430,7 +2396,7 @@
     // the OLD school's messages on screen and never loaded the new one's —
     // Redis already separates history per school (_session_key in
     // app/agent.py), but the visible chat window didn't follow along.
-    schoolPickerEl.addEventListener("school-changed", () => {
+    document.addEventListener("school-changed", () => {
       messagesEl.innerHTML = "";
       restoreHistory();
     });

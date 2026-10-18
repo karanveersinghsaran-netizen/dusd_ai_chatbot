@@ -1455,14 +1455,12 @@ def test_chatbox_theme_data_exposes_each_school_level(client):
     assert {t["level"] for t in themes.values()} == {"middle", "high"}
 
 
-def test_chatbox_renders_a_level_dropdown_per_level_not_hardcoded_schools():
-    """Guards the shape of the picker: selects keyed by data-level, built in
-    script, with no school id written into the markup."""
+def test_chatbox_switcher_is_built_in_script_not_hardcoded():
+    """The switcher sheet is populated from school-theme-data at runtime, so
+    no school id may appear in the markup — that's what left Fallon and
+    Emerald unreachable when the picker was literal <input> tags."""
     markup = Path(main.__file__).parent.joinpath("chatbox.html").read_text(encoding="utf-8")
 
     assert 'name="school" value=' not in markup
-    assert 'data-level' in markup
-    # The active school is marked by a radio inside each level row, so the
-    # school a question goes to is stated once rather than repeated in a
-    # separate row that re-listed every name.
-    assert '"active-school"' in markup
+    assert 'id="school-sheet-list"' in markup
+    assert 'id="school-switch-btn"' in markup
