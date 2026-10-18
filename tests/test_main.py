@@ -1462,4 +1462,7 @@ def test_chatbox_renders_a_level_dropdown_per_level_not_hardcoded_schools():
 
     assert 'name="school" value=' not in markup
     assert 'data-level' in markup
-    assert 'active-school-row' in markup
+    # The active school is marked by a radio inside each level row, so the
+    # school a question goes to is stated once rather than repeated in a
+    # separate row that re-listed every name.
+    assert '"active-school"' in markup

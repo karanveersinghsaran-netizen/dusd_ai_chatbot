@@ -709,81 +709,81 @@
 
   #school-picker {
     display: none;
-    flex-direction: column;
-    gap: 6px;
-    padding: 8px 12px;
+    padding: 7px 12px;
     background: var(--surface);
     border-bottom: 1px solid var(--border);
     font-size: 0.85rem;
     flex-shrink: 0;
   }
-  #school-picker.visible { display: flex; }
-  /* Capped and centred so the selects don't stretch across a desktop window;
-     below this width they just fill the available space on a phone. */
-  #school-picker > * {
-    width: 100%;
-    max-width: 560px;
-    margin: 0 auto;
-  }
-  /* Both level dropdowns share one row, so the picker costs two rows of
-     vertical space instead of three and the transcript gets the rest.
-     Wraps back to stacked below ~380px, where two labelled selects stop
-     fitting legibly. */
+  #school-picker.visible { display: block; }
+  /* Both levels on one row. Each row carries its own radio, so the school a
+     question goes to is marked in place rather than repeated in a separate
+     "chatting with" row — which listed every school name a second time. */
   #school-levels {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px 12px;
+    gap: 6px 10px;
+    width: 100%;
+    max-width: 620px;
+    margin: 0 auto;
   }
   .school-row {
     display: flex;
     align-items: center;
     gap: 6px;
-    flex: 1 1 170px;
+    flex: 1 1 200px;
     min-width: 0;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid transparent;
   }
-  .school-row > .school-row-label {
+  /* Unmistakable, because picking up the wrong school means reading another
+     child's menu or bell schedule. */
+  .school-row.active {
+    border-color: var(--user-bubble-bg);
+    background: var(--bg);
+  }
+  .school-row > label {
     color: var(--text-muted);
     white-space: nowrap;
+    cursor: pointer;
+  }
+  .school-row.active > label { color: var(--text); font-weight: 600; }
+  .school-row > input[type="radio"] {
+    accent-color: var(--user-bubble-bg);
+    margin: 0;
+    cursor: pointer;
+    flex-shrink: 0;
   }
   .school-row select {
     flex: 1;
     min-width: 0;
-    padding: 5px 8px;
-    border-radius: 8px;
+    padding: 4px 6px;
+    border-radius: 7px;
     border: 1px solid var(--border);
     background: var(--bg);
     color: var(--text);
     font: inherit;
     cursor: pointer;
   }
-  /* The active-school control: which of the chosen schools you're talking to. */
-  #active-school-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-    padding-top: 2px;
-    border-top: 1px dashed var(--border);
-    margin-top: 2px;
+  /* Below ~430px the captions cost more than they're worth: keeping them
+     squeezed the selects until the school names elided mid-word ("Fallon
+     Mid", "Emerald Hig"), which is the one thing in this row a parent has
+     to be able to read. The option text already says which level a school
+     is, so the caption is hidden visually and kept for screen readers,
+     handing its width to the select. */
+  @media (max-width: 430px) {
+    #school-levels { gap: 5px 6px; }
+    .school-row { flex-basis: 150px; gap: 5px; padding: 3px 6px; }
+    .school-row > label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
   }
-  #active-school-row > .school-row-label { color: var(--text-muted); white-space: nowrap; }
-  #active-school-row label {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 5px 10px;
-    border-radius: 999px;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    cursor: pointer;
-    color: var(--text);
-  }
-  #active-school-row label.active {
-    border-color: var(--user-bubble-bg);
-    background: var(--user-bubble-bg);
-    color: var(--user-bubble-text, #fff);
-  }
-  #active-school-row input { accent-color: var(--user-bubble-bg); }
 
   /* Below ~420px the full "Middle School:" / "High School:" captions push
      the two selects onto separate rows AND wrap the chips, taking the
@@ -791,19 +791,6 @@
      in the short caption (kept in data-short, with the long one still in
      the DOM for screen readers) and tighten the spacing so one row each
      survives down to the narrowest phones. */
-  @media (max-width: 420px) {
-    #school-levels { gap: 6px 8px; }
-    .school-row { gap: 4px; flex-basis: 140px; }
-    .school-row > .school-row-label[data-short] {
-      font-size: 0;
-    }
-    .school-row > .school-row-label[data-short]::before {
-      content: attr(data-short) ":";
-      font-size: 0.85rem;
-    }
-    #active-school-row { gap: 6px; }
-    #active-school-row label { padding: 5px 8px; }
-  }
 
   #messages {
     flex: 1;
@@ -1737,20 +1724,28 @@
         : options[0];
     }
 
-    const activeRowEl = document.createElement("div");
-    activeRowEl.id = "active-school-row";
-
     const levelsRowEl = document.createElement("div");
     levelsRowEl.id = "school-levels";
     for (const lvl of levels) {
       const row = document.createElement("div");
       row.className = "school-row";
-      const label = document.createElement("span");
-      label.className = "school-row-label";
-      label.textContent = levelLabel(lvl) + ":";
+      row.dataset.level = lvl;
+
+      // The radio marks which level's selection questions go to. Sitting in
+      // the row means each school name is shown once, not twice.
+      const radio = document.createElement("input");
+      radio.type = "radio";
+      radio.name = "active-school";
+      radio.id = "active-" + lvl;
+      radio.addEventListener("change", () => setActiveSchool(selectedByLevel[lvl]));
+
+      const label = document.createElement("label");
+      label.htmlFor = radio.id;
+      label.textContent = levelLabel(lvl);
       // Short caption for narrow screens (see the max-width media query).
       // The long text stays in the DOM so screen readers still read it.
       label.dataset.short = LEVEL_SHORT[lvl] || levelLabel(lvl);
+
       const select = document.createElement("select");
       select.dataset.level = lvl;
       select.setAttribute("aria-label", levelLabel(lvl));
@@ -1762,11 +1757,10 @@
         opt.selected = id === selectedByLevel[lvl];
         select.appendChild(opt);
       }
-      row.append(label, select);
+      row.append(radio, label, select);
       levelsRowEl.appendChild(row);
     }
     schoolPickerEl.appendChild(levelsRowEl);
-    schoolPickerEl.appendChild(activeRowEl);
 
     // Chatbox token (#51): forwarded into every /chat, /feedback/thanks, and
     // /feedback/report call so the backend can resolve a stable user_id from
@@ -1813,27 +1807,18 @@
       } catch (err) {}
     }
 
+    // Marks which row is live. Replaces a second row that re-listed every
+    // school name purely to say which one was active.
     function renderActiveRow() {
-      activeRowEl.textContent = "";
-      const caption = document.createElement("span");
-      caption.className = "school-row-label";
-      caption.textContent = "Chatting with:";
-      activeRowEl.appendChild(caption);
-      for (const lvl of levels) {
-        const id = selectedByLevel[lvl];
-        const wrap = document.createElement("label");
-        wrap.classList.toggle("active", id === schoolId);
-        const radio = document.createElement("input");
-        radio.type = "radio";
-        radio.name = "active-school";
+      for (const row of schoolPickerEl.querySelectorAll(".school-row")) {
+        const id = selectedByLevel[row.dataset.level];
+        const isActive = id === schoolId;
+        row.classList.toggle("active", isActive);
+        const radio = row.querySelector('input[type="radio"]');
         radio.value = id;
-        radio.checked = id === schoolId;
-        radio.addEventListener("change", () => setActiveSchool(id));
-        wrap.appendChild(radio);
-        // textContent, not innerHTML — names come from school.json.
-        wrap.appendChild(document.createTextNode(
-          " " + shortSchoolName(schoolThemes[id].name || id)));
-        activeRowEl.appendChild(wrap);
+        radio.checked = isActive;
+        radio.setAttribute("aria-label",
+          "Chat with " + shortSchoolName(schoolThemes[id].name || id));
       }
     }
 
