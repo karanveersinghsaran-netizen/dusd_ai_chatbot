@@ -1122,11 +1122,13 @@
 
   <!-- Only visible when the embed didn't pin a school via ?school=. Real
        embeds (embed/wms-chatbot.js) always set the query param, so the picker
-       is a dev/testing convenience. -->
-  <div id="school-picker">
-    <label><input type="radio" name="school" value="wells" checked> Wells Middle</label>
-    <label><input type="radio" name="school" value="dhs"> Dublin High</label>
-  </div>
+       is a dev/testing convenience.
+
+       Populated at runtime from the school-theme-data island below, NOT
+       hardcoded: these radios used to list wells and dhs literally, so
+       onboarding Fallon and Emerald left them unreachable from the picker
+       even though the backend served them fine. -->
+  <div id="school-picker"></div>
 
   <div id="messages"></div>
 
@@ -1609,6 +1611,34 @@
     const sendEl = document.getElementById("send");
     const schoolPickerEl = document.getElementById("school-picker");
 
+    // Parsed here rather than further down because the picker is built from
+    // it. Every school under data/schools/ reaches this island via
+    // main.py's _public_school_theme(), so a school added there shows up in
+    // the picker with no edit to this file.
+    const schoolThemes = JSON.parse(document.getElementById("school-theme-data").textContent || "{}");
+
+    // Default to the same school the backend defaults to (config.DEFAULT_SCHOOL_ID)
+    // when it's present, else whichever sorts first, so the picker always has
+    // exactly one checked radio.
+    const PICKER_DEFAULT_SCHOOL = "wells";
+    const pickerIds = Object.keys(schoolThemes).sort();
+    const pickerDefault = pickerIds.includes(PICKER_DEFAULT_SCHOOL)
+      ? PICKER_DEFAULT_SCHOOL
+      : pickerIds[0];
+    for (const id of pickerIds) {
+      const label = document.createElement("label");
+      const radio = document.createElement("input");
+      radio.type = "radio";
+      radio.name = "school";
+      radio.value = id;
+      radio.checked = id === pickerDefault;
+      label.appendChild(radio);
+      // textContent, not innerHTML — school names come from school.json.
+      label.appendChild(document.createTextNode(
+        " " + shortSchoolName(schoolThemes[id].name || id)));
+      schoolPickerEl.appendChild(label);
+    }
+
     const schoolRadios = Array.from(schoolPickerEl.querySelectorAll('input[name="school"]'));
 
     // Remembers the picker's last choice for the unpinned case only (no
@@ -1650,7 +1680,6 @@
     // school's brand color + short name in the header. No school pinned
     // (picker visible) or a school with no theme fields yet both fall back
     // to the neutral blue default already defined in :root above.
-    const schoolThemes = JSON.parse(document.getElementById("school-theme-data").textContent || "{}");
     const titleTextEl = document.getElementById("title-text");
     const schoolLogoEl = document.getElementById("school-logo");
     const bellScheduleLinkEl = document.getElementById("bell-schedule-link");
