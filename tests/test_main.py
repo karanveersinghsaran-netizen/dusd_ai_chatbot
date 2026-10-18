@@ -1441,3 +1441,25 @@ def test_chatbox_theme_data_covers_every_school(client):
     )
     # A name is what the picker label and header are derived from.
     assert all(t.get("name") for t in themes.values())
+
+
+def test_chatbox_theme_data_exposes_each_school_level(client):
+    """The Middle/High dropdowns are built from this field, so it has to
+    reach the page — the picker can't group schools it can't categorise."""
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+    body = client.get(f"/chatbox?token={token}").text
+
+    themes = json.loads(re.search(
+        r'<script id="school-theme-data"[^>]*>(.*?)</script>', body, re.S).group(1))
+
+    assert {t["level"] for t in themes.values()} == {"middle", "high"}
+
+
+def test_chatbox_renders_a_level_dropdown_per_level_not_hardcoded_schools():
+    """Guards the shape of the picker: selects keyed by data-level, built in
+    script, with no school id written into the markup."""
+    markup = Path(main.__file__).parent.joinpath("chatbox.html").read_text(encoding="utf-8")
+
+    assert 'name="school" value=' not in markup
+    assert 'data-level' in markup
+    assert 'active-school-row' in markup

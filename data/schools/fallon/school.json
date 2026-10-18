@@ -3,6 +3,7 @@
   "name": "Fallon Middle School",
   "district": "Dublin Unified School District",
   "district_id": "dusd",
+  "level": "middle",
   "website": "https://fms.dublinusd.org/",
   "rss_url": "https://fms.dublinusd.org/apps/events/events_rss.jsp?id=0",
   "phone": "(925) 875-9376",

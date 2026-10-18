@@ -709,27 +709,71 @@
 
   #school-picker {
     display: none;
-    gap: 8px;
+    flex-direction: column;
+    gap: 6px;
     padding: 8px 12px;
     background: var(--surface);
     border-bottom: 1px solid var(--border);
     font-size: 0.85rem;
-    justify-content: center;
     flex-shrink: 0;
   }
   #school-picker.visible { display: flex; }
-  #school-picker label {
+  /* Capped and centred so the selects don't stretch across a desktop window;
+     below this width they just fill the available space on a phone. */
+  #school-picker > * {
+    width: 100%;
+    max-width: 420px;
+    margin: 0 auto;
+  }
+  /* One row per level, so a phone never has to fit them side by side. */
+  .school-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .school-row > .school-row-label {
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .school-row select {
+    flex: 1;
+    min-width: 0;
+    padding: 5px 8px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+  }
+  /* The active-school control: which of the chosen schools you're talking to. */
+  #active-school-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding-top: 2px;
+    border-top: 1px dashed var(--border);
+    margin-top: 2px;
+  }
+  #active-school-row > .school-row-label { color: var(--text-muted); white-space: nowrap; }
+  #active-school-row label {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 6px 12px;
+    padding: 5px 10px;
     border-radius: 999px;
     background: var(--bg);
     border: 1px solid var(--border);
     cursor: pointer;
     color: var(--text);
   }
-  #school-picker input { accent-color: var(--user-bubble-bg); }
+  #active-school-row label.active {
+    border-color: var(--user-bubble-bg);
+    background: var(--user-bubble-bg);
+    color: var(--user-bubble-text, #fff);
+  }
+  #active-school-row input { accent-color: var(--user-bubble-bg); }
 
   #messages {
     flex: 1;
@@ -1617,35 +1661,75 @@
     // the picker with no edit to this file.
     const schoolThemes = JSON.parse(document.getElementById("school-theme-data").textContent || "{}");
 
-    // Default to the same school the backend defaults to (config.DEFAULT_SCHOOL_ID)
-    // when it's present, else whichever sorts first, so the picker always has
-    // exactly one checked radio.
-    const PICKER_DEFAULT_SCHOOL = "wells";
-    const pickerIds = Object.keys(schoolThemes).sort();
-    const pickerDefault = pickerIds.includes(PICKER_DEFAULT_SCHOOL)
-      ? PICKER_DEFAULT_SCHOOL
-      : pickerIds[0];
-    for (const id of pickerIds) {
-      const label = document.createElement("label");
-      const radio = document.createElement("input");
-      radio.type = "radio";
-      radio.name = "school";
-      radio.value = id;
-      radio.checked = id === pickerDefault;
-      label.appendChild(radio);
-      // textContent, not innerHTML — school names come from school.json.
-      label.appendChild(document.createTextNode(
-        " " + shortSchoolName(schoolThemes[id].name || id)));
-      schoolPickerEl.appendChild(label);
+    // One dropdown per level, so a family with a kid at each can keep both
+    // selected at once. "level" comes from school.json; anything without one
+    // falls into "other" rather than disappearing from the picker.
+    const LEVEL_ORDER = ["middle", "high"];
+    const LEVEL_LABELS = { middle: "Middle School", high: "High School", other: "School" };
+    const levelLabel = (lvl) =>
+      LEVEL_LABELS[lvl] || (lvl.charAt(0).toUpperCase() + lvl.slice(1) + " School");
+
+    // Per-level default: the backend's own default school when it's in that
+    // level, else whichever sorts first — so every dropdown starts on a real
+    // school and the active toggle always has something to point at.
+    const LEVEL_DEFAULTS = { middle: "wells", high: "dhs" };
+    const PREF_SELECTED = "wms-school-by-level";   // {level: schoolId}
+    const PREF_ACTIVE = "wms-school";              // which selection is live
+
+    const schoolsByLevel = {};
+    for (const [id, theme] of Object.entries(schoolThemes)) {
+      const lvl = theme.level || "other";
+      (schoolsByLevel[lvl] ||= []).push(id);
+    }
+    const levels = Object.keys(schoolsByLevel).sort((a, b) => {
+      const ai = LEVEL_ORDER.indexOf(a), bi = LEVEL_ORDER.indexOf(b);
+      return (ai === -1 ? LEVEL_ORDER.length : ai) - (bi === -1 ? LEVEL_ORDER.length : bi)
+        || a.localeCompare(b);
+    });
+    for (const lvl of levels) {
+      schoolsByLevel[lvl].sort((a, b) =>
+        (schoolThemes[a].name || a).localeCompare(schoolThemes[b].name || b));
     }
 
-    const schoolRadios = Array.from(schoolPickerEl.querySelectorAll('input[name="school"]'));
+    let savedByLevel = {};
+    try { savedByLevel = JSON.parse(localStorage.getItem(PREF_SELECTED) || "{}") || {}; }
+    catch (err) { savedByLevel = {}; }
 
-    // Remembers the picker's last choice for the unpinned case only (no
-    // ?school= — local dev, or a generic non-school-specific link/PWA
-    // install). Real embeds always pin ?school= explicitly per school site,
-    // so a saved preference never overrides that.
-    const SCHOOL_PREF_KEY = "wms-school";
+    // selectedByLevel: the school chosen in each dropdown. Saved choice wins,
+    // then the level's default, then first alphabetically.
+    const selectedByLevel = {};
+    for (const lvl of levels) {
+      const options = schoolsByLevel[lvl];
+      const saved = savedByLevel[lvl];
+      selectedByLevel[lvl] = options.includes(saved) ? saved
+        : options.includes(LEVEL_DEFAULTS[lvl]) ? LEVEL_DEFAULTS[lvl]
+        : options[0];
+    }
+
+    const activeRowEl = document.createElement("div");
+    activeRowEl.id = "active-school-row";
+
+    for (const lvl of levels) {
+      const row = document.createElement("div");
+      row.className = "school-row";
+      const label = document.createElement("span");
+      label.className = "school-row-label";
+      label.textContent = levelLabel(lvl) + ":";
+      const select = document.createElement("select");
+      select.dataset.level = lvl;
+      select.setAttribute("aria-label", levelLabel(lvl));
+      for (const id of schoolsByLevel[lvl]) {
+        const opt = document.createElement("option");
+        opt.value = id;
+        // textContent, not innerHTML — names come from school.json.
+        opt.textContent = shortSchoolName(schoolThemes[id].name || id);
+        opt.selected = id === selectedByLevel[lvl];
+        select.appendChild(opt);
+      }
+      row.append(label, select);
+      schoolPickerEl.appendChild(row);
+    }
+    schoolPickerEl.appendChild(activeRowEl);
 
     // Chatbox token (#51): forwarded into every /chat, /feedback/thanks, and
     // /feedback/report call so the backend can resolve a stable user_id from
@@ -1659,21 +1743,89 @@
       return chatboxToken ? `${path}?token=${encodeURIComponent(chatboxToken)}` : path;
     }
 
+    // schoolId is the ACTIVE school — the one questions actually go to. The
+    // dropdowns above only record which school is chosen per level; a family
+    // with a kid at a middle and a high school keeps both selected and says
+    // here which one they're asking about. The backend serves one school per
+    // conversation (history is keyed school:user_id in app/agent.py), so this
+    // has to resolve to exactly one id.
     let schoolId = new URLSearchParams(window.location.search).get("school");
-    const matchingRadio = schoolId && schoolRadios.find((r) => r.value === schoolId);
-    if (matchingRadio) {
-      matchingRadio.checked = true;
+    const pinnedSchool = schoolId && schoolThemes[schoolId] ? schoolId : null;
+    if (pinnedSchool) {
+      // An embed pinned a school: start there, and point that level's
+      // dropdown at it, but don't lock the picker — switching is the feature.
+      const lvl = schoolThemes[pinnedSchool].level || "other";
+      if (schoolsByLevel[lvl]) {
+        selectedByLevel[lvl] = pinnedSchool;
+        const sel = schoolPickerEl.querySelector('select[data-level="' + lvl + '"]');
+        if (sel) sel.value = pinnedSchool;
+      }
+      schoolId = pinnedSchool;
     } else {
-      schoolPickerEl.classList.add("visible");
-      const savedSchoolId = localStorage.getItem(SCHOOL_PREF_KEY);
-      const savedRadio = savedSchoolId && schoolRadios.find((r) => r.value === savedSchoolId);
-      if (savedRadio) savedRadio.checked = true;
-      schoolId = schoolRadios.find((r) => r.checked).value;
+      let savedActive = null;
+      try { savedActive = localStorage.getItem(PREF_ACTIVE); } catch (err) {}
+      const chosen = levels.map((lvl) => selectedByLevel[lvl]);
+      schoolId = chosen.includes(savedActive) ? savedActive : chosen[0];
     }
-    schoolPickerEl.addEventListener("change", (e) => {
-      schoolId = e.target.value;
-      try { localStorage.setItem(SCHOOL_PREF_KEY, schoolId); } catch (err) {}
-    });
+    schoolPickerEl.classList.add("visible");
+
+    function persistSchoolPrefs() {
+      try {
+        localStorage.setItem(PREF_SELECTED, JSON.stringify(selectedByLevel));
+        localStorage.setItem(PREF_ACTIVE, schoolId);
+      } catch (err) {}
+    }
+
+    function renderActiveRow() {
+      activeRowEl.textContent = "";
+      const caption = document.createElement("span");
+      caption.className = "school-row-label";
+      caption.textContent = "Chatting with:";
+      activeRowEl.appendChild(caption);
+      for (const lvl of levels) {
+        const id = selectedByLevel[lvl];
+        const wrap = document.createElement("label");
+        wrap.classList.toggle("active", id === schoolId);
+        const radio = document.createElement("input");
+        radio.type = "radio";
+        radio.name = "active-school";
+        radio.value = id;
+        radio.checked = id === schoolId;
+        radio.addEventListener("change", () => setActiveSchool(id));
+        wrap.appendChild(radio);
+        // textContent, not innerHTML — names come from school.json.
+        wrap.appendChild(document.createTextNode(
+          " " + shortSchoolName(schoolThemes[id].name || id)));
+        activeRowEl.appendChild(wrap);
+      }
+    }
+
+    // Everything that has to follow the active school listens for
+    // "school-changed" rather than a raw change event: changing the dropdown
+    // for the level you are NOT chatting with updates that selection without
+    // tearing down the conversation you're in the middle of.
+    function setActiveSchool(id) {
+      if (!schoolThemes[id]) return;
+      const changed = id !== schoolId;
+      schoolId = id;
+      persistSchoolPrefs();
+      renderActiveRow();
+      if (changed) schoolPickerEl.dispatchEvent(new CustomEvent("school-changed"));
+    }
+
+    for (const sel of schoolPickerEl.querySelectorAll("select[data-level]")) {
+      sel.addEventListener("change", (e) => {
+        const lvl = e.target.dataset.level;
+        const wasActiveLevel = selectedByLevel[lvl] === schoolId;
+        selectedByLevel[lvl] = e.target.value;
+        persistSchoolPrefs();
+        if (wasActiveLevel) setActiveSchool(e.target.value);
+        else renderActiveRow();
+      });
+    }
+
+    renderActiveRow();
+    persistSchoolPrefs();
 
     // Per-school theming (#52): reads the theme data island embedded by
     // /chatbox (main.py's _public_school_theme()) and reflects the pinned
@@ -1800,7 +1952,7 @@
 
     applySchoolTheme(schoolId);
     renderAnnouncements(schoolId);
-    schoolPickerEl.addEventListener("change", () => {
+    schoolPickerEl.addEventListener("school-changed", () => {
       applySchoolTheme(schoolId);
       renderAnnouncements(schoolId);
       // refreshTitle (defined below, in the language section) is a hoisted
@@ -2256,7 +2408,7 @@
     // the OLD school's messages on screen and never loaded the new one's —
     // Redis already separates history per school (_session_key in
     // app/agent.py), but the visible chat window didn't follow along.
-    schoolPickerEl.addEventListener("change", () => {
+    schoolPickerEl.addEventListener("school-changed", () => {
       messagesEl.innerHTML = "";
       restoreHistory();
     });
