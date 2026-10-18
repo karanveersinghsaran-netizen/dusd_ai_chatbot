@@ -19,6 +19,11 @@ class SchoolConfig:
     name: str
     district: str
     district_id: str
+    # Which picker group this school belongs to in the chatbox — "middle" or
+    # "high" today. Explicit rather than inferred from lunch_menu_grade_band:
+    # that field exists to select menu DATA and is None for a school with no
+    # menu, which would silently drop it out of the picker.
+    level: Optional[str]
     website: str
     rss_url: str
     phone: str
@@ -97,6 +102,7 @@ def _load_school(school_dir: Path) -> SchoolConfig:
         name=raw["name"],
         district=raw["district"],
         district_id=raw["district_id"],
+        level=raw.get("level"),
         website=raw["website"],
         rss_url=raw["rss_url"],
         phone=raw.get("phone", ""),

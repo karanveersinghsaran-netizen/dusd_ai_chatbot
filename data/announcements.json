@@ -1,10 +1,25 @@
 [
   {
+    "id": "2026-10-school-switcher",
+    "date": "2026-10-18",
+    "title": "Switch between schools",
+    "text": "Got children at more than one school? Tap the school name at the top of the chat to switch — your choice is remembered, and each school keeps its own conversation."
+  },
+  {
+    "id": "2026-10-fallon-emerald",
+    "date": "2026-10-18",
+    "title": "Fallon and Emerald are here",
+    "text": "Fallon Middle School and Emerald High School have joined — ask either of them about staff, bell schedules, lunch and allergens, clubs, athletics and the school calendar, same as Wells and Dublin High."
+  },
+  {
     "id": "2026-09-lunch-menu",
     "date": "2026-09-20",
     "title": "Ask about lunch and allergens",
     "text": "I can now tell you what's for lunch this week and flag allergens (wheat, egg, soy, milk, sesame, fish, tree nut, peanut, shellfish) for each dish — just ask, e.g. \"what's dairy-free this week?\"",
-    "schools": ["dhs", "wells"]
+    "schools": [
+      "dhs",
+      "wells"
+    ]
   },
   {
     "id": "2026-09-instagram",
@@ -17,20 +32,26 @@
     "date": "2026-09-13",
     "title": "More to ask about at Wells",
     "text": "I can now help with sports registration and physicals, volunteering, enrollment/registration dates, and student Google account setup.",
-    "schools": ["wells"]
+    "schools": [
+      "wells"
+    ]
   },
   {
     "id": "2026-09-athletics-family-enrollment-tech",
     "date": "2026-09-13",
     "title": "More to ask about at DHS",
     "text": "I can now help with sports registration and physicals, parent organizations, enrollment/registration dates, the GATE program, and student Google account/WiFi setup.",
-    "schools": ["dhs"]
+    "schools": [
+      "dhs"
+    ]
   },
   {
     "id": "2026-09-course-catalog",
     "date": "2026-09-12",
     "title": "Ask about DHS courses",
     "text": "You can now ask about course descriptions, prerequisites, credits, and graduation requirements — straight from the DUSD Grades 9-12 Course Catalog.",
-    "schools": ["dhs"]
+    "schools": [
+      "dhs"
+    ]
   }
 ]

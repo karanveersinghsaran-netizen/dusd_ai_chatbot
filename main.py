@@ -126,6 +126,7 @@ def _public_school_theme() -> dict:
     return {
         school.id: {
             "name": school.name,
+            "level": school.level,
             "theme_color": school.theme_color,
             "primary_bubble_color": school.primary_bubble_color,
             "background_tint": school.background_tint,
