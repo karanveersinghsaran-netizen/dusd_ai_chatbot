@@ -231,3 +231,47 @@ def test_theme_colors_are_distinct_across_schools():
     colors = [get_school(s).theme_color for s in ("wells", "dhs", "fallon", "emerald")]
 
     assert len(set(colors)) == len(colors), colors
+
+
+# ── school level drives the chatbox pickers (#175) ────────────────────────
+
+@pytest.mark.parametrize("school_id", ["wells", "dhs", "fallon", "emerald"])
+def test_every_school_declares_a_level(school_id):
+    """level groups schools into the chatbox's Middle/High dropdowns. A
+    school without one lands in a catch-all "School" group, which is a
+    visible wart rather than a crash — so assert it over every school."""
+    assert get_school(school_id).level in {"middle", "high"}
+
+
+def test_levels_match_the_grade_bands_they_serve():
+    """level is declared separately from lunch_menu_grade_band on purpose
+    (a school with no menu has no band), but where both exist they must not
+    contradict each other."""
+    expected = {"6-8": "middle", "9-12": "high"}
+    for school_id in ("wells", "dhs", "fallon", "emerald"):
+        school = get_school(school_id)
+        if school.lunch_menu_grade_band:
+            assert school.level == expected[school.lunch_menu_grade_band], school_id
+
+
+def test_each_level_has_a_default_school_the_picker_can_select():
+    """The chatbox defaults Middle to wells and High to dhs; both have to
+    exist and sit in the level they're the default for."""
+    assert get_school("wells").level == "middle"
+    assert get_school("dhs").level == "high"
+
+
+def test_level_defaults_to_none_when_absent_from_json(tmp_path, monkeypatch):
+    """An older school.json without the field must still load."""
+    school_dir = tmp_path / "noleveltest"
+    school_dir.mkdir()
+    (school_dir / "school.json").write_text(json.dumps({
+        "id": "noleveltest", "name": "No Level School", "district": "D",
+        "district_id": "d", "website": "https://x.test/", "rss_url": "https://x.test/rss",
+    }), encoding="utf-8")
+    monkeypatch.setattr("app.schools.SCHOOLS_DIR", tmp_path)
+    load_schools.cache_clear()
+    try:
+        assert load_schools()["noleveltest"].level is None
+    finally:
+        load_schools.cache_clear()

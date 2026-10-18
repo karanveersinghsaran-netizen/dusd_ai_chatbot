@@ -1441,3 +1441,46 @@ def test_chatbox_theme_data_covers_every_school(client):
     )
     # A name is what the picker label and header are derived from.
     assert all(t.get("name") for t in themes.values())
+
+
+def test_chatbox_theme_data_exposes_each_school_level(client):
+    """The Middle/High dropdowns are built from this field, so it has to
+    reach the page — the picker can't group schools it can't categorise."""
+    token = issue_chatbox_token(signing_key=CHATBOX_TOKEN_KEY)
+    body = client.get(f"/chatbox?token={token}").text
+
+    themes = json.loads(re.search(
+        r'<script id="school-theme-data"[^>]*>(.*?)</script>', body, re.S).group(1))
+
+    assert {t["level"] for t in themes.values()} == {"middle", "high"}
+
+
+def test_chatbox_switcher_is_built_in_script_not_hardcoded():
+    """The switcher sheet is populated from school-theme-data at runtime, so
+    no school id may appear in the markup — that's what left Fallon and
+    Emerald unreachable when the picker was literal <input> tags."""
+    markup = Path(main.__file__).parent.joinpath("chatbox.html").read_text(encoding="utf-8")
+
+    assert 'name="school" value=' not in markup
+    assert 'id="school-sheet-list"' in markup
+    assert 'id="school-switch-btn"' in markup
+
+
+def test_chatbox_defines_every_helper_it_calls():
+    """A refactor deleted the chatboxToken/withToken definitions while three
+    call sites remained, so every /chat, /chat/history and /feedback request
+    threw ReferenceError before reaching the network — and the catch block
+    reported it as "couldn't reach the server", which reads like a network
+    fault rather than a bug. Nothing in the suite noticed, because the script
+    is never executed here. This catches the shape of that mistake cheaply."""
+    markup = Path(main.__file__).parent.joinpath("chatbox.html").read_text(encoding="utf-8")
+
+    for name, definition in [
+        ("withToken(", "function withToken("),
+        ("chatboxToken", "const chatboxToken"),
+        ("setActiveSchool(", "function setActiveSchool("),
+        ("shortSchoolName(", "function shortSchoolName("),
+        ("restoreHistory(", "function restoreHistory("),
+    ]:
+        if name in markup:
+            assert definition in markup, f"{name} is called but {definition!r} is missing"

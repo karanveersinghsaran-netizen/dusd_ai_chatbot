@@ -3,6 +3,7 @@
   "name": "Emerald High School",
   "district": "Dublin Unified School District",
   "district_id": "dusd",
+  "level": "high",
   "website": "https://ehs.dublinusd.org/",
   "rss_url": "https://ehs.dublinusd.org/apps/events/events_rss.jsp?id=0",
   "phone": "(925) 551-4040",
