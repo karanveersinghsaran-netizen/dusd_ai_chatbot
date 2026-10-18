@@ -1448,3 +1448,90 @@ def test_nutrition_suffix_flags_a_period_that_has_already_ended(dhs_agent):
 
     assert "ENDED" in suffix
     assert "Covers today" not in suffix
+
+
+# ── tool results survive the turn (#161) ───────────────────────────────────
+
+def _tool_turn_response(tool_name="get_lunch_menu"):
+    """A response that asks for one tool call, then a plain reply."""
+    use = MagicMock()
+    use.type, use.id, use.name, use.input = "tool_use", "tu_1", tool_name, {}
+    first = MagicMock(stop_reason="tool_use", content=[use])
+    return first
+
+
+def test_chat_persists_the_tool_exchange_not_just_the_prose(agent):
+    """The defect: only the question and the final reply were kept, so a
+    follow-up turn reached a model holding its own summary and no data. That
+    is what let one wrong "that isn't on the menu" repeat for a whole session
+    while the correct result sat in a message nobody stored."""
+    agent.client.beta.messages.create.side_effect = [
+        _tool_turn_response(), _text_response("Monday is pizza."),
+    ]
+    with patch("app.agent.get_lunch_menu_text", return_value="MENU DATA"), \
+            patch("app.agent.get_lunch_menu_urls", return_value=(None, None)):
+        agent.chat("what is for lunch", user_id="persist_u1")
+
+    history = agent.redis_store.get_conversation(agent._session_key("persist_u1"))
+    kinds = []
+    for m in history:
+        c = m["content"]
+        kinds.append(
+            "+".join(sorted({b["type"] for b in c if isinstance(b, dict)}))
+            if isinstance(c, list) else m["role"])
+
+    assert kinds == ["user", "tool_use", "tool_result", "assistant"], kinds
+    # The DATA itself, not a paraphrase of it.
+    tool_msg = history[2]["content"][0]
+    assert "MENU DATA" in tool_msg["content"]
+    assert tool_msg["tool_use_id"] == "tu_1"
+
+
+def test_persisted_tool_result_is_date_stamped(agent):
+    """A conversation lives five days, so a stored result can outlast the day
+    it describes. The stamp is what lets the model notice."""
+    agent.client.beta.messages.create.side_effect = [
+        _tool_turn_response(), _text_response("ok"),
+    ]
+    with patch("app.agent.get_lunch_menu_text", return_value="MENU DATA"), \
+            patch("app.agent.get_lunch_menu_urls", return_value=(None, None)):
+        agent.chat("lunch?", user_id="persist_u2")
+
+    history = agent.redis_store.get_conversation(agent._session_key("persist_u2"))
+    assert "[Fetched " in history[2]["content"][0]["content"]
+
+
+def test_persisted_tool_result_is_capped(agent):
+    """A full course-catalog result is ~7,000 tokens and would ride along on
+    every later turn. Capped, with a marker telling the model to re-call
+    rather than trust a partial listing."""
+    from app.agent import MAX_PERSISTED_TOOL_RESULT_CHARS as CAP
+    agent.client.beta.messages.create.side_effect = [
+        _tool_turn_response(), _text_response("ok"),
+    ]
+    with patch("app.agent.get_lunch_menu_text", return_value="X" * (CAP * 3)), \
+            patch("app.agent.get_lunch_menu_urls", return_value=(None, None)):
+        agent.chat("lunch?", user_id="persist_u3")
+
+    stored = agent.redis_store.get_conversation(
+        agent._session_key("persist_u3"))[2]["content"][0]["content"]
+
+    assert len(stored) < CAP * 1.2
+    assert "call the tool again" in stored
+
+
+def test_nothing_is_persisted_when_the_turn_fails(agent):
+    """Unchanged guarantee: a failed API call must leave no half-turn — now
+    including no orphaned tool_use, which would make every later request
+    invalid rather than merely incomplete."""
+    agent.client.beta.messages.create.side_effect = [
+        _tool_turn_response(), RuntimeError("boom"),
+    ]
+    with patch("app.agent.get_lunch_menu_text", return_value="MENU DATA"), \
+            patch("app.agent.get_lunch_menu_urls", return_value=(None, None)):
+        try:
+            agent.chat("lunch?", user_id="persist_u4")
+        except Exception:
+            pass
+
+    assert agent.redis_store.get_conversation(agent._session_key("persist_u4")) == []
