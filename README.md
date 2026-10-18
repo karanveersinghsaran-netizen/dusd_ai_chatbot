@@ -1,15 +1,16 @@
-# Wells Middle School AI Chatbot
+# DUSD AI Chatbot
 
 [![tests](https://github.com/karanveersinghsaran-netizen/dusd_ai_chatbot/actions/workflows/tests.yml/badge.svg)](https://github.com/karanveersinghsaran-netizen/dusd_ai_chatbot/actions/workflows/tests.yml)
 
-A web chatbot for Wells Middle School (Dublin Unified School District) powered by Claude AI. It answers questions about the school by scraping the school website in real time.
+A web chatbot for Dublin Unified School District (DUSD) schools, powered by Claude AI. It currently serves Dublin High, Emerald High, Fallon Middle, and Wells Middle — answering parent and student questions by grounding every answer in each school's own website and official district documents (lunch menus, bell schedules, academic calendars, campus maps, and course catalogs where published).
 
 ## Features
 
+- Multi-school: one deployment serves all four schools, each with its own theme, menus, and content — adding a new school is a `data/schools/<id>/` directory, no code change required
 - AI-powered responses using Claude (Anthropic)
-- Live school website scraping for up-to-date information
-- Per-session conversation history
-- Embeddable web widget (iframe snippet) for the school website
+- Live school-website scraping for day-of information (announcements, bell schedules, calendar changes)
+- Per-session conversation history over a signed-token access link
+- Embeddable web widget (iframe snippet) each school can drop into its own site
 
 ## Tech Stack
 
@@ -74,7 +75,7 @@ docker compose up --build --scale app=3
 dusd_ai_chatbot/
 ├── main.py                    # FastAPI app: /chat, /chatbox, /embed
 ├── chatbox.html                # Web chat widget UI
-├── embed/wms-chatbot.js        # Iframe-embed snippet for school sites
+├── embed/wms-chatbot.js        # Iframe-embed snippet each school drops into its own site
 ├── app/
 │   ├── agent.py                 # Claude AI agent with tools
 │   ├── config.py                # Configuration and env vars
