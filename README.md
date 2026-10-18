@@ -1,6 +1,6 @@
 # Wells Middle School AI Chatbot
 
-[![tests](https://github.com/karanveersinghsaran-netizen/wms_ai_chatbot/actions/workflows/tests.yml/badge.svg)](https://github.com/karanveersinghsaran-netizen/wms_ai_chatbot/actions/workflows/tests.yml)
+[![tests](https://github.com/karanveersinghsaran-netizen/dusd_ai_chatbot/actions/workflows/tests.yml/badge.svg)](https://github.com/karanveersinghsaran-netizen/dusd_ai_chatbot/actions/workflows/tests.yml)
 
 A web chatbot for Wells Middle School (Dublin Unified School District) powered by Claude AI. It answers questions about the school by scraping the school website in real time.
 
@@ -30,8 +30,8 @@ A web chatbot for Wells Middle School (Dublin Unified School District) powered b
 ### Installation
 
 ```bash
-git clone https://github.com/karanveersinghsaran-netizen/wms_ai_chatbot.git
-cd wms_ai_chatbot
+git clone https://github.com/karanveersinghsaran-netizen/dusd_ai_chatbot.git
+cd dusd_ai_chatbot
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
@@ -71,7 +71,7 @@ docker compose up --build --scale app=3
 ## Project Structure
 
 ```
-wms_ai_chatbot/
+dusd_ai_chatbot/
 ├── main.py                    # FastAPI app: /chat, /chatbox, /embed
 ├── chatbox.html                # Web chat widget UI
 ├── embed/wms-chatbot.js        # Iframe-embed snippet for school sites
