@@ -204,3 +204,50 @@ def test_clear_session_does_not_remove_preferred_language(redis_store):
     redis_store.clear_session("u1")
 
     assert redis_store.get_preferred_language("u1") == "es"
+
+
+# ── trimming must not orphan a tool_result (#161) ─────────────────────────
+
+@pytest.mark.parametrize("extra", [10, 11])
+def test_trimming_never_leaves_a_leading_tool_result(redis_store, extra):
+    """History now holds tool_use/tool_result pairs, and the API rejects a
+    tool_result whose tool_use isn't present. Slicing to the last MAX_HISTORY
+    messages can cut between them — which would 400 every request for the
+    rest of that session, long after the turn that caused it.
+
+    Both parities are exercised on purpose: whether the cut orphans a result
+    depends on whether the first retained index is odd, so a single total
+    silently tests nothing half the time. With extra=10 the slice lands on a
+    tool_use and the guard is a no-op; with extra=11 it lands on a
+    tool_result and the guard is what saves the session.
+    """
+    from app.store.redis_store import MAX_HISTORY
+
+    for i in range(MAX_HISTORY + extra):
+        if i % 2 == 0:
+            redis_store.append_message("s1", {"role": "assistant", "content": [
+                {"type": "tool_use", "id": f"t{i}", "name": "x", "input": {}}]})
+        else:
+            redis_store.append_message("s1", {"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": f"t{i-1}", "content": "data"}]})
+
+    first = redis_store.get_conversation("s1")[0]
+    is_tool_result = (
+        first.get("role") == "user"
+        and isinstance(first.get("content"), list)
+        and any(b.get("type") == "tool_result" for b in first["content"]))
+
+    assert not is_tool_result, f"history starts with an orphaned tool_result (extra={extra})"
+
+
+def test_trimming_keeps_plain_messages_untouched(redis_store):
+    """The orphan check must not eat ordinary conversation."""
+    from app.store.redis_store import MAX_HISTORY
+
+    for i in range(MAX_HISTORY + 4):
+        redis_store.append_message("s2", {"role": "user", "content": f"m{i}"})
+
+    history = redis_store.get_conversation("s2")
+
+    assert len(history) == MAX_HISTORY
+    assert history[0]["content"] == f"m{4}"
