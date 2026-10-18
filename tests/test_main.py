@@ -1464,3 +1464,23 @@ def test_chatbox_switcher_is_built_in_script_not_hardcoded():
     assert 'name="school" value=' not in markup
     assert 'id="school-sheet-list"' in markup
     assert 'id="school-switch-btn"' in markup
+
+
+def test_chatbox_defines_every_helper_it_calls():
+    """A refactor deleted the chatboxToken/withToken definitions while three
+    call sites remained, so every /chat, /chat/history and /feedback request
+    threw ReferenceError before reaching the network — and the catch block
+    reported it as "couldn't reach the server", which reads like a network
+    fault rather than a bug. Nothing in the suite noticed, because the script
+    is never executed here. This catches the shape of that mistake cheaply."""
+    markup = Path(main.__file__).parent.joinpath("chatbox.html").read_text(encoding="utf-8")
+
+    for name, definition in [
+        ("withToken(", "function withToken("),
+        ("chatboxToken", "const chatboxToken"),
+        ("setActiveSchool(", "function setActiveSchool("),
+        ("shortSchoolName(", "function shortSchoolName("),
+        ("restoreHistory(", "function restoreHistory("),
+    ]:
+        if name in markup:
+            assert definition in markup, f"{name} is called but {definition!r} is missing"
