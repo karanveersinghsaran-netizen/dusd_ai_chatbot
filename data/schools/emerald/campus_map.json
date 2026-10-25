@@ -1,11 +1,26 @@
 {
   "map_url": null,
 
-  "_source": "EHS Tour Guide Handout (campus layout data; no official building-position map published yet).",
+  "_source": "EHS Tour Guide Handout for building/room data; Google Maps satellite imagery (orientation verified by the on-map compass needle, north = up) for the cardinal positions and campus boundaries below. No official building-position map image has been published yet.",
+
+  "campus_context": {
+    "orientation": "North is up (standard Google Maps orientation, verified by the on-map compass needle).",
+    "boundary_streets": {
+      "north": "Central Parkway — the campus faces north onto Central Pkwy and the main driveway entrance is on this side.",
+      "west": "Chancery Lane (with Brannigan Street parallel further west).",
+      "east": "Grafton Street (with Fitzwilliam Street parallel further east).",
+      "south": "The campus Athletic Field forms the south edge; Devany Square park sits just off the southwest corner, and the Dublin Boulevard arterial runs further south."
+    },
+    "zones": {
+      "north": "Academic cluster — Administration (Building A) and the other academic buildings (C, D, E, F, G) sit in the north and central portion of the campus, visible from Central Parkway.",
+      "south": "Athletics cluster — the Gym (Building M), Locker Rooms (Building L), and the Stadium (athletic field with 8-lane track) occupy the south portion of campus."
+    }
+  },
 
   "buildings": {
     "A": {
       "name": "Administration (Building A)",
+      "position": "North side of campus, fronting Central Parkway. The main driveway entrance from Central Pkwy drops visitors right at Building A.",
       "notes": "Two floors. Floor 1 houses the Administration Offices, Health Center, and Staff Lounge. Floor 2 has the Wellness Center, Counselor Offices, and Student Services Offices."
     },
     "C": {
@@ -30,10 +45,12 @@
     },
     "L": {
       "name": "Locker Rooms (Building L)",
+      "position": "South side of campus, part of the athletics cluster next to the Gym (Building M) and the Stadium.",
       "notes": "Girls and Boys locker rooms, Kinesiology Lab, and Weight Room."
     },
     "M": {
       "name": "Gymnasium (Building M)",
+      "position": "South side of campus, between the academic buildings to the north and the Stadium to the south; adjacent to the Locker Rooms (Building L).",
       "notes": "2,400-seat bleacher gym with 3 basketball courts and 9 volleyball/badminton courts. Also contains the PE Fitness Classroom."
     }
   },
@@ -42,6 +59,7 @@
     "Administration Office": {
       "building": "A",
       "floor": 1,
+      "position": "North side of campus; the main driveway from Central Parkway drops visitors right at the Building A entrance.",
       "description": "Main administration office — first stop for visitors, phones, and front-desk questions."
     },
     "Health Center": {
@@ -175,6 +193,7 @@
     },
     "Stadium": {
       "building": "Outdoor",
+      "position": "South end of campus; occupies the south edge of the parcel, inside the campus boundary and north of the Dublin Boulevard arterial.",
       "description": "Athletic field with an 8-lane track."
     },
     "Tennis Courts": {
@@ -183,6 +202,7 @@
     },
     "Main Courtyard": {
       "building": "Outdoor",
+      "position": "Central area of campus, between the Administration (Building A) area on the north and the Gym (Building M) / Stadium area on the south.",
       "description": "The central courtyard; Academic Tower 1 (Building F) opens off it, with north–south access through Building F's main vestibule to Academic Tower 2 (Building G)."
     },
     "Snack Bar": {
@@ -192,6 +212,8 @@
   },
 
   "navigation_notes": [
+    "Cardinal orientation (confirmed from Google Maps satellite imagery with its on-map compass needle): north is up. The campus is bounded by Central Parkway on the north, Chancery Lane on the west, Grafton Street on the east, and the campus Athletic Field at the south (with Dublin Boulevard further south).",
+    "The main driveway entrance is on the north side off Central Parkway, dropping visitors right at the Administration (Building A) entrance.",
     "Visitors should start at the Administration Office on the 1st floor of Building A.",
     "The counselor offices, Wellness Center, and Student Services all share the 2nd floor of Building A.",
     "The Library and ACCESS Center are both in Building E — Library on floor 1, ACCESS Center on floor 2.",
@@ -199,6 +221,6 @@
     "The two academic towers (Building F and Building G) are linked by a 2nd-floor Walking Bridge; the north–south path through Building F's main vestibule gets you between the Main Courtyard and Building G at ground level.",
     "Athletics cluster together: Gym (Building M), Locker Rooms (Building L), Stadium (field + 8-lane track), and the 8 tennis courts.",
     "This map data is sourced from the EHS Tour Guide Handout. If someone asks about a building or room that isn't listed here (for example a specific Building B that the handout doesn't describe), say the handout doesn't cover it and point them at the Administration Office at (925) 551-4040.",
-    "No official building-position map image has been published yet for Emerald. The campus is still in phased construction (Phase 3 adds the Catherine C. Kuo Performing Arts Center), so a published map may lag the facilities themselves."
+    "No official building-position map image has been published yet for Emerald (the campus is still in phased construction, with Phase 3 adding the Catherine C. Kuo Performing Arts Center). The cardinal zones (north = academic, south = athletics) and campus boundaries above are confirmed from Google Maps satellite imagery; the individual academic buildings (C, D, E, F, G) all sit in the north-and-center academic cluster, but their exact letter-to-footprint mapping isn't labeled on satellite imagery and hasn't been digitised here yet."
   ]
 }
