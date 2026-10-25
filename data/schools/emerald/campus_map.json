@@ -1,7 +1,11 @@
 {
   "map_url": "https://raw.githubusercontent.com/karanveersinghsaran-netizen/dusd_ai_chatbot/master/data/schools/emerald/campus_map.png",
 
-  "_source": "Building positions derived from the labeled campus map image on page 1 of the EHS Tour Guide Handout (Google Doc 18WxqlSPnm5huygPSpcWVmn_iJ81UwZQq9vnh3PJxgOQ), cross-checked for cardinal orientation against a Google Maps satellite view of 3600 Central Parkway, Dublin, CA (compass needle confirmed north-up). Both sources agree: Central Parkway runs along the north edge, Grafton Street along the east, with Finninan Way wrapping the south side.",
+  "handout_url": "https://docs.google.com/document/d/18WxqlSPnm5huygPSpcWVmn_iJ81UwZQq9vnh3PJxgOQ/edit",
+  "handout_name": "EHS Tour Guide Handout",
+  "handout_note": "The handout at handout_url has the full labeled campus map plus building/room details (floors, labs, offices, Phase 2 and Phase 3 additions). Share this link when users ask for 'the full map', 'a brochure', 'more details on building X', or anything the condensed data below doesn't cover.",
+
+  "_source": "Building positions derived from the labeled campus map image on page 1 of the EHS Tour Guide Handout (handout_url above), cross-checked for cardinal orientation against a Google Maps satellite view of 3600 Central Parkway, Dublin, CA (compass needle confirmed north-up). Both sources agree: Central Parkway runs along the north edge, Grafton Street along the east, with Finninan Way wrapping the south side.",
 
   "campus_context": {
     "orientation": "North is up on both the EHS Tour Guide Handout campus map and the Google Maps satellite view (verified by the on-map compass needle).",
