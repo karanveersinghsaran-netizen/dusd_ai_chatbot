@@ -210,9 +210,9 @@ def test_get_campus_directions_prefers_same_origin_url_when_public_base_url_set(
 
 @pytest.fixture()
 def emerald_agent():
-    """Emerald HS has campus_map.json but no map image yet (campus is still
-    in phased construction, no official map published). The tool should
-    still work on the data; it just shouldn't attach a map image."""
+    """Emerald HS ships campus_map.json plus the labeled campus_map.png
+    from the EHS Tour Guide Handout. The tool should return the JSON data
+    AND attach the map image via the dispatcher's image detection."""
     with patch("app.agent.anthropic.Anthropic"):
         redis_store = RedisStore(client=FakeRedisClient())
         postgres_store = MagicMock()
@@ -241,17 +241,16 @@ def test_emerald_campus_directions_returns_building_data(emerald_agent):
     assert "ACCESS Center" in result
 
 
-def test_emerald_campus_directions_does_not_attach_broken_map(emerald_agent):
-    """Emerald has no campus_map.png/.jpg on disk yet. The dispatcher must
-    NOT return a 'Campus map image: ...' URL (the chatbox would render a
-    broken image) and must return should_attach_map=False so the UI
-    skips the image altogether."""
+def test_emerald_campus_directions_attaches_map(emerald_agent):
+    """Emerald now ships campus_map.png (the labeled EHS handout map). The
+    dispatcher must emit the 'Campus map image: ...' line and return
+    should_attach_map=True so the chatbox renders the image inline."""
     with patch("app.agent.config.PUBLIC_BASE_URL", "https://chat.dublinusd.org"):
         result, attach_map = emerald_agent.process_tool_call(
             "get_campus_directions", {"destination": "library"}
         )
-    assert "Campus map image:" not in result
-    assert attach_map is False
+    assert "Campus map image:" in result
+    assert attach_map is True
 
 
 def test_dhs_campus_directions_still_attaches_map(dhs_agent):

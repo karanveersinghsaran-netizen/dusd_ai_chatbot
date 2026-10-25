@@ -1,5 +1,5 @@
 {
-  "map_url": null,
+  "map_url": "https://raw.githubusercontent.com/karanveersinghsaran-netizen/dusd_ai_chatbot/master/data/schools/emerald/campus_map.png",
 
   "_source": "Building positions derived from the labeled campus map image on page 1 of the EHS Tour Guide Handout (Google Doc 18WxqlSPnm5huygPSpcWVmn_iJ81UwZQq9vnh3PJxgOQ), cross-checked for cardinal orientation against a Google Maps satellite view of 3600 Central Parkway, Dublin, CA (compass needle confirmed north-up). Both sources agree: Central Parkway runs along the north edge, Grafton Street along the east, with Finninan Way wrapping the south side.",
 
@@ -15,7 +15,7 @@
       "north": "Parking Lot A along Central Parkway.",
       "upper_middle": "The main building complex: Student Union / Theater / VAPA cluster on the west (blue buildings on the handout map), and Administration / Library on the east (yellow buildings).",
       "center_east": "Gymnasium (Building M) and Locker Rooms (Building L) — an orange cluster on the east side.",
-      "southwest": "Academic Tower 1 (Building F / ACADEMY 1) and south of it Academic Tower 2 (Building G / ACADEMY 2), both yellow on the handout map.",
+      "center_south": "Academic Tower 1 (Building F / ACADEMY 1) and south of it Academic Tower 2 (Building G / ACADEMY 2), both yellow on the handout map; sit between the main building complex (north) and the Stadium (south).",
       "south": "Stadium (athletic field + 8-lane track) in the south-center, Tennis Courts in the SW corner, Devaney Park along the west."
     }
   },
@@ -43,22 +43,22 @@
     },
     "F": {
       "name": "Academic Tower 1 (Building F)",
-      "position": "South-west portion of campus. On the handout map, Academic Tower 1 is labeled ACADEMY 1 — a yellow building south of VAPA (Building C) and north of Academic Tower 2 (Building G / ACADEMY 2). Parking Lot B sits adjacent to it in the center of campus.",
+      "position": "Center-south of campus. On the handout map, Academic Tower 1 is labeled ACADEMY 1 — a long yellow building south of VAPA (Building C) and north of Academic Tower 2 (Building G / ACADEMY 2). Parking Lot B sits just to the north between F and the VAPA / Student Union cluster.",
       "notes": "Three floors; 36 academic classrooms including 2 computer labs, 4 chemistry labs, and 6 science flex labs, all accessible via 4 staircases and an elevator. Also houses the Special Education Offices and 2 Special Education Lifeskills rooms. The main vestibule has showcase cabinets and provides north–south access from the Main Courtyard to Academic Tower 2 (Building G). Restrooms on every floor; a 2nd-floor Walking Bridge to Academic Tower 2 is part of Phase 2."
     },
     "G": {
       "name": "Academic Tower 2 (Building G)",
-      "position": "South-west portion of campus, directly south of Academic Tower 1 (Building F / ACADEMY 1). On the handout map it is labeled ACADEMY 2. Linked to Academic Tower 1 by the 2nd-floor Walking Bridge.",
+      "position": "Center-south of campus, directly south of Academic Tower 1 (Building F / ACADEMY 1) and north of the Stadium. On the handout map it is labeled ACADEMY 2. Linked to Academic Tower 1 by the 2nd-floor Walking Bridge.",
       "notes": "Second academic tower, completed July 2025. Linked to Academic Tower 1 (Building F) by the 2nd-floor Walking Bridge."
     },
     "L": {
       "name": "Locker Rooms (Building L)",
-      "position": "Far east side of campus, directly adjacent to the Gymnasium (Building M) on its east side — a small orange building on the handout map. Along Grafton Street.",
+      "position": "East side of campus, directly south of the Gymnasium (Building M) — a smaller orange building on the handout map, between the Gym and the Stadium / Grafton Street corner.",
       "notes": "Girls and Boys locker rooms, Kinesiology Lab, and Weight Room."
     },
     "M": {
       "name": "Gymnasium (Building M)",
-      "position": "East-center of the main building complex — the large orange building on the handout map. Directly south of the Library (Building E), north-east of Academic Tower 1 (Building F), and immediately west of the Locker Rooms (Building L). North of the Stadium.",
+      "position": "East-center of the main building complex — the large orange building on the handout map. Directly south of the Library (Building E), east of Academic Tower 1 (Building F), and immediately north of the Locker Rooms (Building L).",
       "notes": "2,400-seat bleacher gym with 3 basketball courts and 9 volleyball/badminton courts. Also contains the PE Fitness Classroom."
     }
   },
@@ -181,23 +181,23 @@
     },
     "Girls Locker Room": {
       "building": "L",
-      "description": "Girls locker room in Building L (far east side of campus, adjacent to the Gym)."
+      "description": "Girls locker room in Building L (east side of campus, directly south of the Gym)."
     },
     "Boys Locker Room": {
       "building": "L",
-      "description": "Boys locker room in Building L (far east side of campus, adjacent to the Gym)."
+      "description": "Boys locker room in Building L (east side of campus, directly south of the Gym)."
     },
     "Kinesiology Lab": {
       "building": "L",
-      "description": "Kinesiology lab in Building L (far east side of campus, adjacent to the Gym)."
+      "description": "Kinesiology lab in Building L (east side of campus, directly south of the Gym)."
     },
     "Weight Room": {
       "building": "L",
-      "description": "Weight Room in Building L (far east side of campus, adjacent to the Gym)."
+      "description": "Weight Room in Building L (east side of campus, directly south of the Gym)."
     },
     "Gym": {
       "building": "M",
-      "position": "East-center of main complex (Building M) — south of the Library, north of the Stadium, west of the Locker Rooms.",
+      "position": "East-center of main complex (Building M) — south of the Library, north of the Locker Rooms (Building L), east of Academic Tower 1 (Building F).",
       "description": "The main gymnasium: 2,400 bleacher seats, 3 basketball courts, 9 volleyball/badminton courts."
     },
     "PE Fitness Classroom": {
