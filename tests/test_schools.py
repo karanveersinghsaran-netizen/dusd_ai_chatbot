@@ -218,11 +218,22 @@ def test_new_schools_have_theme_colors(school_id):
     assert school.background_tint.startswith("#")
 
 
-@pytest.mark.parametrize("school_id", ["fallon", "emerald"])
-def test_new_schools_claim_no_campus_map(school_id):
-    """Neither has a digitised campus map yet, so get_campus_directions must
-    stay unregistered rather than answering from nothing."""
-    assert get_school(school_id).campus_map_file is None
+def test_fallon_claims_no_campus_map():
+    """Fallon has no digitised campus-map data yet, so get_campus_directions
+    must stay unregistered rather than answering from nothing. (Emerald's
+    campus-map data was added from the EHS Tour Guide Handout — see
+    data/schools/emerald/campus_map.json.)"""
+    assert get_school("fallon").campus_map_file is None
+
+
+def test_emerald_claims_campus_map_data():
+    """Emerald ships campus_map.json but no image file yet (campus is still
+    under phased construction, no official building-position map
+    published). The agent must register get_campus_directions for Emerald
+    and the dispatcher is responsible for not emitting a broken map
+    image URL — see test_emerald_campus_directions_* in test_agent.py."""
+    assert get_school("emerald").campus_map_file is not None
+    assert get_school("emerald").campus_map_file.is_file()
 
 
 def test_theme_colors_are_distinct_across_schools():

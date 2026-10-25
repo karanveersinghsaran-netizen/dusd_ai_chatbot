@@ -624,17 +624,29 @@ CRITICAL RULES:
         if tool_name == "get_campus_directions":
             try:
                 campus = json.loads(self.school.campus_map_file.read_text(encoding="utf-8"))
+                # A school may ship campus_map.json data without yet publishing
+                # a map image (Emerald during its phased construction, for
+                # example). Only emit the map image reference when an image
+                # file exists on disk — otherwise we'd return a URL the
+                # chatbox renders as a broken image.
+                image_candidates = [
+                    p for p in self.school.campus_map_file.parent.glob("campus_map.*")
+                    if p.suffix.lower() in {".jpg", ".jpeg", ".png"}
+                ]
+                has_image = bool(image_candidates)
                 # Prefer our own same-origin image endpoint over whatever static
                 # map_url is checked into campus_map.json — the repo is private,
                 # so a raw.githubusercontent.com link 404s for any unauthenticated
                 # visitor. Falls back to the static value when PUBLIC_BASE_URL
                 # isn't configured (e.g. local dev).
-                if config.PUBLIC_BASE_URL:
+                if has_image and config.PUBLIC_BASE_URL:
                     campus["map_url"] = f"{config.PUBLIC_BASE_URL}/schools/{self.school.id}/campus-map"
+                map_line = ""
+                if has_image and campus.get("map_url"):
+                    map_line = f"Campus map image: {campus['map_url']}\n\n"
                 return (
-                    f"Campus map image: {campus['map_url']}\n\n"
-                    f"{json.dumps(campus, indent=2)}",
-                    True,
+                    map_line + json.dumps(campus, indent=2),
+                    has_image,
                 )
             except Exception as e:
                 return (f"Campus map data unavailable: {e}", False)
