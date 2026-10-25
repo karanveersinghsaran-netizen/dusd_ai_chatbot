@@ -2,10 +2,22 @@
   "map_url": "https://raw.githubusercontent.com/karanveersinghsaran-netizen/wms_ai_chatbot/master/data/schools/wells/campus_map.png",
   "pdf_url": "https://wms.dublinusd.org/pdf/Wells%20Map-Final%20_1_.pdf",
 
+  "_source": "Building adjacencies and room numbering come from the Wells schematic campus map image (data/schools/wells/campus_map.png) and the official PDF at pdf_url. Cardinal directions (N/S/E/W) below are TRUE cardinal, confirmed against the compass rose drawn in the top-left of the image (true north = RIGHT of the image). The schematic itself is drawn tilted — see map_orientation below.",
+
+  "map_orientation": {
+    "note": "The Wells campus_map.png schematic is drawn tilted ~90° counterclockwise from true north. When reading the image, mentally rotate it 90° clockwise to recover true cardinal directions.",
+    "image_to_true_cardinal": {
+      "image_top": "actually WEST in reality (the Gym is drawn at the top of the image but sits on the west side of campus)",
+      "image_right": "actually NORTH in reality (the compass arrow points to the right of the image)",
+      "image_bottom": "actually EAST in reality",
+      "image_left": "actually SOUTH in reality (H Building drawn at upper-left is really south-west of center)"
+    }
+  },
+
   "buildings": {
     "B": {
       "name": "B Building",
-      "position": "west side of campus",
+      "position": "EAST side of campus (true cardinal). On the campus_map.png schematic, Building B is drawn at the bottom-center / lower-left — the image is rotated ~90° CCW, so what appears 'west' on the schematic is actually east in reality.",
       "floors": {
         "1": {
           "rooms": ["B101", "B102", "B103", "B104", "B105", "B106"],
@@ -20,7 +32,7 @@
     },
     "H": {
       "name": "H Building",
-      "position": "northwest side of campus, curved building",
+      "position": "SOUTH-WEST side of campus (true cardinal) — the large curved building. On the campus_map.png it is drawn in the upper-left; because the schematic is rotated ~90° CCW, upper-left corresponds to south-west in reality.",
       "floors": {
         "1": {
           "rooms": ["H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10", "H11", "H12"],
@@ -31,11 +43,11 @@
           "key_areas": ["Boiler Room"]
         }
       },
-      "notes": "Curved building on the northwest side. Elevator available. H1-H12 on 1st floor, H21-H29 on 2nd floor."
+      "notes": "Curved building on the south-west side of campus. Elevator available. H1-H12 on 1st floor, H21-H29 on 2nd floor."
     },
     "E": {
       "name": "E Building",
-      "position": "east-center side of campus, standalone portable classrooms",
+      "position": "NORTH-CENTER side of campus (true cardinal), standalone portable classrooms next to the Band room and the Admin Office. On the campus_map.png they are drawn on the right-center of the image.",
       "floors": {
         "1": {
           "rooms": ["E1", "E2", "E3", "E4", "E5", "E6"],
@@ -50,63 +62,63 @@
     "Library": {
       "building": "B Building",
       "floor": "1st floor",
-      "description": "Inside B Building, 1st floor — enter through the Foyer"
+      "description": "Inside B Building (east side of campus), 1st floor — enter through the Foyer."
     },
     "Counseling": {
       "building": "B Building",
       "floor": "2nd floor",
-      "description": "B Building, 2nd floor — take stairs or elevator near the Foyer"
+      "description": "B Building (east side), 2nd floor — take stairs or elevator near the Foyer."
     },
     "Gym": {
       "building": "Standalone",
       "floor": "Ground level",
-      "position": "north side of campus",
-      "description": "Large standalone building on the north side, next to the Lunch Pavilion. Boys and Girls Locker Rooms are attached."
+      "position": "WEST side of campus (true cardinal). On the campus_map.png schematic the Gym is drawn at the top-center because the image is rotated ~90° CCW from true north.",
+      "description": "Large standalone building on the west side, next to the Lunch Pavilion. Boys and Girls Locker Rooms are attached."
     },
     "MPR": {
       "building": "Standalone",
       "floor": "Ground level",
-      "position": "center of campus",
-      "description": "Multi-Purpose Room in the center of campus. Includes the Stage, Weight Room, and D1."
+      "position": "Center of campus, leaning east (true cardinal). Drawn at the bottom-center of the campus_map.png.",
+      "description": "Multi-Purpose Room in the center-east of campus. Includes the Stage, Weight Room, and D1."
     },
     "Lunch Pavilion": {
       "building": "Standalone",
       "floor": "Ground level",
-      "position": "north side of campus, next to Gym",
-      "description": "Standalone building on the north side next to the Gym. Includes Kitchen and Restrooms."
+      "position": "WEST / NORTH-WEST side of campus (true cardinal), next to the Gym. Drawn at the top of the campus_map.png just to the right of the Gym.",
+      "description": "Standalone building next to the Gym on the west side. Includes Kitchen and Restrooms."
     },
     "Band": {
       "building": "Standalone",
       "floor": "Ground level",
-      "position": "east side of campus",
-      "description": "Standalone Band room on the east side of campus, near E Building."
+      "position": "NORTH side of campus (true cardinal). Drawn at the far right of the campus_map.png because the schematic is rotated.",
+      "description": "Standalone Band room on the north side of campus, near E Building."
     },
     "Office": {
       "building": "Standalone",
       "floor": "Ground level",
-      "position": "southeast side of campus",
-      "description": "Main Admin area on the southeast side. Includes Principal, Asst. Principal, Health room, and Student Activities."
+      "position": "NORTH-EAST side of campus (true cardinal). Drawn at the bottom-right of the campus_map.png — the schematic's rotation makes bottom-right = north-east in reality.",
+      "description": "Main Admin area on the north-east side. Includes Principal, Asst. Principal, Health room, and Student Activities."
     },
     "Boys Locker Room": {
       "building": "Gym",
-      "description": "Attached to the Gym on the north side of campus"
+      "description": "Attached to the Gym on the west side of campus."
     },
     "Girls Locker Room": {
       "building": "Gym",
-      "description": "Attached to the Gym on the north side of campus"
+      "description": "Attached to the Gym on the west side of campus."
     },
     "Weight Room": {
       "building": "MPR",
-      "description": "Inside the MPR building, center of campus"
+      "description": "Inside the MPR building, center-east of campus."
     },
     "Stage": {
       "building": "MPR",
-      "description": "Inside the MPR building, center of campus"
+      "description": "Inside the MPR building, center-east of campus."
     },
     "Foyer": {
       "building": "B Building",
       "floor": "1st floor",
-      "description": "Main entrance area of B Building, 1st floor"
+      "description": "Main entrance area of B Building (east side), 1st floor."
     }
   },
 
@@ -120,14 +132,15 @@
   },
 
   "navigation_notes": [
-    "H Building is the large curved building on the northwest side.",
-    "B Building is on the west side and contains the Library (1F) and Counseling (2F).",
-    "The Gym and Lunch Pavilion are side by side on the north side.",
-    "The MPR (Multi-Purpose Room) is in the center of campus.",
-    "E Building portable classrooms are near the Admin Office on the east-center side.",
-    "The Band room is on the far east side of campus.",
-    "The Admin Office (Principal, Asst. Principal, Health) is on the southeast side.",
+    "IMPORTANT ORIENTATION NOTE: The campus_map.png schematic is tilted ~90° counterclockwise from true north. On the schematic, the Gym is drawn at the top and B Building is drawn at the bottom-left, but in reality the Gym is on the WEST side of campus and B is on the EAST side. The compass rose in the top-left corner of the image shows the correct true-north direction (right). All cardinal directions below use TRUE cardinal.",
+    "H Building is the large curved building on the SOUTH-WEST side of campus (drawn at upper-left of the schematic).",
+    "B Building is on the EAST side (drawn at the bottom-left of the schematic) and contains the Library (1F) and Counseling (2F).",
+    "The Gym and Lunch Pavilion are side by side on the WEST side of campus (drawn at the top of the schematic).",
+    "The MPR (Multi-Purpose Room) is in the center of campus, leaning east.",
+    "E Building portable classrooms are on the NORTH-CENTER side near the Admin Office (drawn right-center on the schematic).",
+    "The Band room is on the NORTH side of campus (drawn at the far right of the schematic).",
+    "The Admin Office (Principal, Asst. Principal, Health) is on the NORTH-EAST side (drawn at the bottom-right of the schematic).",
     "Most buildings have restrooms (RR) marked on the map.",
-    "You cannot cut through between B Building and the Office/E Building — to travel between them, you must go around the MPR and through the main quad."
+    "You cannot cut through between B Building and the Office / E Building — to travel between them, you must go around the MPR and through the main quad."
   ]
 }
