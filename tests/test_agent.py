@@ -208,6 +208,62 @@ def test_get_campus_directions_prefers_same_origin_url_when_public_base_url_set(
     assert "raw.githubusercontent.com" not in result
 
 
+@pytest.fixture()
+def emerald_agent():
+    """Emerald HS has campus_map.json but no map image yet (campus is still
+    in phased construction, no official map published). The tool should
+    still work on the data; it just shouldn't attach a map image."""
+    with patch("app.agent.anthropic.Anthropic"):
+        redis_store = RedisStore(client=FakeRedisClient())
+        postgres_store = MagicMock()
+        return SchoolAgent(
+            school=get_school("emerald"),
+            redis_store=redis_store,
+            postgres_store=postgres_store,
+        )
+
+
+def test_get_campus_directions_tool_registered_for_emerald(emerald_agent):
+    assert "get_campus_directions" in [t["name"] for t in emerald_agent.tools]
+
+
+def test_emerald_campus_directions_returns_building_data(emerald_agent):
+    """Smoke test the Emerald JSON through the dispatcher: the tool result
+    must carry at least the headline buildings and key locations the
+    EHS Tour Guide handout names."""
+    with patch("app.agent.config.PUBLIC_BASE_URL", ""):
+        result, _ = emerald_agent.process_tool_call(
+            "get_campus_directions", {"destination": "library"}
+        )
+    assert "Academic Tower 1" in result
+    assert "Building F" in result
+    assert "Library" in result
+    assert "ACCESS Center" in result
+
+
+def test_emerald_campus_directions_does_not_attach_broken_map(emerald_agent):
+    """Emerald has no campus_map.png/.jpg on disk yet. The dispatcher must
+    NOT return a 'Campus map image: ...' URL (the chatbox would render a
+    broken image) and must return should_attach_map=False so the UI
+    skips the image altogether."""
+    with patch("app.agent.config.PUBLIC_BASE_URL", "https://chat.dublinusd.org"):
+        result, attach_map = emerald_agent.process_tool_call(
+            "get_campus_directions", {"destination": "library"}
+        )
+    assert "Campus map image:" not in result
+    assert attach_map is False
+
+
+def test_dhs_campus_directions_still_attaches_map(dhs_agent):
+    """Guard against the no-image path accidentally regressing DHS, which
+    DOES have a map image on disk."""
+    with patch("app.agent.config.PUBLIC_BASE_URL", "https://chat.dublinusd.org"):
+        _, attach_map = dhs_agent.process_tool_call(
+            "get_campus_directions", {"destination": "library"}
+        )
+    assert attach_map is True
+
+
 def test_get_club_list_tool_present_when_school_has_clubs_sheet(dhs_agent):
     assert "get_club_list" in [t["name"] for t in dhs_agent.tools]
 

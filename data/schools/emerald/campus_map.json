@@ -1,0 +1,204 @@
+{
+  "map_url": null,
+
+  "_source": "EHS Tour Guide Handout (campus layout data; no official building-position map published yet).",
+
+  "buildings": {
+    "A": {
+      "name": "Administration (Building A)",
+      "notes": "Two floors. Floor 1 houses the Administration Offices, Health Center, and Staff Lounge. Floor 2 has the Wellness Center, Counselor Offices, and Student Services Offices."
+    },
+    "C": {
+      "name": "Visual & Performing Arts (Building C)",
+      "notes": "Band, Choir, and Theatre Arts classrooms; Ceramics & Sculpture and Visual Arts studios. A Phase 2 expansion (completed July 2025) added a Dance Studio, Video Production Studio, and Theater Make-up & Locker Room."
+    },
+    "D": {
+      "name": "Student Union (Building D)",
+      "notes": "Climate-controlled indoor–outdoor flexible gathering space. Houses the ASB Activities Center, Food Court, and a 150-seat Lecture Hall. The Catherine C. Kuo Performing Arts Center is planned as part of the Phase 3 expansion here."
+    },
+    "E": {
+      "name": "Library / ACCESS Center (Building E)",
+      "notes": "Two floors. Floor 1: Library and Media & Technology Center. Floor 2: Academic College & Career Education Student Support (ACCESS) Center."
+    },
+    "F": {
+      "name": "Academic Tower 1 (Building F)",
+      "notes": "Three floors; 36 academic classrooms including 2 computer labs, 4 chemistry labs, and 6 science flex labs, all accessible via 4 staircases and an elevator. Also houses the Special Education Offices and 2 Special Education Lifeskills rooms. The main vestibule has showcase cabinets and provides north–south access from the Main Courtyard to Academic Tower 2 (Building G). Restrooms on every floor; a 2nd-floor Walking Bridge to Academic Tower 2 is part of Phase 2."
+    },
+    "G": {
+      "name": "Academic Tower 2 (Building G)",
+      "notes": "Second academic tower, completed July 2025. Linked to Academic Tower 1 (Building F) by the 2nd-floor Walking Bridge."
+    },
+    "L": {
+      "name": "Locker Rooms (Building L)",
+      "notes": "Girls and Boys locker rooms, Kinesiology Lab, and Weight Room."
+    },
+    "M": {
+      "name": "Gymnasium (Building M)",
+      "notes": "2,400-seat bleacher gym with 3 basketball courts and 9 volleyball/badminton courts. Also contains the PE Fitness Classroom."
+    }
+  },
+
+  "key_locations": {
+    "Administration Office": {
+      "building": "A",
+      "floor": 1,
+      "description": "Main administration office — first stop for visitors, phones, and front-desk questions."
+    },
+    "Health Center": {
+      "building": "A",
+      "floor": 1,
+      "description": "On-campus Health Center for medical issues during the school day."
+    },
+    "Staff Lounge": {
+      "building": "A",
+      "floor": 1,
+      "description": "Staff lounge, Building A floor 1 (staff only)."
+    },
+    "Wellness Center": {
+      "building": "A",
+      "floor": 2,
+      "description": "Mental-health and wellness support space, 2nd floor of Building A alongside the counselor offices."
+    },
+    "Counselor Offices": {
+      "building": "A",
+      "floor": 2,
+      "description": "Academic / college counselors' offices on the 2nd floor of Building A. For which counselor a specific student is assigned to, use lookup_counselor_by_last_name."
+    },
+    "Student Services": {
+      "building": "A",
+      "floor": 2,
+      "description": "Student Services offices (registrar, records, etc.), 2nd floor of Building A."
+    },
+    "Library": {
+      "building": "E",
+      "floor": 1,
+      "description": "School library and Media & Technology Center, 1st floor of Building E."
+    },
+    "Media & Technology Center": {
+      "building": "E",
+      "floor": 1,
+      "description": "Shares the 1st floor of Building E with the Library."
+    },
+    "ACCESS Center": {
+      "building": "E",
+      "floor": 2,
+      "description": "Academic College & Career Education Student Support (ACCESS) Center — academic help and college-prep resources, 2nd floor of Building E."
+    },
+    "Food Court": {
+      "building": "D",
+      "description": "Student dining area inside the Student Union (Building D)."
+    },
+    "ASB Activities Center": {
+      "building": "D",
+      "description": "Associated Student Body activity office / events space inside the Student Union."
+    },
+    "Lecture Hall": {
+      "building": "D",
+      "description": "150-seat lecture hall inside the Student Union."
+    },
+    "Band Room": {
+      "building": "C",
+      "description": "Band classroom in the Visual & Performing Arts building (Building C)."
+    },
+    "Choir Room": {
+      "building": "C",
+      "description": "Choir classroom in the Visual & Performing Arts building (Building C)."
+    },
+    "Theatre Arts Room": {
+      "building": "C",
+      "description": "Theatre Arts classroom in Building C."
+    },
+    "Ceramics & Sculpture Studio": {
+      "building": "C",
+      "description": "Ceramics & Sculpture studio in Building C."
+    },
+    "Visual Arts Studio": {
+      "building": "C",
+      "description": "Visual Arts studio in Building C."
+    },
+    "Dance Studio": {
+      "building": "C",
+      "description": "Dance studio added in the Phase 2 Building C expansion (July 2025)."
+    },
+    "Video Production Studio": {
+      "building": "C",
+      "description": "Video Production studio added in the Phase 2 Building C expansion (July 2025)."
+    },
+    "Catherine C. Kuo Performing Arts Center": {
+      "building": "D",
+      "status": "planned",
+      "description": "Performing Arts Center planned as part of the Phase 3 expansion inside the Student Union (Building D). Not yet open."
+    },
+    "Chemistry Labs": {
+      "building": "F",
+      "description": "Four chemistry labs inside Academic Tower 1 (Building F)."
+    },
+    "Science Flex Labs": {
+      "building": "F",
+      "description": "Six science flex labs inside Academic Tower 1 (Building F)."
+    },
+    "Computer Labs": {
+      "building": "F",
+      "description": "Two computer labs inside Academic Tower 1 (Building F)."
+    },
+    "Special Education Offices": {
+      "building": "F",
+      "description": "Special Education offices and two Special Education Lifeskills rooms inside Academic Tower 1 (Building F)."
+    },
+    "Walking Bridge": {
+      "building": "F ↔ G",
+      "description": "A 2nd-floor covered walking bridge connecting Academic Tower 1 (Building F) and Academic Tower 2 (Building G). Part of the Phase 2 construction."
+    },
+    "Girls Locker Room": {
+      "building": "L",
+      "description": "Girls locker room in Building L."
+    },
+    "Boys Locker Room": {
+      "building": "L",
+      "description": "Boys locker room in Building L."
+    },
+    "Kinesiology Lab": {
+      "building": "L",
+      "description": "Kinesiology lab in Building L."
+    },
+    "Weight Room": {
+      "building": "L",
+      "description": "Weight Room in Building L."
+    },
+    "Gym": {
+      "building": "M",
+      "description": "The main gymnasium: 2,400 bleacher seats, 3 basketball courts, 9 volleyball/badminton courts."
+    },
+    "PE Fitness Classroom": {
+      "building": "M",
+      "description": "PE Fitness classroom inside the Gymnasium (Building M)."
+    },
+    "Stadium": {
+      "building": "Outdoor",
+      "description": "Athletic field with an 8-lane track."
+    },
+    "Tennis Courts": {
+      "building": "Outdoor",
+      "description": "Eight tennis courts near the Stadium and Academic Tower 2."
+    },
+    "Main Courtyard": {
+      "building": "Outdoor",
+      "description": "The central courtyard; Academic Tower 1 (Building F) opens off it, with north–south access through Building F's main vestibule to Academic Tower 2 (Building G)."
+    },
+    "Snack Bar": {
+      "building": "Exterior",
+      "description": "An exterior Snack Bar with adjacent restrooms."
+    }
+  },
+
+  "navigation_notes": [
+    "Visitors should start at the Administration Office on the 1st floor of Building A.",
+    "The counselor offices, Wellness Center, and Student Services all share the 2nd floor of Building A.",
+    "The Library and ACCESS Center are both in Building E — Library on floor 1, ACCESS Center on floor 2.",
+    "The Food Court, ASB Activities Center, and 150-seat Lecture Hall are all inside the Student Union (Building D).",
+    "The two academic towers (Building F and Building G) are linked by a 2nd-floor Walking Bridge; the north–south path through Building F's main vestibule gets you between the Main Courtyard and Building G at ground level.",
+    "Athletics cluster together: Gym (Building M), Locker Rooms (Building L), Stadium (field + 8-lane track), and the 8 tennis courts.",
+    "This map data is sourced from the EHS Tour Guide Handout. If someone asks about a building or room that isn't listed here (for example a specific Building B that the handout doesn't describe), say the handout doesn't cover it and point them at the Administration Office at (925) 551-4040.",
+    "No official building-position map image has been published yet for Emerald. The campus is still in phased construction (Phase 3 adds the Catherine C. Kuo Performing Arts Center), so a published map may lag the facilities themselves."
+  ]
+}

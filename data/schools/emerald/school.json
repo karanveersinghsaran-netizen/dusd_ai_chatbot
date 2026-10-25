@@ -13,6 +13,7 @@
   "bell_schedule_url": "https://ehs.dublinusd.org/apps/bell_schedules/",
   "has_course_catalog": true,
   "course_catalog_url": "https://docs.google.com/document/d/1DxIYs_qW9sHB3rNxSrdz8QDy3Vp_lSKUbBSIYrFjigU/edit",
+  "campus_map_file": "campus_map.json",
   "lunch_menu_grade_band": "9-12",
   "lunch_menu_url": "https://www.schoolnutritionandfitness.com/schools/dusd_2203112030183753/menus/HS_Menu_Oct_19-30,_2026.pdf",
   "lunch_menu_nutrition_url": "https://www.schoolnutritionandfitness.com/schools/dusd_2203112030183753/nutriinfo/9-12_Oct_2026_Nutrition.pdf",
