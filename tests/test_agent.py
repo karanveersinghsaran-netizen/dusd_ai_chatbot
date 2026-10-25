@@ -263,6 +263,52 @@ def test_dhs_campus_directions_still_attaches_map(dhs_agent):
     assert attach_map is True
 
 
+@pytest.fixture()
+def fallon_agent():
+    """Fallon MS ships campus_map.json plus the labeled campus_map.png
+    (satellite overlay with building letters pinned from a user
+    annotation). The tool should return the JSON data AND attach the
+    map image."""
+    with patch("app.agent.anthropic.Anthropic"):
+        redis_store = RedisStore(client=FakeRedisClient())
+        postgres_store = MagicMock()
+        return SchoolAgent(
+            school=get_school("fallon"),
+            redis_store=redis_store,
+            postgres_store=postgres_store,
+        )
+
+
+def test_get_campus_directions_tool_registered_for_fallon(fallon_agent):
+    assert "get_campus_directions" in [t["name"] for t in fallon_agent.tools]
+
+
+def test_fallon_campus_directions_returns_building_data(fallon_agent):
+    """Smoke test Fallon JSON through the dispatcher: the tool result
+    must carry at least the headline buildings/features the FMS map
+    names."""
+    with patch("app.agent.config.PUBLIC_BASE_URL", ""):
+        result, _ = fallon_agent.process_tool_call(
+            "get_campus_directions", {"destination": "library"}
+        )
+    assert "Administration" in result
+    assert "Media Center" in result
+    assert "Gymnasium" in result
+    assert "Courtyard" in result
+
+
+def test_fallon_campus_directions_attaches_map(fallon_agent):
+    """Fallon ships campus_map.png (the labeled satellite overlay). The
+    dispatcher must emit the 'Campus map image: ...' line and return
+    should_attach_map=True."""
+    with patch("app.agent.config.PUBLIC_BASE_URL", "https://chat.dublinusd.org"):
+        result, attach_map = fallon_agent.process_tool_call(
+            "get_campus_directions", {"destination": "library"}
+        )
+    assert "Campus map image:" in result
+    assert attach_map is True
+
+
 def test_get_club_list_tool_present_when_school_has_clubs_sheet(dhs_agent):
     assert "get_club_list" in [t["name"] for t in dhs_agent.tools]
 
