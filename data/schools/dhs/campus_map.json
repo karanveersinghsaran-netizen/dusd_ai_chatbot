@@ -1,117 +1,137 @@
 {
   "map_url": "https://raw.githubusercontent.com/karanveersinghsaran-netizen/wms_ai_chatbot/master/data/schools/dhs/campus_map.jpg",
 
+  "_source": "Building adjacencies and letter assignments come from the official DHS campus map image (data/schools/dhs/campus_map.jpg). Cardinal directions (N/S/E/W) are TRUE cardinal, verified against a Google Maps satellite view of 8151 Village Parkway with its compass needle (north = up). The campus_map.jpg itself is drawn rotated ~90° counterclockwise from true north — see map_orientation below.",
+
+  "map_orientation": {
+    "note": "The DHS campus_map.jpg is tilted ~90° counterclockwise from true north. When reading the image, mentally rotate it 90° clockwise to recover true cardinal directions.",
+    "jpg_to_true_cardinal": {
+      "jpg_top": "actually EAST in reality (that's why GAEL Stadium, drawn at the top of the image, is on the east side of campus)",
+      "jpg_right": "actually SOUTH in reality (Brighton Dr runs along the real south edge)",
+      "jpg_bottom": "actually WEST in reality (Village Pkwy runs along the real west edge)",
+      "jpg_left": "actually NORTH in reality (baseball / tennis / softball sit on the real north side, with the Iron Horse Trail running along the real east edge)"
+    },
+    "boundary_streets_true_cardinal": {
+      "west": "Village Parkway",
+      "south": "Brighton Drive",
+      "east": "Iron Horse Regional Trail (and Coyote Creek beyond)",
+      "north": "Dublin High School Greenspace and Davona Drive area"
+    }
+  },
+
   "buildings": {
     "C": {
       "name": "VAPA / Performing Arts building (Building C)",
-      "position": "west-center of campus, attached to the Performing Arts Center",
-      "notes": "Houses music, drama, and media arts (VAPA wing); next to the tennis courts and portables, and directly attached to the Performing Arts Center."
+      "position": "Center-WEST of campus (TRUE cardinal). The Performing Arts Center is directly attached on its west side; the Auxiliary Gym (Building E) is to the north and the tennis courts are further north. On the campus_map.jpg image, Building C appears center-south because the image is rotated ~90° CCW.",
+      "notes": "Houses music, drama, and media arts (VAPA wing); directly attached to the Performing Arts Center."
     },
     "E": {
       "name": "Auxiliary Gym (Building E)",
-      "position": "center of campus, between Building C and the central plaza",
-      "notes": "Separate from GAEL Stadium's field house; sits next to the Amphitheater."
+      "position": "Center-NORTH of campus (true cardinal), east of VAPA (Building C) and north of Building H; the portables (relocatable classrooms) are just to the north/west. On the campus_map.jpg, Building E appears center-west because the image is rotated.",
+      "notes": "Separate from GAEL Stadium's field house; across the central plaza from Building H."
     },
     "F": {
       "name": "Science & Engineering (Building F)",
-      "position": "north-center of campus, next to the Sports Complex and Parking Lot 5",
-      "notes": "Includes the ARC (Academic Resource Center) wing."
+      "position": "SOUTH side of campus (true cardinal), west of the Sports Complex and east of the ARC; Parking Lots 5 and 6 sit south along Brighton Drive. On the campus_map.jpg, Building F appears on the east side because the image is rotated.",
+      "notes": "The ARC (Academic Resource Center) is directly adjacent on the west side."
     },
     "H": {
       "name": "Building H",
-      "position": "center of campus, next to the Student Union"
+      "position": "Center of campus — immediately north of the Student Union (true cardinal); east of the ARC and south of the central plaza. On the campus_map.jpg, Building H appears center with the Student Union to its east, because the image is rotated."
     },
     "J": {
       "name": "Building J",
-      "position": "north-east of campus along Brighton Drive, next to Parking Lot 5 and Building K"
+      "position": "SOUTH edge of campus along Brighton Drive (true cardinal), west of Building K; Parking Lot 5 sits directly south between the building and Brighton Dr. On the campus_map.jpg, Building J appears on the right/east side because the image is rotated."
     },
     "K": {
       "name": "Building K",
-      "position": "north-east of campus along Brighton Drive, between Building J and the Library"
+      "position": "SOUTH edge of campus along Brighton Drive (true cardinal), east of Building J; Parking Lot 5 sits directly south between the building and Brighton Dr. On the campus_map.jpg, Building K appears on the right/east side south of J."
     },
     "L": {
       "name": "Building L",
-      "position": "south-east of campus along Brighton Drive, next to Buildings M and N"
+      "position": "SOUTH-WEST of campus (true cardinal) — southernmost of the west building row (north-to-south the row goes N → M → L). Closest of the three to Brighton Drive. On the campus_map.jpg, Building L appears on the bottom-right because the image is rotated."
     },
     "M": {
       "name": "Building M",
-      "position": "south-east of campus, between Buildings L and N"
+      "position": "WEST-center of campus (true cardinal) — middle of the west building row, between Building N (north) and Building L (south). On the campus_map.jpg, Building M appears center-south because the image is rotated."
     },
     "N": {
       "name": "Building N",
-      "position": "south-east corner of campus, near the Village Parkway / Brighton Drive intersection, next to Building M"
+      "position": "WEST-center of campus (true cardinal) — northernmost of the west building row (N → M → L north-to-south), next to Building M on the south. On the campus_map.jpg, Building N appears bottom-center because the image is rotated."
     }
   },
 
   "key_locations": {
     "Admin": {
       "building": "Admin",
-      "position": "center of campus, central plaza",
-      "description": "Main administration office, in the central plaza next to the Library."
+      "position": "Center-WEST of campus (true cardinal), directly west of the Library in the central plaza. On the campus_map.jpg, Admin appears center-south.",
+      "description": "Main administration office in the central plaza, west of the Library (true cardinal)."
     },
     "Library": {
       "building": "Library",
-      "position": "center of campus, central plaza",
-      "description": "Library, in the central plaza next to Admin."
+      "position": "Center of campus, in the central plaza — east of Admin and south of the Amphitheater (true cardinal). On the campus_map.jpg, the Library appears center with Admin to its south and the Amphitheater to its west.",
+      "description": "Library, in the central plaza between Admin (west) and the Amphitheater (north) in true cardinal."
     },
     "Student Union": {
       "building": "Student Union",
-      "position": "center of campus, next to Building H and Building E",
-      "description": "Student Union / dining area, center of campus next to Building H."
+      "position": "Center-SOUTH of campus (true cardinal), south of Building H and north of Buildings J/K. On the campus_map.jpg, the Student Union appears center-east.",
+      "description": "Student Union / dining area, south of Building H in true cardinal (east of H on the campus_map.jpg)."
     },
     "Performing Arts Center": {
       "building": "PAC",
-      "position": "west-center of campus, attached to Building C",
-      "description": "Performing Arts Center (PAC), west-center of campus, directly attached to Building C (VAPA)."
+      "position": "Center-WEST of campus (true cardinal), directly attached to the west side of Building C (VAPA). On the campus_map.jpg it appears center-south.",
+      "description": "Performing Arts Center (PAC), directly attached to Building C (VAPA)."
     },
     "Amphitheater": {
       "building": "Standalone",
-      "position": "center of campus, in the plaza between Building E and the Student Union",
-      "description": "Outdoor amphitheater in the central plaza."
+      "position": "Center of campus, in the plaza between the VAPA/Performing Arts cluster (north) and the Library/Student Union (south) in true cardinal. On the campus_map.jpg this appears between the VAPA cluster (west) and the Library/Student Union (east).",
+      "description": "Outdoor amphitheater in the central plaza, between the VAPA building (north) and the Library (south) in true cardinal."
     },
     "Sports Complex": {
       "building": "Sports Complex",
-      "position": "north-center of campus, next to Building F and Parking Lot 5/6",
-      "description": "Sports Complex, north-center of campus next to Building F and Parking Lots 5 and 6."
+      "position": "SOUTH-EAST of campus (true cardinal), west of GAEL Stadium and east of Building F; adjacent to Parking Lot 6 on the south. On the campus_map.jpg, the Sports Complex appears north-east.",
+      "description": "Sports Complex, west of GAEL Stadium and east of Building F in true cardinal."
     },
     "GAEL Stadium": {
       "building": "Standalone",
-      "position": "north side of campus, along the Iron Horse Trail",
-      "description": "Football stadium and track, north side of campus closest to the Iron Horse Trail."
+      "position": "EAST side of campus (true cardinal), immediately west of the Iron Horse Regional Trail. The football field with surrounding red track is clearly visible on both Google Maps satellite and on the campus_map.jpg (where it appears at the top because the image is rotated ~90° CCW).",
+      "description": "Football stadium and track on the east side of campus (next to the Iron Horse Regional Trail)."
     },
     "Baseball & Softball Diamonds": {
       "building": "Standalone",
-      "position": "north-west side of campus, next to GAEL Stadium",
-      "description": "Baseball and softball diamonds, north-west side of campus along the Iron Horse Trail."
+      "position": "NORTH half of campus (true cardinal). The baseball diamond (larger, labeled 'Dublin High School Baseball Field' on Google Maps) is center-north; the softball diamond (smaller) is in the NW corner. On the campus_map.jpg, both appear on the left side.",
+      "description": "Baseball diamond center-north and softball diamond in the NW corner (true cardinal)."
     },
     "Tennis Courts": {
       "building": "Standalone",
-      "position": "west-center of campus, next to Building C and the portables",
-      "description": "Tennis courts, west-center of campus next to Building C."
+      "position": "Center-NORTH of campus (true cardinal), south of the baseball field and north of the portables / VAPA cluster. Labeled 'Dublin High School Tennis Courts' on Google Maps. On the campus_map.jpg they appear center-west.",
+      "description": "Tennis courts between the baseball field (north) and the central building cluster (south) in true cardinal."
     },
     "ARC": {
-      "building": "Academic Resource Center (part of Building F)",
-      "position": "north-center of campus",
-      "description": "Academic Resource Center, a wing of Building F."
+      "building": "Academic Resource Center (adjacent to Building F)",
+      "position": "SOUTH side of campus (true cardinal), directly west of Building F. On the campus_map.jpg it appears east-center (south of F).",
+      "description": "Academic Resource Center, directly west of (and adjacent to) Building F in true cardinal."
     }
   },
 
   "parking": {
-    "Lot 1": "South side of campus, along Village Parkway",
-    "Lot 2": "South side of campus, along Village Parkway, next to Lot 1",
-    "Lot 3": "South side of campus, along Village Parkway, next to Lot 2",
-    "Lot 4": "South side of campus, along Village Parkway, next to Lot 3 and closest to Brighton Drive",
-    "Lot 5": "North-east side of campus, along Brighton Drive, next to the Sports Complex and Building J",
-    "Lot 6": "North-east corner of campus, along Brighton Drive, next to Building F and the Sports Complex"
+    "Lot 1": "WEST edge of campus, southernmost lot along Village Parkway (true cardinal). On the campus_map.jpg, Lot 1 appears at the bottom-left.",
+    "Lot 2": "WEST edge of campus, along Village Parkway between Lots 1 and 3 (true cardinal).",
+    "Lot 3": "WEST edge of campus, along Village Parkway between Lots 2 and 4 (true cardinal).",
+    "Lot 4": "WEST edge of campus, northernmost lot along Village Parkway (true cardinal). Directly west of Buildings N / M / L. On the campus_map.jpg, Lot 4 appears bottom-right.",
+    "Lot 5": "SOUTH side of campus, between the Student Union / Buildings J-K cluster and Brighton Drive (true cardinal). On the campus_map.jpg, Lot 5 appears east-center.",
+    "Lot 6": "SOUTH-EAST corner of campus, along Brighton Drive next to the Sports Complex (true cardinal). On the campus_map.jpg, Lot 6 appears north-east."
   },
 
   "navigation_notes": [
-    "Village Parkway runs along the south side of campus; Brighton Drive runs along the east side; the Iron Horse Trail runs along the north-west edge.",
-    "GAEL Stadium (football field/track) and the baseball/softball diamonds are in the north-west corner of campus, closest to the Iron Horse Trail.",
-    "The Sports Complex, Building F (Science & Engineering / ARC), and Parking Lots 5-6 are north-center of campus, along Brighton Drive.",
-    "Building E (Auxiliary Gym), Building C (VAPA) with the attached Performing Arts Center, the tennis courts, and the portables are west-center of campus.",
-    "Admin, the Library, the Amphitheater, the Student Union, and Building H cluster around the central plaza.",
-    "Buildings J and K are north-east along Brighton Drive; Buildings L, M, and N are south-east along Brighton Drive, closest to the Village Parkway corner.",
-    "Parking Lots 1-4 run along the south edge (Village Parkway); Lots 5-6 are along the north-east edge (Brighton Drive)."
+    "IMPORTANT ORIENTATION NOTE: The campus_map.jpg image is drawn tilted ~90° counterclockwise from true north. On the image Village Pkwy appears at the bottom, Brighton Dr on the right, GAEL Stadium at the top, Iron Horse Trail on the upper-left — but in reality Village Pkwy is on the WEST, Brighton Dr is on the SOUTH, GAEL Stadium is on the EAST, and the Iron Horse Trail is on the EAST. All cardinal directions below use TRUE cardinal (north = up on Google Maps).",
+    "True boundary streets: Village Parkway runs along the WEST edge of campus; Brighton Drive runs along the SOUTH edge; the Iron Horse Regional Trail runs along the EAST edge (visible as the long vertical trail on Google Maps); the NORTH edge borders Dublin High School Greenspace / Davona Drive.",
+    "North half of campus is almost entirely athletic fields: the baseball diamond (center-north), the softball diamond (NW corner), and the tennis courts (center-north just south of baseball). GAEL Stadium — the football field with red track — sits on the EAST side of campus along the Iron Horse Trail.",
+    "The main building cluster is in the SOUTH and CENTER of the campus. The Sports Complex and Building F (Science & Engineering) stack south-east; Building F has the ARC (Academic Resource Center) directly west of it; Parking Lots 5 and 6 sit south along Brighton Drive.",
+    "Buildings J and K sit on the SOUTH edge along Brighton Drive, with Parking Lot 5 between them and the street; J is west, K is east.",
+    "The center-north of the building cluster has the portables (relocatable classrooms) and Building E (Auxiliary Gym) just south of the portables; Building C (VAPA) sits south of E with the Performing Arts Center attached on its west side; tennis courts and the baseball/softball fields are further north.",
+    "The central plaza runs east-west through the center: Amphitheater → Library → Admin from north to south (not north-to-south top-to-bottom on the image — that's the rotated view). Building H and the Student Union sit south of the plaza.",
+    "Buildings N, M, and L form the WEST row of the main building area (north-to-south: N → M → L — L is southernmost, closest to Brighton Drive). Parking Lot 4 sits directly west of this row along Village Parkway.",
+    "Parking: Lots 1-4 run north-to-south along Village Parkway at the WEST edge; Lot 5 is on the SOUTH side between the main building cluster and Brighton Drive; Lot 6 is in the SOUTH-EAST corner next to the Sports Complex."
   ]
 }
