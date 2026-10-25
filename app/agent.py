@@ -10,6 +10,11 @@ from typing import Any, Dict, NamedTuple, Optional
 from app import config
 from app.schools import SchoolConfig, get_school
 from app.services.clubs import get_club_list
+from app.services.counselor_lookup import (
+    format_counselor_answer,
+    has_counselor_assignments,
+    lookup_counselor_by_last_name,
+)
 from app.services.course_catalog import get_course_catalog_section, get_department_names
 from app.services.lunch_menu import (
     get_lunch_menu_text,
@@ -377,6 +382,34 @@ class SchoolAgent:
                 "input_schema": {"type": "object", "properties": {}},
             })
 
+        if has_counselor_assignments(school.id):
+            self.tools.append({
+                "name": "lookup_counselor_by_last_name",
+                "description": (
+                    f"Return which {school.name} counselor a student is assigned to "
+                    "based on their last name, plus that counselor's name, email, "
+                    "phone extension, and role notes. Use this tool WHENEVER a student "
+                    "asks who their counselor is and gives (or has given earlier in the "
+                    "conversation) a last name, OR asks about contact info for the "
+                    "counselor who handles a specific last name. Do NOT answer such a "
+                    "question by reasoning over the alphabetical ranges from the "
+                    "counseling page yourself — the ranges are easy to miscompare "
+                    "letter-by-letter (e.g. 'Smith' falls in the San-Z bucket, not the "
+                    "Muu-Sam bucket). This tool uses exact string comparison and is the "
+                    "authoritative source for the assignment."
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "last_name": {
+                            "type": "string",
+                            "description": "The student's last name, e.g. 'Smith'. Case-insensitive.",
+                        }
+                    },
+                    "required": ["last_name"],
+                },
+            })
+
         # Whichever tool ends up last carries the cache_control breakpoint —
         # Anthropic caches everything up to and including it, so the tools
         # block itself is cached regardless of which optional tools a given
@@ -562,6 +595,19 @@ CRITICAL RULES:
                     f"directly at {self.school.phone} to confirm current staff assignments.]"
                 )
             return (result, False)
+        if tool_name == "lookup_counselor_by_last_name":
+            last_name = (tool_input.get("last_name") or "").strip()
+            counselor = lookup_counselor_by_last_name(self.school.id, last_name)
+            if not last_name:
+                return ("No last name provided. Ask the student for their last name and try again.", False)
+            if counselor is None:
+                return (
+                    f"No counselor assignment data is available for {self.school.name}, or "
+                    f"the last name '{last_name}' did not match any published bucket. "
+                    f"Fall back to the counseling page.",
+                    False,
+                )
+            return (format_counselor_answer(counselor, last_name), False)
         if tool_name == "get_calendar_events":
             events_url = f"{self.school.website}apps/events/"
             return (f"SOURCE: {events_url}\n\n" + get_upcoming_events(self.school.rss_url), False)

@@ -1,0 +1,48 @@
+{
+  "phone_main": "(925) 833-3300",
+  "counseling_page_url": "https://dhs.dublinusd.org/apps/pages/index.jsp?uREC_ID=448385&type=d",
+  "assignments_by_last_name": [
+    {"start": "A",   "counselor_id": "halket"},
+    {"start": "Deo", "counselor_id": "luzzi"},
+    {"start": "Kal", "counselor_id": "prado"},
+    {"start": "Muu", "counselor_id": "parker"},
+    {"start": "San", "counselor_id": "calloway"}
+  ],
+  "counselors": {
+    "halket": {
+      "name": "Mrs. Kim Halket",
+      "email": "halketkim@dublinusd.org",
+      "phone_ext": "7278",
+      "last_name_range": "A - Den",
+      "roles": []
+    },
+    "luzzi": {
+      "name": "Ms. Jacey Luzzi",
+      "email": "luzzijacey@dublinusd.org",
+      "phone_ext": "7022",
+      "last_name_range": "Deo - Kak",
+      "roles": []
+    },
+    "prado": {
+      "name": "Ms. Yolanda Prado",
+      "email": "pradoyolanda@dublinusd.org",
+      "phone_ext": "7197",
+      "last_name_range": "Kal - Mut",
+      "roles": ["Co-Lead Counselor", "Multilingual Learners"]
+    },
+    "parker": {
+      "name": "Mr. Warren Parker",
+      "email": "parkerwarren@dublinusd.org",
+      "phone_ext": "7028",
+      "last_name_range": "Muu - Sam",
+      "roles": ["Co-Lead Counselor", "AVID"]
+    },
+    "calloway": {
+      "name": "Mr. Eric Calloway",
+      "email": "callowayeric@dublinusd.org",
+      "phone_ext": "7021",
+      "last_name_range": "San - Z",
+      "roles": ["NCAA Coordinator"]
+    }
+  }
+}

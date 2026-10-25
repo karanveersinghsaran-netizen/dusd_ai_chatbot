@@ -1,0 +1,48 @@
+{
+  "phone_main": "925-551-4040",
+  "counseling_page_url": "https://ehs.dublinusd.org/apps/pages/index.jsp?uREC_ID=467266&type=d",
+  "assignments_by_last_name": [
+    {"start": "A",    "counselor_id": "valone"},
+    {"start": "Det",  "counselor_id": "henning"},
+    {"start": "Kau",  "counselor_id": "ureno"},
+    {"start": "Neh",  "counselor_id": "nandakishore"},
+    {"start": "Sine", "counselor_id": "martin"}
+  ],
+  "counselors": {
+    "valone": {
+      "name": "Cyndi Valone",
+      "email": "valonecyndi@dublinusd.org",
+      "phone_ext": "4840",
+      "last_name_range": "A - Des",
+      "roles": []
+    },
+    "henning": {
+      "name": "Christina Henning",
+      "email": "henningchristina@dublinusd.org",
+      "phone_ext": "4839",
+      "last_name_range": "Det - Kat",
+      "roles": []
+    },
+    "ureno": {
+      "name": "Lizeth Ureno",
+      "email": "urenolizeth@dublinusd.org",
+      "phone_ext": "4841",
+      "last_name_range": "Kau - Neg",
+      "roles": []
+    },
+    "nandakishore": {
+      "name": "Pallavi Nandakishore",
+      "email": "nandakishorepallavi@dublinusd.org",
+      "phone_ext": "4821",
+      "last_name_range": "Neh - Sind",
+      "roles": []
+    },
+    "martin": {
+      "name": "Angela Martin",
+      "email": "martinangela@dublinusd.org",
+      "phone_ext": "4822",
+      "last_name_range": "Sine - Z",
+      "roles": []
+    }
+  }
+}

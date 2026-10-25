@@ -695,19 +695,22 @@ def test_non_last_tools_have_no_cache_control(agent):
 
 
 def test_last_tool_has_cache_control_for_dhs(dhs_agent):
-    """The cache_control breakpoint must land on whichever tool ends up last
-    (get_lunch_menu, for DHS), regardless of which optional tools —
-    campus directions, club roster, course catalog, lunch menu — a given
-    school has registered."""
+    """The cache_control breakpoint must land on whichever tool ends up last,
+    regardless of which optional tools — campus directions, club roster,
+    course catalog, lunch menu, counselor lookup — a given school has
+    registered. The specific name of the last tool depends on registration
+    order; what matters is that cache_control is on it and ONLY on it."""
     last_tool = dhs_agent.tools[-1]
-    assert last_tool["name"] == "get_lunch_menu"
     assert last_tool.get("cache_control") == {"type": "ephemeral", "ttl": "5m"}
+    for earlier in dhs_agent.tools[:-1]:
+        assert "cache_control" not in earlier
 
 
 def test_last_tool_has_cache_control_without_campus_map(agent_without_campus_map):
     last_tool = agent_without_campus_map.tools[-1]
-    assert last_tool["name"] == "get_lunch_menu"
     assert last_tool.get("cache_control") == {"type": "ephemeral", "ttl": "5m"}
+    for earlier in agent_without_campus_map.tools[:-1]:
+        assert "cache_control" not in earlier
 
 
 # ── Dynamic context injected into first user message only ─────────────────────
@@ -1535,3 +1538,37 @@ def test_nothing_is_persisted_when_the_turn_fails(agent):
             pass
 
     assert agent.redis_store.get_conversation(agent._session_key("persist_u4")) == []
+
+
+# ── lookup_counselor_by_last_name tool (DHS/EHS) ──────────────────────────
+
+def test_counselor_lookup_tool_present_for_dhs(dhs_agent):
+    assert "lookup_counselor_by_last_name" in [t["name"] for t in dhs_agent.tools]
+
+
+def test_counselor_lookup_tool_absent_for_wells(agent):
+    """Middle schools don't publish counselor-by-last-name buckets, so the
+    tool should NOT be registered there — otherwise the agent would try to
+    call it for a school it has no data for."""
+    assert "lookup_counselor_by_last_name" not in [t["name"] for t in agent.tools]
+
+
+def test_counselor_lookup_dispatch_resolves_smith_to_calloway(dhs_agent):
+    """Direct regression guard for the bug reported 2026-10-24: the agent
+    was returning Mr. Parker (Muu-Sam) for 'Smith' when the correct answer
+    is Mr. Calloway (San-Z). The tool dispatcher must now route this via
+    the deterministic lookup."""
+    result, attach_map = dhs_agent.process_tool_call(
+        "lookup_counselor_by_last_name", {"last_name": "Smith"}
+    )
+    assert "Mr. Eric Calloway" in result
+    assert "San - Z" in result
+    assert "Parker" not in result   # the wrong answer must not leak in
+    assert attach_map is False
+
+
+def test_counselor_lookup_dispatch_missing_last_name(dhs_agent):
+    result, _ = dhs_agent.process_tool_call(
+        "lookup_counselor_by_last_name", {"last_name": "   "}
+    )
+    assert "No last name" in result
