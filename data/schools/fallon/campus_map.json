@@ -1,0 +1,155 @@
+{
+  "map_url": "https://raw.githubusercontent.com/karanveersinghsaran-netizen/dusd_ai_chatbot/master/data/schools/fallon/campus_map.png",
+
+  "handout_url": "https://fms.dublinusd.org/pdf/FMS%20Campus%20Map.pdf",
+  "handout_name": "Fallon Middle School Campus Map (official PDF)",
+  "handout_note": "The handout at handout_url is the official schematic campus map from the Fallon website. It shows building shapes and numbered room-entry points per building (1 through 5 around each classroom cross). Share this link when users ask for 'the full map', a 'printable map', or need to see the numbered classroom entries that aren't labeled on the satellite image at map_url.",
+
+  "_source": "Building positions were pinned on a Google Maps satellite screenshot of 3601 Kohnen Way (compass needle confirmed north-up) by the user manually marking each building with its letter; those pixel positions were then rendered onto the campus_map.png at map_url. Building names and classroom-room numbering come from the official FMS Campus Map PDF at handout_url. Cardinal directions below are TRUE cardinal.",
+
+  "campus_context": {
+    "orientation": "North is up on the campus_map.png (Google Maps orientation verified by the compass needle; a compass rose is drawn in the top-left corner of the image).",
+    "boundary_streets": {
+      "north": "S Dublin Ranch Drive runs along the north edge of the Fallon campus.",
+      "south": "Kohnen Way runs along the south edge; the main parking lot and parent drop-off sit between Kohnen Way and the school buildings.",
+      "east": "Grafton Street runs along the east edge.",
+      "west": "The athletic fields form the west edge of campus; residential streets lie further west."
+    },
+    "zones": {
+      "west": "Athletic fields: a grass field in the north-west and a dirt/track field in the south-west, plus Building N (Gymnasium / Dance Room) on the west edge next to the fields.",
+      "center_and_east": "The main classroom horseshoe wraps around the central Courtyard. Classroom buildings A, B, C, D, E (north/upper arc) and F, G, H, J (south/east arc) form the outer ring; portable classroom groups P (north side) and Q (east side) sit against the outer edges of the arc.",
+      "center_south": "The Administration (K) and Media Center (L) fan buildings sit south of the Courtyard, with Building M (Multipurpose Room / Cafeteria) just to the west of K.",
+      "south": "Main parking lot and parent drop-off along Kohnen Way, between the school complex and the street."
+    }
+  },
+
+  "buildings": {
+    "A": {
+      "name": "Classroom Building A",
+      "position": "Upper-west side of the horseshoe arc, between Building B (north) and Building M (south-west). Each wing of A is numbered 1-5 for its door/room (see handout_url for the numbering)."
+    },
+    "B": {
+      "name": "Classroom Building B",
+      "position": "Top (north) of the horseshoe arc, directly north of Building A, next to the Portables P group."
+    },
+    "C": {
+      "name": "Classroom Building C",
+      "position": "Upper arc, east of Building B — part of the north edge of the horseshoe."
+    },
+    "D": {
+      "name": "Classroom Building D",
+      "position": "East side of the arc, between Building C (west) and Building E (east, further east)."
+    },
+    "E": {
+      "name": "Classroom Building E",
+      "position": "East end of the north arc — the easternmost of the upper classroom row, closest to Grafton Street."
+    },
+    "F": {
+      "name": "Classroom Building F",
+      "position": "East-center of the arc, south of Building E and north of Building G; next to the Q portable group."
+    },
+    "G": {
+      "name": "Classroom Building G",
+      "position": "South-east side of the arc, south of Building F and north of Building H."
+    },
+    "H": {
+      "name": "Classroom Building H",
+      "position": "South-east end of the arc — the easternmost of the lower (south) classroom row, between Building G (north) and Building J (west)."
+    },
+    "J": {
+      "name": "Classroom Building J",
+      "position": "South end of the arc, between Building G (east) and the Media Center (Building L); the lower south edge of the horseshoe."
+    },
+    "K": {
+      "name": "Administration (Building K)",
+      "position": "Center-south of campus, inside the horseshoe — the north half of the admin/media fan, between Building M (west) and the Courtyard (east). Visitors enter here from the main parking lot off Kohnen Way.",
+      "notes": "Main administration offices. First stop for visitors."
+    },
+    "L": {
+      "name": "Media Center (Building L)",
+      "position": "Center-south of campus, inside the horseshoe — the south half of the admin/media fan, directly south of the Courtyard and north of the main parking lot.",
+      "notes": "Library / media center."
+    },
+    "M": {
+      "name": "Multipurpose Room / Cafeteria (Building M)",
+      "position": "West-center of campus, just west of Building K (Administration) and east of the athletic fields.",
+      "notes": "Multipurpose room and cafeteria."
+    },
+    "N": {
+      "name": "Gymnasium / Dance Room (Building N)",
+      "position": "West side of campus, next to the athletic fields; south-west of Building M.",
+      "notes": "Gymnasium and dance room; the west end of the main building footprint along the athletic fields."
+    },
+    "P": {
+      "name": "Portable Classrooms P1–P7",
+      "position": "North edge of the campus, outside the horseshoe arc — a row of portable classrooms (P1 through P7) between the main arc and S Dublin Ranch Drive.",
+      "notes": "Seven portable classroom buildings (P1, P2, P3, P4, P5, P6, P7) numbered west to east along the north edge."
+    },
+    "Q": {
+      "name": "Portable Classrooms Q1–Q4",
+      "position": "East-center of campus, outside the horseshoe arc — a row of portable classrooms (Q1 through Q4) between the arc and Grafton Street.",
+      "notes": "Four portable classroom buildings (Q1, Q2, Q3, Q4) along the east edge."
+    }
+  },
+
+  "key_locations": {
+    "Administration Office": {
+      "building": "K",
+      "position": "Inside Building K, in the center-south of campus. First stop for visitors entering from the main parking lot off Kohnen Way.",
+      "description": "Main administration office — front desk, phones, visitor sign-in."
+    },
+    "Media Center / Library": {
+      "building": "L",
+      "position": "Inside Building L, directly south of the Courtyard.",
+      "description": "Library / media center."
+    },
+    "Multipurpose Room": {
+      "building": "M",
+      "position": "Inside Building M, west of Administration (Building K). Doubles as the cafeteria.",
+      "description": "Multipurpose room / cafeteria."
+    },
+    "Cafeteria": {
+      "building": "M",
+      "description": "Student dining in the Multipurpose Room (Building M)."
+    },
+    "Gymnasium": {
+      "building": "N",
+      "position": "Inside Building N, on the west side of campus next to the athletic fields.",
+      "description": "Main gymnasium."
+    },
+    "Dance Room": {
+      "building": "N",
+      "description": "Dance room inside Building N (Gymnasium)."
+    },
+    "Rotunda": {
+      "building": "Standalone",
+      "position": "Hexagonal structure where the K (Administration) and L (Media Center) fans meet, at the south edge of the Courtyard.",
+      "description": "Rotunda between the Administration and Media Center buildings — see the handout PDF for the exact shape."
+    },
+    "Courtyard": {
+      "building": "Outdoor",
+      "position": "Center of campus, inside the horseshoe of classroom buildings — the open space ringed by Buildings A through J.",
+      "description": "Central outdoor courtyard, the gathering space inside the classroom horseshoe."
+    },
+    "Athletic Fields": {
+      "building": "Outdoor",
+      "position": "West side of campus: a grass sports field in the north-west and a dirt/track field in the south-west.",
+      "description": "Two athletic fields on the west side of campus."
+    },
+    "Main Parking Lot": {
+      "building": "Outdoor",
+      "position": "South side of campus, along Kohnen Way — between the school buildings and the street. The main visitor entrance and parent drop-off.",
+      "description": "Main parking lot and parent drop-off along Kohnen Way."
+    }
+  },
+
+  "navigation_notes": [
+    "Cardinal orientation (verified from Google Maps satellite with the compass needle, and shown as the compass rose in the top-left of the campus_map.png): north is up. The campus is bounded by S Dublin Ranch Drive on the north, Kohnen Way on the south, Grafton Street on the east, and the athletic fields on the west.",
+    "The main visitor entrance is on the south side off Kohnen Way, through the main parking lot. Visitors should start at the Administration Office (Building K) in the center-south of the campus.",
+    "The classroom buildings (A through J, skipping I) are arranged in a horseshoe around a central Courtyard. The north/upper arc runs B → C → D → E (west to east), the east arc continues F → G → H, and J closes the south end of the arc near the Media Center.",
+    "The Administration (Building K) and Media Center (Building L) sit south of the Courtyard, forming a fan shape with a hexagonal Rotunda where they meet.",
+    "Building M (Multipurpose Room / Cafeteria) is west of K. Building N (Gymnasium / Dance Room) is further west, next to the athletic fields.",
+    "Portable classrooms P1–P7 sit on the north edge of the campus (outside the arc, between the arc and S Dublin Ranch Drive). Portable classrooms Q1–Q4 sit on the east edge (between the arc and Grafton Street).",
+    "The athletic fields fill the west side of campus: a grass sports field to the north and a dirt/track field to the south."
+  ]
+}
