@@ -238,6 +238,68 @@ def test_history_returns_stored_messages(client):
     }
 
 
+def test_history_flattens_assistant_tool_use_turns_to_text(client):
+    """A session that triggered a tool call persists the assistant turn as a
+    list of {type: text}/{type: tool_use} blocks (see
+    _persistable_assistant_content in app/agent.py). Without flattening,
+    Pydantic rejects list content against HistoryMessage.content: str and the
+    endpoint returns 500 — the regression this fix is for. The text blocks
+    are joined so the chatbox gets the string it renders through marked."""
+    mock_agent = _mock_agent()
+    mock_agent.get_history.return_value = [
+        {"role": "user", "content": "where is building M?"},
+        {"role": "assistant", "content": [
+            {"type": "text", "text": "Let me check the campus map. "},
+            {"type": "tool_use", "id": "tool_1", "name": "get_campus_directions",
+             "input": {"destination": "building M"}},
+        ]},
+        {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "tool_1",
+             "content": "Building M is on the south side."},
+        ]},
+        {"role": "assistant", "content": "Building M is on the south side of campus."},
+    ]
+    with patch("main.get_agent", return_value=mock_agent):
+        resp = client.get("/chat/history")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "messages": [
+            {"role": "user", "content": "where is building M?"},
+            {"role": "assistant", "content": "Let me check the campus map. "},
+            {"role": "assistant", "content": "Building M is on the south side of campus."},
+        ]
+    }
+
+
+def test_history_drops_assistant_turns_with_only_tool_use_blocks(client):
+    """An assistant turn can be pure tool_use (no interstitial text), in which
+    case flattening yields an empty string. Emitting an empty bubble would
+    show a blank message in the restored chat, so these turns are dropped
+    outright."""
+    mock_agent = _mock_agent()
+    mock_agent.get_history.return_value = [
+        {"role": "user", "content": "lunch today?"},
+        {"role": "assistant", "content": [
+            {"type": "tool_use", "id": "tool_1", "name": "get_lunch_menu", "input": {}},
+        ]},
+        {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "tool_1", "content": "Pizza"},
+        ]},
+        {"role": "assistant", "content": "Today's lunch is pizza."},
+    ]
+    with patch("main.get_agent", return_value=mock_agent):
+        resp = client.get("/chat/history")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "messages": [
+            {"role": "user", "content": "lunch today?"},
+            {"role": "assistant", "content": "Today's lunch is pizza."},
+        ]
+    }
+
+
 def test_history_uses_same_identity_as_chat(client):
     """A message sent via /chat, then fetched via /chat/history with the
     same cookie jar, must resolve to the same user_id — same

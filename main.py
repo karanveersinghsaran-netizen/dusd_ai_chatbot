@@ -578,6 +578,34 @@ async def chat(
     return ChatResponse(reply=text, attach_map=reply.attach_map)
 
 
+def _flatten_history_for_display(stored: list) -> list[HistoryMessage]:
+    """Collapse Redis-stored history to the string shape the chatbox renders.
+
+    A tool-use round trip is persisted as an assistant turn whose content is
+    a list of text/tool_use blocks, followed by a user turn whose content is
+    a list of tool_result blocks (see _persistable_assistant_content /
+    _persistable_tool_results in app/agent.py). Neither fits HistoryMessage's
+    str content, and neither is user-visible: the chatbox originally showed
+    only the final text reply. So we join the assistant text blocks into one
+    string and drop the tool_result turns entirely."""
+    out: list[HistoryMessage] = []
+    for msg in stored:
+        role = msg.get("role")
+        content = msg.get("content")
+        if isinstance(content, str):
+            out.append(HistoryMessage(role=role, content=content))
+            continue
+        if role == "assistant" and isinstance(content, list):
+            text = "".join(
+                block.get("text", "")
+                for block in content
+                if isinstance(block, dict) and block.get("type") == "text"
+            )
+            if text:
+                out.append(HistoryMessage(role=role, content=text))
+    return out
+
+
 @app.get("/chat/history", response_model=HistoryResponse)
 @limiter.limit("30/minute", key_func=session_or_ip_key)
 async def chat_history(
@@ -601,7 +629,7 @@ async def chat_history(
         raise HTTPException(status_code=400, detail=f"Unknown school: {resolved_school_id}")
 
     messages = agent.get_history(user_id, limit=limit)
-    return HistoryResponse(messages=messages)
+    return HistoryResponse(messages=_flatten_history_for_display(messages))
 
 
 @app.post("/feedback/thanks", dependencies=[Depends(enforce_max_body_size)])
