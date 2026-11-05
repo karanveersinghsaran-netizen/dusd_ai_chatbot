@@ -140,6 +140,38 @@ An empty allergen set is the tell for this failure, and nothing in the
 committed file has one. Note that an override is a COMPLETE replacement,
 so correcting the bleed means fixing both dishes, not just the empty one.
 
+## Cycle 3 2026, extended to Nov 20 (both bands)
+
+Both C3 files were first committed ending Oct 30 (see above), so from Nov 2
+the tool had no menu. The district then published `6-8_Menu_Nov_2026.pdf`
+and `HS_Menu_Nov_2026.pdf` ("November 2 - November 27"), whose weekday
+columns repeat October's C3 pattern dish for dish, so `end_date` is now
+**Nov 20**, the C3 end on the nutrition PDFs' title line. Nov 23-27 is
+Thanksgiving Break in `data/calendars/dusd/2026_27.json`; the next cycle is
+expected after it.
+
+The nutrition PDFs were also renamed, and the October URLs now 404:
+`6-8_Oct_Nov_2026_Nutrition.pdf` and `9-12_Oct_Nov_2026_Nutrition.pdf`
+(no leading underscore any more). Both still title `C3 MENU (OCT 12 - NOV
+20)`. Re-extracting them reproduces the committed allergen sets exactly,
+except for the dishes the overrides above already correct. Those
+differences are the same page-break artifacts as before, so every override
+still applies.
+
+The Oct 15-16 no-school note was replaced with Nov 11 (Veterans Day,
+Wednesday), the only no-school day left in the extended range.
+
+One new name conflict, 6-8: the November calendar's Tuesday entree is
+*Chicken Quesadilla with Salsa Cup*, but the nutrition PDF still lists
+*Cheese Quesadilla with Salsa Cup* (Tortilla wheat/soy; Mozzarella milk;
+Salsa Cup none; **no chicken component**). The dish name carries both
+spellings, as with DHS's Buffalo/BBQ pizza, and keeps the PDF's
+`milk, soy, wheat`. **Worth asking the district.** If chicken really is
+served, its allergens aren't documented anywhere. The DHS calendar renames
+(*Cheese Baked Ziti* / *Bosco Sticks* vs. the nutrition PDF's *Cheese Baked
+Pasta* / *Bosco Bistro Basket*) were left on the nutrition names, since
+they are the same slots with the same components.
+
 ## Cycle 2 2026 (Aug 31 - Oct 9) manual overrides
 
 Both files' `"overrides"` keys correct the same underlying issue: at a page
