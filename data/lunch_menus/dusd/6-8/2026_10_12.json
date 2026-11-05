@@ -27,7 +27,7 @@
         "allergens": []
       },
       {
-        "name": "Cheese Quesadilla with Salsa Cup",
+        "name": "Chicken Quesadilla with Salsa Cup (listed in the district nutrition document as Cheese Quesadilla with Salsa Cup)",
         "allergens": [
           "milk",
           "soy",
@@ -123,11 +123,11 @@
   ],
   "period_label": "Cycle 3",
   "start_date": "2026-10-12",
-  "end_date": "2026-10-30",
+  "end_date": "2026-11-20",
   "peanut_tree_nut_free": true,
-  "menu_url": "https://www.schoolnutritionandfitness.com/schools/dusd_2203112030183753/menus/6-8_Menu_Oct_2026.pdf",
-  "nutrition_url": "https://www.schoolnutritionandfitness.com/schools/dusd_2203112030183753/nutriinfo/_6-8_Oct_2026_Nutrition.pdf",
+  "menu_url": "https://www.schoolnutritionandfitness.com/schools/dusd_2203112030183753/menus/6-8_Menu_Nov_2026.pdf",
+  "nutrition_url": "https://www.schoolnutritionandfitness.com/schools/dusd_2203112030183753/nutriinfo/6-8_Oct_Nov_2026_Nutrition.pdf",
   "notes": [
-    "No school Thursday October 15 and Friday October 16, 2026 — no meals are served those two days."
+    "No school Wednesday November 11, 2026 (Veterans Day) — no meals are served that day."
   ]
 }
