@@ -46,3 +46,38 @@ def test_dhs_grady_days_have_correct_and_matching_weekdays():
             f"{d.isoformat()} is labeled '{stated_weekday}' but is actually {actual_weekday}"
         )
         assert actual_weekday == "Wednesday", f"{d.isoformat()} is not a Wednesday"
+
+
+# ── Dated overrides (Veterans Day week 2026) ────────────────────────────────
+
+def test_dhs_veterans_day_week_overrides_cover_monday_through_friday_of_one_week():
+    """The agent renders each override's weekday from its ISO date, so what
+    matters here is that the dates themselves are right: five consecutive
+    weekdays, Monday to Friday, with Veterans Day (a fixed November 11
+    holiday) on the Wednesday."""
+    dhs = get_school("dhs")
+    week = sorted(
+        datetime.strptime(o["date"], "%Y-%m-%d").date()
+        for o in dhs.bell_schedule_overrides
+        if o["date"].startswith("2026-11-")
+    )
+    assert [d.strftime("%A") for d in week] == [
+        "Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
+    ]
+    assert (week[-1] - week[0]).days == 4
+    assert week[2].isoformat() == "2026-11-11"
+
+
+def test_dhs_veterans_day_override_agrees_with_the_district_calendar():
+    """Two sources state Nov 11 is off — the DHS override and the DUSD calendar
+    (data/calendars/dusd/2026_27.json). They must not drift apart."""
+    from datetime import date
+
+    from app.services.calendar import get_school_day_status
+
+    status = get_school_day_status(date(2026, 11, 11), "dusd")
+    assert "Veterans Day" in status and "no school" in status
+
+    dhs = get_school("dhs")
+    note = next(o["note"] for o in dhs.bell_schedule_overrides if o["date"] == "2026-11-11")
+    assert "no school" in note.lower()
