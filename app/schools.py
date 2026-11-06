@@ -6,6 +6,7 @@ tool no other school uses).
 """
 import json
 from dataclasses import dataclass, field
+from datetime import date
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -32,6 +33,14 @@ class SchoolConfig:
     office_hours: str
     bell_schedule: str
     useful_links: str
+    # One-off, dated deviations from bell_schedule — a modified week around a
+    # holiday, a rally day announced mid-semester, etc. Each entry is
+    # {"date": "YYYY-MM-DD", "note": "..."}. The agent states only the entries
+    # whose date falls inside its per-request DATE TABLE window (see
+    # SchoolAgent._bell_schedule_override_suffix), so an announcement is
+    # recorded once, surfaces as the week approaches, and expires on its own —
+    # the regular weekly schedule text above is never edited in and back out.
+    bell_schedule_overrides: List[Dict[str, str]] = field(default_factory=list)
     pages: Dict[str, List[str]] = field(default_factory=dict)
     campus_map_file: Optional[Path] = None
     donation_url: Optional[str] = None
@@ -90,6 +99,26 @@ class SchoolConfig:
     useful_links_zh: Optional[str] = None
 
 
+def _parse_bell_schedule_overrides(raw: dict, school_dir: Path) -> List[Dict[str, str]]:
+    """Validate bell_schedule_overrides at load time so a typo in a date fails
+    the test suite (and startup) rather than silently never matching a day."""
+    overrides = raw.get("bell_schedule_overrides", [])
+    for entry in overrides:
+        try:
+            date.fromisoformat(entry["date"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(
+                f"{school_dir.name}/school.json: bell_schedule_overrides entry {entry!r} "
+                f"needs a 'date' in YYYY-MM-DD form"
+            ) from exc
+        if not str(entry.get("note", "")).strip():
+            raise ValueError(
+                f"{school_dir.name}/school.json: bell_schedule_overrides entry for "
+                f"{entry['date']} needs a non-empty 'note'"
+            )
+    return overrides
+
+
 def _load_school(school_dir: Path) -> SchoolConfig:
     raw = json.loads((school_dir / "school.json").read_text(encoding="utf-8"))
 
@@ -110,6 +139,7 @@ def _load_school(school_dir: Path) -> SchoolConfig:
         fax=raw.get("fax", ""),
         office_hours=raw.get("office_hours", ""),
         bell_schedule=raw.get("bell_schedule", ""),
+        bell_schedule_overrides=_parse_bell_schedule_overrides(raw, school_dir),
         useful_links=raw.get("useful_links", ""),
         pages=raw.get("pages", {}),
         campus_map_file=campus_map_file,

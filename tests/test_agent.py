@@ -1471,6 +1471,118 @@ def test_nutrition_suffix_falls_back_to_the_school_record_url(agent):
     assert agent.school.lunch_menu_nutrition_url in suffix
 
 
+# ── Dated bell-schedule overrides, stated per request ─────────────────────
+
+def _pacific(y, m, d, hour=9):
+    import datetime
+    from zoneinfo import ZoneInfo
+    return datetime.datetime(y, m, d, hour, 0, tzinfo=ZoneInfo("America/Los_Angeles"))
+
+
+def _agent_with_overrides(overrides):
+    school = replace(get_school("wells"), bell_schedule_overrides=overrides)
+    with patch("app.agent.anthropic.Anthropic"):
+        return SchoolAgent(
+            school=school,
+            redis_store=RedisStore(client=FakeRedisClient()),
+            postgres_store=MagicMock(),
+        )
+
+
+def test_override_suffix_states_the_veterans_day_week_the_friday_before(dhs_agent):
+    """Asked on Fri Nov 6, 2026 about "next Tuesday", the model must see that
+    Nov 10 runs the All Classes schedule, with the weekday already spelled
+    out (DATE HANDLING forbids it computing one)."""
+    with patch("app.agent.pacific_now", return_value=_pacific(2026, 11, 6)):
+        suffix = dhs_agent._bell_schedule_override_suffix()
+
+    assert suffix.startswith("BELL SCHEDULE OVERRIDES")
+    assert "- Tuesday, November 10, 2026: Monday - All Classes schedule" in suffix
+    assert "INSTEAD OF the usual Tuesday Odd Day schedule" in suffix
+    assert "- Wednesday, November 11, 2026: Veterans Day holiday" in suffix
+    assert "- Friday, November 13, 2026:" in suffix
+
+
+def test_override_suffix_expires_on_its_own_once_the_dates_have_passed(dhs_agent):
+    """Nothing to edit out afterwards: a month later the block is simply gone,
+    and well before the week it hasn't appeared yet either."""
+    with patch("app.agent.pacific_now", return_value=_pacific(2026, 12, 15)):
+        assert dhs_agent._bell_schedule_override_suffix() is None
+    with patch("app.agent.pacific_now", return_value=_pacific(2026, 10, 1)):
+        assert dhs_agent._bell_schedule_override_suffix() is None
+
+
+def test_override_suffix_absent_for_a_school_with_no_overrides(agent):
+    with patch("app.agent.pacific_now", return_value=_pacific(2026, 11, 6)):
+        assert agent._bell_schedule_override_suffix() is None
+
+
+def test_override_suffix_window_matches_the_date_table():
+    """An override is stated exactly while its date is a DATE TABLE row
+    (today-7 .. today+14): the model can only resolve "next Tuesday" against
+    a row it has, and an override for a date outside the table would be one
+    it has no way to place."""
+    agent = _agent_with_overrides([
+        {"date": "2026-11-01", "note": "eight days ago — out"},
+        {"date": "2026-11-02", "note": "seven days ago — in"},
+        {"date": "2026-11-23", "note": "fourteen days ahead — in"},
+        {"date": "2026-11-24", "note": "fifteen days ahead — out"},
+    ])
+    with patch("app.agent.pacific_now", return_value=_pacific(2026, 11, 9)):
+        suffix = agent._bell_schedule_override_suffix()
+        date_table = agent._current_datetime_suffix()
+
+    assert "seven days ago — in" in suffix
+    assert "fourteen days ahead — in" in suffix
+    assert "eight days ago — out" not in suffix
+    assert "fifteen days ahead — out" not in suffix
+    # Every stated override date is a row the model can look up.
+    assert "Monday, November 02, 2026" in date_table
+    assert "Monday, November 23, 2026" in date_table
+    assert "Tuesday, November 24, 2026" not in date_table
+
+
+def test_override_suffix_lists_entries_in_date_order_regardless_of_json_order():
+    agent = _agent_with_overrides([
+        {"date": "2026-11-12", "note": "second"},
+        {"date": "2026-11-10", "note": "first"},
+    ])
+    with patch("app.agent.pacific_now", return_value=_pacific(2026, 11, 9)):
+        suffix = agent._bell_schedule_override_suffix()
+
+    assert suffix.index("first") < suffix.index("second")
+
+
+def test_call_api_appends_overrides_as_an_uncached_block_only_while_in_effect(dhs_agent):
+    """Same contract as the date and nutrition suffixes: after the cached
+    prefix, no cache_control, and the cached prefix itself never carries the
+    dates (so it stays byte-stable across the announcement's lifetime)."""
+    dhs_agent.client.beta.messages.create.return_value = _text_response("ok")
+
+    with patch("app.agent.pacific_now", return_value=_pacific(2026, 11, 6)):
+        dhs_agent._call_api([{"role": "user", "content": "hi"}])
+    system = dhs_agent.client.beta.messages.create.call_args[1]["system"]
+    # The cached prefix names the block too ("When a BELL SCHEDULE OVERRIDES
+    # block is present..."), so match on the block's own header.
+    header = "BELL SCHEDULE OVERRIDES — the school has announced"
+    block = _system_block(system, header)
+    assert "cache_control" not in block
+    assert system.index(block) > 0
+    assert "November 10, 2026" not in system[0]["text"]
+    assert sum("cache_control" in b for b in system) == 1
+
+    with patch("app.agent.pacific_now", return_value=_pacific(2026, 12, 15)):
+        dhs_agent._call_api([{"role": "user", "content": "hi"}])
+    system = dhs_agent.client.beta.messages.create.call_args[1]["system"]
+    assert not any(header in b["text"] for b in system)
+
+
+def test_system_prompt_tells_the_model_overrides_beat_the_weekly_schedule(dhs_agent):
+    prompt = dhs_agent._system_prompt
+    assert "BELL SCHEDULE OVERRIDES block" in prompt
+    assert "take precedence over the weekly schedule above" in prompt
+
+
 # ── nutrition link emitted next to SOURCE (#162 follow-up) ────────────────
 
 def test_get_lunch_menu_emits_a_nutrition_marker_next_to_source(dhs_agent):

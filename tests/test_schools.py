@@ -283,3 +283,61 @@ def test_level_defaults_to_none_when_absent_from_json(tmp_path, monkeypatch):
         assert load_schools()["noleveltest"].level is None
     finally:
         load_schools.cache_clear()
+
+
+# ── Dated bell-schedule overrides ───────────────────────────────────────────
+
+def test_dhs_records_the_veterans_day_week_bell_schedule_overrides():
+    """The DHS ParentSquare post of Nov 6, 2026 gave a modified schedule for
+    the whole Veterans Day week; every day of it must be recorded."""
+    dhs = get_school("dhs")
+    by_date = {o["date"]: o["note"] for o in dhs.bell_schedule_overrides}
+    assert set(by_date) >= {
+        "2026-11-09", "2026-11-10", "2026-11-11", "2026-11-12", "2026-11-13",
+    }
+    # The one day that actually differs from the regular weekly schedule.
+    assert "All Classes" in by_date["2026-11-10"]
+    assert "Odd Day" in by_date["2026-11-10"]
+    assert "no school" in by_date["2026-11-11"].lower()
+
+
+def test_bell_schedule_overrides_default_to_empty_when_absent_from_json(tmp_path, monkeypatch):
+    school_dir = tmp_path / "nooverrides"
+    school_dir.mkdir()
+    (school_dir / "school.json").write_text(json.dumps({
+        "id": "nooverrides", "name": "Plain School", "district": "D",
+        "district_id": "d", "website": "https://x.test/", "rss_url": "https://x.test/rss",
+    }), encoding="utf-8")
+    monkeypatch.setattr("app.schools.SCHOOLS_DIR", tmp_path)
+    load_schools.cache_clear()
+    try:
+        assert load_schools()["nooverrides"].bell_schedule_overrides == []
+    finally:
+        load_schools.cache_clear()
+
+
+@pytest.mark.parametrize("bad_entry", [
+    {"date": "11/10/2026", "note": "All Classes schedule"},   # not ISO
+    {"date": "2026-11-31", "note": "All Classes schedule"},   # no such day
+    {"note": "All Classes schedule"},                          # no date at all
+    {"date": "2026-11-10"},                                    # nothing to tell the model
+    {"date": "2026-11-10", "note": "   "},
+])
+def test_malformed_bell_schedule_override_fails_at_load(tmp_path, monkeypatch, bad_entry):
+    """A typo'd date would otherwise never match a day and the override would
+    silently never be stated — the same failure class as the Grady Day typo
+    that tests/test_bell_schedule_data.py guards against."""
+    school_dir = tmp_path / "badoverride"
+    school_dir.mkdir()
+    (school_dir / "school.json").write_text(json.dumps({
+        "id": "badoverride", "name": "Bad School", "district": "D",
+        "district_id": "d", "website": "https://x.test/", "rss_url": "https://x.test/rss",
+        "bell_schedule_overrides": [bad_entry],
+    }), encoding="utf-8")
+    monkeypatch.setattr("app.schools.SCHOOLS_DIR", tmp_path)
+    load_schools.cache_clear()
+    try:
+        with pytest.raises(ValueError, match="bell_schedule_overrides"):
+            load_schools()
+    finally:
+        load_schools.cache_clear()

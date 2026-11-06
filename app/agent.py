@@ -4,7 +4,7 @@ import json
 import logging
 import re
 import time
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import Any, Dict, NamedTuple, Optional
 
 from app import config
@@ -32,6 +32,12 @@ from app.services.calendar import (
 from app.store.redis_store import MAX_HISTORY, RedisStore, store as default_redis_store
 from app.store.postgres_store import PostgresStore, store as default_postgres_store
 from app.timezone_utils import pacific_now, pacific_today, school_year_label
+
+# The DATE TABLE in _current_datetime_suffix spans this many days either side
+# of today. Bell-schedule overrides are stated for the same window, so the
+# model never sees an override for a date it can't resolve against the table.
+DATE_TABLE_PAST_DAYS = 7
+DATE_TABLE_FUTURE_DAYS = 14
 
 logger = logging.getLogger(__name__)
 
@@ -481,6 +487,8 @@ SCHOOL INFORMATION:
 BELL SCHEDULE:
 {school.bell_schedule}
 
+When a BELL SCHEDULE OVERRIDES block is present after this prompt, its dated entries take precedence over the weekly schedule above for those specific dates — answer from the override for such a date, and say that it differs from the usual schedule.
+
 {useful_links_block}
 
 DATE HANDLING:
@@ -556,7 +564,7 @@ CRITICAL RULES:
         now = pacific_now()
         today = now.date()
         rows = []
-        for offset in range(-7, 15):
+        for offset in range(-DATE_TABLE_PAST_DAYS, DATE_TABLE_FUTURE_DAYS + 1):
             d = today + timedelta(days=offset)
             marker = {-1: " (yesterday)", 0: " (today)", 1: " (tomorrow)"}.get(offset, "")
             rows.append(f"{d.strftime('%A, %B %d, %Y')}{marker}")
@@ -900,6 +908,38 @@ CRITICAL RULES:
         )
         return "\n".join(lines)
 
+    def _bell_schedule_override_suffix(self) -> Optional[str]:
+        """One-off bell-schedule changes for specific dates, stated per request.
+
+        A school announces these a few days ahead ("modified schedule Monday
+        and Tuesday for Veterans Day week") and they are dead a week later, so
+        they don't belong in the regular weekly schedule text of the cached
+        prefix: editing it in and back out for every announcement would both
+        bust the cache and risk leaving a stale line behind. Instead each
+        entry is stated here, uncached, only while its date is inside the
+        DATE TABLE window — it appears as the week approaches and drops out
+        on its own afterwards. The weekday is spelled out by Python, per the
+        DATE HANDLING rule that the model never computes one itself."""
+        if not self.school.bell_schedule_overrides:
+            return None
+        today = pacific_now().date()
+        window_start = today - timedelta(days=DATE_TABLE_PAST_DAYS)
+        window_end = today + timedelta(days=DATE_TABLE_FUTURE_DAYS)
+        lines = []
+        for entry in sorted(self.school.bell_schedule_overrides, key=lambda e: e["date"]):
+            d = date.fromisoformat(entry["date"])
+            if window_start <= d <= window_end:
+                lines.append(f"- {d.strftime('%A, %B %d, %Y')}: {entry['note']}")
+        if not lines:
+            return None
+        return (
+            "BELL SCHEDULE OVERRIDES — the school has announced these one-off "
+            "changes for specific dates. For a question about one of these dates, "
+            "the entry below takes precedence over the regular weekly BELL SCHEDULE "
+            "in the system prompt; state the change rather than the usual schedule "
+            "for that weekday:\n" + "\n".join(lines)
+        )
+
     def _call_api(
         self,
         messages: list,
@@ -929,6 +969,11 @@ CRITICAL RULES:
         nutrition_suffix = self._lunch_nutrition_suffix()
         if nutrition_suffix:
             system.append({"type": "text", "text": nutrition_suffix})
+        # Uncached as well: which overrides are in effect depends on today's
+        # date, and the block vanishes entirely once the dates have passed.
+        override_suffix = self._bell_schedule_override_suffix()
+        if override_suffix:
+            system.append({"type": "text", "text": override_suffix})
         # A second breakpoint on the last message: Anthropic caches everything
         # up to and including a breakpoint, so this lets the NEXT call — the
         # next conversation turn, or the next tool-loop iteration within this
