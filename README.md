@@ -35,7 +35,7 @@ git clone https://github.com/karanveersinghsaran-netizen/dusd_ai_chatbot.git
 cd dusd_ai_chatbot
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt  # runtime deps plus test/operator-script-only ones
 ```
 
 ### Configuration
@@ -85,7 +85,8 @@ dusd_ai_chatbot/
 ├── data/                       # Campus map, instructional calendars
 ├── db/schema.sql               # Postgres schema
 ├── scripts/                    # Operator CLIs (e.g. mint a /chatbox access token)
-├── requirements.txt
+├── requirements.txt            # Runtime deps (what the Docker image installs)
+├── requirements-dev.txt        # + test and operator-script deps (e.g. pymupdf)
 └── .env.example
 ```
 
