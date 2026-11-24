@@ -1,0 +1,6 @@
+# Everything requirements.txt has, plus what only CI and the offline
+# operator scripts need. Kept out of the Docker image: pymupdf (used only by
+# scripts/parse_lunch_menu.py) pulls in onnxruntime, which is large and has
+# lagged new Python releases (#199).
+-r requirements.txt
+pymupdf==2.1

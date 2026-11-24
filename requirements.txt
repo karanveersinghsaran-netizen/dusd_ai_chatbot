@@ -10,7 +10,6 @@ requests==2.34.2
 pydantic==2.14.3
 httpx==0.28.1
 urllib3==2.8.0
-pymupdf==2.1
 redis==8.1.0
 psycopg[binary]==3.3.8
 testcontainers[postgres,redis]==4.15.0
